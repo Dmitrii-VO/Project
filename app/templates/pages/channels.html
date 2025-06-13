@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои каналы - Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Используем те же CSS переменные */
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --accent-color: #f093fb;
+            --success-color: #4facfe;
+            --warning-color: #ff9a56;
+            --danger-color: #ff6b6b;
+
+            --text-primary: #2d3748;
+            --text-secondary: #718096;
+            --text-muted: #a0aec0;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f7fafc;
+            --bg-tertiary: #edf2f7;
+            --border-color: #e2e8f0;
+
+            --border-radius: 16px;
+            --border-radius-sm: 8px;
+            --border-radius-lg: 24px;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-size-xs: 0.75rem;
+            --font-size-sm: 0.875rem;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.125rem;
+            --font-size-xl: 1.25rem;
+            --font-size-2xl: 1.5rem;
+            --font-size-3xl: 1.875rem;
+            --font-size-4xl: 2.25rem;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* === HEADER === */
+        .page-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 40px 0;
+            margin-bottom: 30px;
+            border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .page-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            pointer-events: none;
+        }
+
+        .header-content {
+            position: relative;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .header-text h1 {
+            font-size: var(--font-size-3xl);
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .header-text p {
+            opacity: 0.9;
+            font-size: var(--font-size-lg);
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 24px;
+        }
+
+        .header-stat {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 16px 20px;
+            border-radius: var(--border-radius);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .header-stat-value {
+            display: block;
+            font-size: var(--font-size-2xl);
+            font-weight: 800;
+            margin-bottom: 4px;
+        }
+
+        .header-stat-label {
+            font-size: var(--font-size-sm);
+            opacity: 0.8;
+        }
+
+        .breadcrumb {
+            margin-bottom: 24px;
+        }
+
+        .breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* === TABS === */
+        .tabs-container {
+            margin-bottom: 32px;
+        }
+
+        .tab-nav {
+            display: flex;
+            background: var(--bg-primary);
+            border-radius: var(--border-radius);
+            padding: 4px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-radius: var(--border-radius-sm);
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+            font-size: var(--font-size-sm);
+        }
+
+        .tab-btn.active {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* === ACTION BAR === */
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .search-container {
+            position: relative;
+            flex: 1;
+            max-width: 400px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 44px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-base);
+            transition: var(--transition);
+            background: var(--bg-primary);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+        }
+
+        /* === BUTTONS === */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 12px 20px;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            gap: 8px;
+            min-height: 44px;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-success {
+            background: var(--success-gradient);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning-gradient);
+            color: var(--text-primary);
+        }
+
+        .btn-sm {
+            padding: 8px 12px;
+            font-size: var(--font-size-xs);
+            min-height: 32px;
+        }
+
+        /* === CHANNEL CARDS === */
+        .channels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 24px;
+            margin-bottom: 40px;
+        }
+
+        .channel-card {
+            background: var(--bg-primary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            transition: var(--transition);
+            position: relative;
+        }
+
+        .channel-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .channel-header {
+            padding: 20px;
+            background: linear-gradient(45deg, var(--bg-tertiary), var(--bg-secondary));
+            position: relative;
+        }
+
+        .channel-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 12px;
+        }
+
+        .channel-title {
+            font-size: var(--font-size-lg);
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: var(--text-primary);
+        }
+
+        .channel-username {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+        }
+
+        .channel-status {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            padding: 4px 8px;
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .status-inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .channel-body {
+            padding: 20px;
+        }
+
+        .channel-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            display: block;
+            font-size: var(--font-size-lg);
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .stat-label {
+            font-size: var(--font-size-xs);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .channel-pricing {
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius-sm);
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .pricing-title {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .pricing-value {
+            font-size: var(--font-size-xl);
+            font-weight: 800;
+            color: var(--primary-color);
+        }
+
+        .channel-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        /* === ADD CHANNEL FORM === */
+        .add-channel-container {
+            background: var(--bg-primary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            margin-bottom: 32px;
+        }
+
+        .add-channel-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .add-channel-header h3 {
+            font-size: var(--font-size-xl);
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .add-channel-form {
+            padding: 32px;
+        }
+
+        .form-grid {
+            display: grid;
+            gap: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .form-label .required {
+            color: var(--danger-color);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-base);
+            transition: var(--transition);
+            background: var(--bg-primary);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 100px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+            background-position: right 12px center;
+            background-repeat: no-repeat;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-prefix {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .input-group .form-input {
+            padding-left: 50px;
+        }
+
+        /* === EMPTY STATE === */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            display: block;
+            opacity: 0.6;
+        }
+
+        .empty-state h3 {
+            font-size: var(--font-size-xl);
+            color: var(--text-primary);
+            margin-bottom: 12px;
+        }
+
+        /* === ALERTS === */
+        .alert {
+            padding: 16px 20px;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: 24px;
+            border-left: 4px solid;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            border-left-color: var(--primary-color);
+            color: #2b6cb0;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            border-left-color: var(--success-color);
+            color: #276749;
+        }
+
+        .alert-warning {
+            background: #fffbeb;
+            border-left-color: var(--warning-color);
+            color: #b45309;
+        }
+
+        /* === OFFERS LIST === */
+        .offers-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .offer-card {
+            background: var(--bg-primary);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--border-color);
+            padding: 24px;
+            transition: var(--transition);
+        }
+
+        .offer-card:hover {
+            box-shadow: var(--shadow-md);
+        }
+
+        .offer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .offer-title {
+            font-size: var(--font-size-lg);
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .offer-budget {
+            font-size: var(--font-size-xl);
+            font-weight: 800;
+            color: var(--success-color);
+        }
+
+        .offer-description {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+
+        .offer-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .offer-tag {
+            padding: 4px 8px;
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-xs);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        .offer-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+
+            .page-header {
+                padding: 30px 16px;
+                margin-bottom: 24px;
+            }
+
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header-stats {
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .channels-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+
+            .action-bar {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .search-container {
+                max-width: none;
+            }
+
+            .tab-nav {
+                padding: 2px;
+            }
+
+            .tab-btn {
+                padding: 10px 12px;
+                font-size: var(--font-size-xs);
+            }
+
+            .add-channel-form {
+                padding: 24px;
+            }
+
+            .offer-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .offer-actions {
+                width: 100%;
+                justify-content: stretch;
+            }
+
+            .offer-actions .btn {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="header-text">
+                    <h1>📺 Мои каналы</h1>
+                    <p>Управление каналами и входящими предложениями</p>
+                </div>
+                <div class="header-stats">
+                    <div class="header-stat">
+                        <span class="header-stat-value" id="totalChannels">3</span>
+                        <span class="header-stat-label">Каналов</span>
+                    </div>
+                    <div class="header-stat">
+                        <span class="header-stat-value" id="activeOffers">12</span>
+                        <span class="header-stat-label">Предложений</span>
+                    </div>
+                    <div class="header-stat">
+                        <span class="header-stat-value">₽84.2K</span>
+                        <span class="header-stat-label">Доходы</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="/">← Вернуться на главную</a>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs-container">
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="channels">Мои каналы</button>
+                <button class="tab-btn" data-tab="offers">Входящие предложения</button>
+                <button class="tab-btn" data-tab="add-channel">Добавить канал</button>
+                <button class="tab-btn" data-tab="analytics">Аналитика</button>
+            </div>
+        </div>
+
+        <!-- Tab: Мои каналы -->
+        <div class="tab-content active" id="channels">
+            <div class="action-bar">
+                <div class="search-container">
+                    <div class="search-icon">🔍</div>
+                    <input type="text" class="search-input" placeholder="Поиск по каналам...">
+                </div>
+                <button class="btn btn-primary" onclick="switchTab('add-channel')">
+                    ➕ Добавить канал
+                </button>
+            </div>
+
+            <div class="channels-grid" id="channelsGrid">
+                <!-- Channel Card 1 -->
+                <div class="channel-card">
+                    <div class="channel-header">
+                        <div class="channel-status status-active">Активен</div>
+                        <div class="channel-avatar">IT</div>
+                        <div class="channel-title">IT новости</div>
+                        <div class="channel-username">@it_news_channel</div>
+                    </div>
+                    <div class="channel-body">
+                        <div class="channel-stats">
+                            <div class="stat-item">
+                                <span class="stat-value">12.5K</span>
+                                <span class="stat-label">Подписчиков</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">8.2%</span>
+                                <span class="stat-label">Охват</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">4.1K</span>
+                                <span class="stat-label">Просмотры</span>
+                            </div>
+                        </div>
+                        <div class="channel-pricing">
+                            <div class="pricing-title">Цена за размещение</div>
+                            <div class="pricing-value">₽3,500</div>
+                        </div>
+                        <div class="channel-actions">
+                            <button class="btn btn-secondary btn-sm">⚙️ Настроить</button>
+                            <button class="btn btn-warning btn-sm">⏳ Ожидает модерации</button>
+                            <a href="/advanced-offers/2" class="btn btn-success btn-sm">🧠 Умные офферы</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Channel Card 2 -->
+                <div class="channel-card">
+                    <div class="channel-header">
+                        <div class="channel-status status-pending">На модерации</div>
+                        <div class="channel-avatar">BZ</div>
+                        <div class="channel-title">Бизнес Тренды</div>
+                        <div class="channel-username">@business_trends</div>
+                    </div>
+                    <div class="channel-body">
+                        <div class="channel-stats">
+                            <div class="stat-item">
+                                <span class="stat-value">8.7K</span>
+                                <span class="stat-label">Подписчиков</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">12.1%</span>
+                                <span class="stat-label">Охват</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">2.8K</span>
+                                <span class="stat-label">Просмотры</span>
+                            </div>
+                        </div>
+                        <div class="channel-pricing">
+                            <div class="pricing-title">Цена за размещение</div>
+                            <div class="pricing-value">₽2,800</div>
+                        </div>
+                        <div class="channel-actions">
+                            <button class="btn btn-secondary btn-sm">⚙️ Настроить</button>
+                            <button class="btn btn-warning btn-sm">⏳ Ожидает модерации</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Channel Card 3 -->
+                <div class="channel-card">
+                    <div class="channel-header">
+                        <div class="channel-status status-active">Активен</div>
+                        <div class="channel-avatar">🎯</div>
+                        <div class="channel-title">Маркетинг Хаки</div>
+                        <div class="channel-username">@marketing_hacks</div>
+                    </div>
+                    <div class="channel-body">
+                        <div class="channel-stats">
+                            <div class="stat-item">
+                                <span class="stat-value">25.3K</span>
+                                <span class="stat-label">Подписчиков</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">15.7%</span>
+                                <span class="stat-label">Охват</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">7.2K</span>
+                                <span class="stat-label">Просмотры</span>
+                            </div>
+                        </div>
+                        <div class="channel-pricing">
+                            <div class="pricing-title">Цена за размещение</div>
+                            <div class="pricing-value">₽5,200</div>
+                        </div>
+                        <div class="channel-actions">
+                            <button class="btn btn-secondary btn-sm">⚙️ Настроить</button>
+                            <button class="btn btn-primary btn-sm">📊 Статистика</button>
+                            <button class="btn btn-success btn-sm" onclick="openAdvancedOffers(3)">🧠 Умные офферы</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Входящие предложения -->
+        <div class="tab-content" id="offers">
+            <div class="alert alert-info">
+                <span>📨</span>
+                <div>
+                    <strong>Новые предложения</strong><br>
+                    У вас есть 3 новых рекламных предложения. Проверьте их и примите решение.
+                </div>
+            </div>
+
+            <div class="offers-list">
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div>
+                            <div class="offer-title">Реклама IT-курсов для начинающих</div>
+                            <div style="color: var(--text-secondary); font-size: var(--font-size-sm);">
+                                Для канала: IT новости
+                            </div>
+                        </div>
+                        <div class="offer-budget">₽3,500</div>
+                    </div>
+                    <div class="offer-description">
+                        Размещение рекламы онлайн-курсов по программированию. Целевая аудитория: начинающие разработчики и студенты технических специальностей.
+                    </div>
+                    <div class="offer-tags">
+                        <span class="offer-tag">Образование</span>
+                        <span class="offer-tag">IT</span>
+                        <span class="offer-tag">Программирование</span>
+                    </div>
+                    <div class="offer-actions">
+                        <button class="btn btn-secondary btn-sm">❌ Отклонить</button>
+                        <button class="btn btn-success btn-sm">✅ Принять</button>
+                    </div>
+                </div>
+
+                <div class="offer-card">
+                    <div class="offer-header">
+                        <div>
+                            <div class="offer-title">Продвижение SaaS платформы</div>
+                            <div style="color: var(--text-secondary); font-size: var(--font-size-sm);">
+                                Для канала: Маркетинг Хаки
+                            </div>
+                        </div>
+                        <div class="offer-budget">₽5,200</div>
+                    </div>
+                    <div class="offer-description">
+                        Реклама CRM системы для малого и среднего бизнеса. Акцент на автоматизации продаж и увеличении конверсии.
+                    </div>
+                    <div class="offer-tags">
+                        <span class="offer-tag">SaaS</span>
+                        <span class="offer-tag">Бизнес</span>
+                        <span class="offer-tag">CRM</span>
+                    </div>
+                    <div class="offer-actions">
+                        <button class="btn btn-secondary btn-sm">❌ Отклонить</button>
+                        <button class="btn btn-success btn-sm">✅ Принять</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Добавить канал -->
+        <div class="tab-content" id="add-channel">
+            <div class="add-channel-container">
+                <div class="add-channel-header">
+                    <h3>➕ Добавить новый канал</h3>
+                    <p>Заполните информацию о вашем Telegram канале</p>
+                </div>
+                <form class="add-channel-form" id="addChannelForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label class="form-label">Ссылка на канал <span class="required">*</span></label>
+                            <input type="url" class="form-input" name="channel_url" placeholder="https://t.me/your_channel" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Название канала <span class="required">*</span></label>
+                            <input type="text" class="form-input" name="channel_name" placeholder="Название вашего канала" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Описание канала</label>
+                            <textarea class="form-input form-textarea" name="description" placeholder="Краткое описание тематики и аудитории канала..."></textarea>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div class="form-group">
+                                <label class="form-label">Количество подписчиков</label>
+                                <input type="number" class="form-input" name="subscribers" placeholder="10000" min="100">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Тематика</label>
+                                <select class="form-input form-select" name="category">
+                                    <option value="">Выберите тематику</option>
+                                    <option value="tech">Технологии</option>
+                                    <option value="business">Бизнес</option>
+                                    <option value="education">Образование</option>
+                                    <option value="lifestyle">Lifestyle</option>
+                                    <option value="finance">Финансы</option>
+                                    <option value="health">Здоровье</option>
+                                    <option value="entertainment">Развлечения</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Цена за размещение <span class="required">*</span></label>
+                            <div class="input-group">
+                                <span class="input-prefix">₽</span>
+                                <input type="number" class="form-input" name="price" placeholder="3000" min="100" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 32px; text-align: center;">
+                        <button type="submit" class="btn btn-primary">
+                            🚀 Добавить канал
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tab: Аналитика -->
+        <div class="tab-content" id="analytics">
+            <div class="empty-state">
+                <span class="empty-state-icon">📊</span>
+                <h3>Аналитика в разработке</h3>
+                <p>Здесь будет подробная статистика по доходам, эффективности каналов и рекламным кампаниям</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Telegram WebApp integration
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+        }
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Remove active class from all tabs and content
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            // Add active class to selected tab and content
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+        }
+
+        // Tab navigation
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tabName = this.getAttribute('data-tab');
+                switchTab(tabName);
+            });
+        });
+
+        // Search functionality
+        document.querySelector('.search-input').addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const channelCards = document.querySelectorAll('.channel-card');
+
+            channelCards.forEach(card => {
+                const title = card.querySelector('.channel-title').textContent.toLowerCase();
+                const username = card.querySelector('.channel-username').textContent.toLowerCase();
+
+                if (title.includes(searchTerm) || username.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+
+        // Add channel form submission
+        document.getElementById('addChannelForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const channelData = Object.fromEntries(formData.entries());
+
+            try {
+                const response = await fetch('/api/channels', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(channelData)
+                });
+
+                if (response.ok) {
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.showAlert('Канал добавлен на модерацию!', () => {
+                            switchTab('channels');
+                            this.reset();
+                        });
+                    } else {
+                        alert('Канал добавлен на модерацию!');
+                        switchTab('channels');
+                        this.reset();
+                    }
+                } else {
+                    throw new Error('Ошибка добавления канала');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.showAlert('Произошла ошибка при добавлении канала');
+                } else {
+                    alert('Произошла ошибка при добавлении канала');
+                }
+            }
+        });
+
+        // Offer actions
+        document.querySelectorAll('.offer-actions .btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const action = this.textContent.includes('Принять') ? 'accept' : 'reject';
+                const offerCard = this.closest('.offer-card');
+                const offerTitle = offerCard.querySelector('.offer-title').textContent;
+
+                if (action === 'accept') {
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.showAlert(`Предложение "${offerTitle}" принято!`);
+                    } else {
+                        alert(`Предложение "${offerTitle}" принято!`);
+                    }
+                } else {
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.showAlert(`Предложение "${offerTitle}" отклонено`);
+                    } else {
+                        alert(`Предложение "${offerTitle}" отклонено`);
+                    }
+                }
+
+                offerCard.style.opacity = '0.5';
+                offerCard.style.pointerEvents = 'none';
+            });
+        });
+
+        // Load statistics (mock data)
+        async function loadStats() {
+            // В реальном приложении здесь был бы API запрос
+            document.getElementById('totalChannels').textContent = '3';
+            document.getElementById('activeOffers').textContent = '12';
+        }
+        // Advanced offers navigation
+        function openAdvancedOffers(channelId) {
+            window.location.href = `/advanced-offers/${channelId}`;
+        }
+        // Initialize
+        loadStats();
+    </script>
+</body>
+</html>

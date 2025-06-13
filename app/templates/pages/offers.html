@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создать оффер - Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* Используем те же CSS переменные из предыдущего файла */
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --accent-color: #f093fb;
+            --success-color: #4facfe;
+            --warning-color: #ff9a56;
+            --danger-color: #ff6b6b;
+
+            --text-primary: #2d3748;
+            --text-secondary: #718096;
+            --text-muted: #a0aec0;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f7fafc;
+            --bg-tertiary: #edf2f7;
+            --border-color: #e2e8f0;
+
+            --border-radius: 16px;
+            --border-radius-sm: 8px;
+            --border-radius-lg: 24px;
+            --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-size-xs: 0.75rem;
+            --font-size-sm: 0.875rem;
+            --font-size-base: 1rem;
+            --font-size-lg: 1.125rem;
+            --font-size-xl: 1.25rem;
+            --font-size-2xl: 1.5rem;
+            --font-size-3xl: 1.875rem;
+            --font-size-4xl: 2.25rem;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            line-height: 1.6;
+            color: var(--text-primary);
+            background: var(--bg-secondary);
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* === HEADER === */
+        .page-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 30px;
+            border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
+        }
+
+        .page-header h1 {
+            font-size: var(--font-size-3xl);
+            font-weight: 800;
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            opacity: 0.9;
+            font-size: var(--font-size-lg);
+        }
+
+        .breadcrumb {
+            margin-bottom: 20px;
+        }
+
+        .breadcrumb a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        /* === PROGRESS STEPPER === */
+        .stepper {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .stepper::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--border-color);
+            z-index: 1;
+        }
+
+        .stepper-progress {
+            position: absolute;
+            top: 20px;
+            left: 0;
+            height: 2px;
+            background: var(--primary-gradient);
+            transition: var(--transition);
+            z-index: 2;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 3;
+            background: var(--bg-secondary);
+            padding: 0 10px;
+        }
+
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: var(--text-muted);
+            transition: var(--transition);
+            margin-bottom: 8px;
+        }
+
+        .step.active .step-circle {
+            background: var(--primary-gradient);
+            color: white;
+            transform: scale(1.1);
+        }
+
+        .step.completed .step-circle {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .step-label {
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .step.active .step-label {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        /* === FORM CONTAINER === */
+        .form-container {
+            background: var(--bg-primary);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-md);
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+
+        .form-step {
+            display: none;
+            padding: 40px;
+        }
+
+        .form-step.active {
+            display: block;
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-title {
+            font-size: var(--font-size-2xl);
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .step-description {
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            font-size: var(--font-size-lg);
+        }
+
+        /* === FORM ELEMENTS === */
+        .form-grid {
+            display: grid;
+            gap: 24px;
+        }
+
+        .form-group {
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--text-primary);
+            font-size: var(--font-size-base);
+        }
+
+        .form-label .required {
+            color: var(--danger-color);
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-base);
+            transition: var(--transition);
+            background: var(--bg-primary);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 120px;
+            resize: vertical;
+            font-family: inherit;
+        }
+
+        .form-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+            background-position: right 12px center;
+            background-repeat: no-repeat;
+            background-size: 16px;
+            padding-right: 40px;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-prefix {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .input-group .form-input {
+            padding-left: 50px;
+        }
+
+        /* === CHIP SELECTOR === */
+        .chip-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .chip {
+            padding: 8px 16px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-lg);
+            background: var(--bg-primary);
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: var(--font-size-sm);
+            font-weight: 500;
+        }
+
+        .chip:hover {
+            border-color: var(--primary-color);
+        }
+
+        .chip.selected {
+            background: var(--primary-gradient);
+            color: white;
+            border-color: var(--primary-color);
+        }
+
+        /* === RANGE SLIDER === */
+        .range-container {
+            margin: 20px 0;
+        }
+
+        .range-values {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 12px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .range-slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: var(--border-color);
+            outline: none;
+            appearance: none;
+        }
+
+        .range-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            cursor: pointer;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .range-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--primary-gradient);
+            cursor: pointer;
+            border: none;
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* === BUTTONS === */
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 24px 40px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            gap: 16px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 14px 28px;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            font-size: var(--font-size-base);
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            min-height: 48px;
+            gap: 8px;
+            flex: 1;
+        }
+
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 2px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        /* === PREVIEW CARD === */
+        .preview-card {
+            background: var(--bg-tertiary);
+            border-radius: var(--border-radius);
+            padding: 24px;
+            margin-top: 24px;
+            border: 1px solid var(--border-color);
+        }
+
+        .preview-title {
+            font-size: var(--font-size-lg);
+            font-weight: 700;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+
+        .preview-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .preview-item:last-child {
+            border-bottom: none;
+        }
+
+        .preview-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .preview-value {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* === ALERTS === */
+        .alert {
+            padding: 16px 20px;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: 24px;
+            border-left: 4px solid;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .alert-info {
+            background: #ebf8ff;
+            border-left-color: var(--primary-color);
+            color: #2b6cb0;
+        }
+
+        .alert-success {
+            background: #f0fff4;
+            border-left-color: var(--success-color);
+            color: #276749;
+        }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 768px) {
+            .container {
+                padding: 16px;
+            }
+
+            .page-header {
+                padding: 24px 16px;
+                margin-bottom: 24px;
+            }
+
+            .page-header h1 {
+                font-size: var(--font-size-2xl);
+            }
+
+            .stepper {
+                flex-direction: column;
+                gap: 16px;
+                margin-bottom: 30px;
+            }
+
+            .stepper::before,
+            .stepper-progress {
+                display: none;
+            }
+
+            .step {
+                flex-direction: row;
+                padding: 0;
+            }
+
+            .step-circle {
+                margin-bottom: 0;
+                margin-right: 12px;
+            }
+
+            .form-step {
+                padding: 24px;
+            }
+
+            .form-actions {
+                padding: 20px 24px;
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <div class="container">
+            <h1>🎯 Создать рекламный оффер</h1>
+            <p>Создайте предложение для размещения в Telegram каналах</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="breadcrumb">
+            <a href="/">← Вернуться на главную</a>
+        </div>
+
+        <!-- Progress Stepper -->
+        <div class="stepper">
+            <div class="stepper-progress" id="stepperProgress"></div>
+            <div class="step active" data-step="1">
+                <div class="step-circle">1</div>
+                <div class="step-label">Основная информация</div>
+            </div>
+            <div class="step" data-step="2">
+                <div class="step-circle">2</div>
+                <div class="step-label">Настройки размещения</div>
+            </div>
+            <div class="step" data-step="3">
+                <div class="step-circle">3</div>
+                <div class="step-label">Бюджет и тематика</div>
+            </div>
+            <div class="step" data-step="4">
+                <div class="step-circle">4</div>
+                <div class="step-label">Подтверждение</div>
+            </div>
+        </div>
+
+        <form id="offerForm" class="form-container">
+            <!-- Шаг 1: Основная информация -->
+            <div class="form-step active" data-step="1">
+                <div class="step-title">Основная информация</div>
+                <div class="step-description">Расскажите о вашем рекламном предложении</div>
+
+                <div class="form-group">
+                    <label class="form-label">Название оффера <span class="required">*</span></label>
+                    <input type="text" class="form-input" name="title" placeholder="Например: Реклама IT-курсов для начинающих" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Описание предложения <span class="required">*</span></label>
+                    <textarea class="form-input form-textarea" name="description" placeholder="Опишите детали вашего предложения, целевую аудиторию и ожидаемые результаты..." required></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Тип рекламного контента</label>
+                    <select class="form-input form-select" name="content_type">
+                        <option value="">Выберите тип контента</option>
+                        <option value="text">Текстовый пост</option>
+                        <option value="image">Пост с изображением</option>
+                        <option value="video">Видео контент</option>
+                        <option value="link">Ссылка с превью</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Текст рекламного сообщения</label>
+                    <textarea class="form-input form-textarea" name="ad_text" placeholder="Введите текст рекламного сообщения, который будет размещен в каналах..."></textarea>
+                </div>
+            </div>
+
+            <!-- Шаг 2: Настройки размещения -->
+            <div class="form-step" data-step="2">
+                <div class="step-title">Настройки размещения</div>
+                <div class="step-description">Определите параметры размещения вашей рекламы</div>
+
+                <div class="form-group">
+                    <label class="form-label">Целевая аудитория</label>
+                    <div class="chip-container">
+                        <div class="chip" data-value="18-25">18-25 лет</div>
+                        <div class="chip" data-value="26-35">26-35 лет</div>
+                        <div class="chip" data-value="36-45">36-45 лет</div>
+                        <div class="chip" data-value="46+">46+ лет</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">География размещения</label>
+                    <select class="form-input form-select" name="geography">
+                        <option value="">Выберите географию</option>
+                        <option value="russia">Россия</option>
+                        <option value="cis">СНГ</option>
+                        <option value="europe">Европа</option>
+                        <option value="world">Весь мир</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Минимальное количество подписчиков канала</label>
+                    <div class="range-container">
+                        <div class="range-values">
+                            <span>1K</span>
+                            <span id="subscribersValue">50K</span>
+                            <span>1M+</span>
+                        </div>
+                        <input type="range" class="range-slider" name="min_subscribers" min="1000" max="1000000" value="50000" step="1000">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Время размещения</label>
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div>
+                            <label class="form-label">Дата начала</label>
+                            <input type="date" class="form-input" name="start_date">
+                        </div>
+                        <div>
+                            <label class="form-label">Дата окончания</label>
+                            <input type="date" class="form-input" name="end_date">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Шаг 3: Бюджет и тематика -->
+            <div class="form-step" data-step="3">
+                <div class="step-title">Бюджет и тематика</div>
+                <div class="step-description">Установите бюджет и выберите подходящие тематики каналов</div>
+
+                <div class="form-group">
+                    <label class="form-label">Общий бюджет <span class="required">*</span></label>
+                    <div class="input-group">
+                        <span class="input-prefix">₽</span>
+                        <input type="number" class="form-input" name="budget" placeholder="50000" min="1000" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Максимальная цена за размещение</label>
+                    <div class="input-group">
+                        <span class="input-prefix">₽</span>
+                        <input type="number" class="form-input" name="max_price" placeholder="5000" min="100">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Тематики каналов</label>
+                    <div class="chip-container">
+                        <div class="chip" data-value="tech">Технологии</div>
+                        <div class="chip" data-value="business">Бизнес</div>
+                        <div class="chip" data-value="education">Образование</div>
+                        <div class="chip" data-value="lifestyle">Lifestyle</div>
+                        <div class="chip" data-value="finance">Финансы</div>
+                        <div class="chip" data-value="health">Здоровье</div>
+                        <div class="chip" data-value="travel">Путешествия</div>
+                        <div class="chip" data-value="food">Еда</div>
+                        <div class="chip" data-value="entertainment">Развлечения</div>
+                        <div class="chip" data-value="sport">Спорт</div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info">
+                    <span>💡</span>
+                    <div>
+                        <strong>Совет:</strong> Выберите 2-4 тематики для лучшего таргетинга.
+                        Слишком широкий выбор может снизить эффективность рекламы.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Шаг 4: Подтверждение -->
+            <div class="form-step" data-step="4">
+                <div class="step-title">Подтверждение оффера</div>
+                <div class="step-description">Проверьте все данные перед публикацией</div>
+
+                <div class="preview-card">
+                    <div class="preview-title">Сводка по офферу</div>
+                    <div class="preview-item">
+                        <span class="preview-label">Название:</span>
+                        <span class="preview-value" id="previewTitle">-</span>
+                    </div>
+                    <div class="preview-item">
+                        <span class="preview-label">Бюджет:</span>
+                        <span class="preview-value" id="previewBudget">-</span>
+                    </div>
+                    <div class="preview-item">
+                        <span class="preview-label">Тематики:</span>
+                        <span class="preview-value" id="previewTopics">-</span>
+                    </div>
+                    <div class="preview-item">
+                        <span class="preview-label">Целевая аудитория:</span>
+                        <span class="preview-value" id="previewAudience">-</span>
+                    </div>
+                    <div class="preview-item">
+                        <span class="preview-label">География:</span>
+                        <span class="preview-value" id="previewGeography">-</span>
+                    </div>
+                </div>
+
+                <div class="alert alert-success">
+                    <span>✅</span>
+                    <div>
+                        <strong>Готово к публикации!</strong><br>
+                        После создания оффера, владельцы подходящих каналов получат уведомления
+                        и смогут откликнуться на ваше предложение.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
+                    ← Назад
+                </button>
+                <button type="button" class="btn btn-primary" id="nextBtn">
+                    Далее →
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn" style="display: none;">
+                    🚀 Создать оффер
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        // Telegram WebApp integration
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+        }
+
+        // Form state management
+        let currentStep = 1;
+        const totalSteps = 4;
+        const formData = {};
+
+        // DOM elements
+        const nextBtn = document.getElementById('nextBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const stepperProgress = document.getElementById('stepperProgress');
+        const subscribersRange = document.querySelector('input[name="min_subscribers"]');
+        const subscribersValue = document.getElementById('subscribersValue');
+
+        // Chip selection
+        document.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                this.classList.toggle('selected');
+            });
+        });
+
+        // Range slider update
+        subscribersRange.addEventListener('input', function() {
+            const value = parseInt(this.value);
+            subscribersValue.textContent = value >= 1000000 ? '1M+' :
+                                          value >= 1000 ? Math.round(value/1000) + 'K' :
+                                          value.toString();
+        });
+
+        // Step navigation
+        function updateStep(step) {
+            // Hide all steps
+            document.querySelectorAll('.form-step').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            // Show current step
+            document.querySelector(`.form-step[data-step="${step}"]`).classList.add('active');
+
+            // Update stepper
+            document.querySelectorAll('.step').forEach((el, index) => {
+                el.classList.remove('active', 'completed');
+                if (index + 1 < step) {
+                    el.classList.add('completed');
+                } else if (index + 1 === step) {
+                    el.classList.add('active');
+                }
+            });
+
+            // Update progress bar
+            const progress = ((step - 1) / (totalSteps - 1)) * 100;
+            stepperProgress.style.width = progress + '%';
+
+            // Update buttons
+            prevBtn.style.display = step > 1 ? 'block' : 'none';
+            nextBtn.style.display = step < totalSteps ? 'block' : 'none';
+            submitBtn.style.display = step === totalSteps ? 'block' : 'none';
+
+            // Update preview on last step
+            if (step === totalSteps) {
+                updatePreview();
+            }
+        }
+
+        // Update preview
+        function updatePreview() {
+            const form = document.getElementById('offerForm');
+            const formData = new FormData(form);
+
+            document.getElementById('previewTitle').textContent =
+                formData.get('title') || 'Не указано';
+
+            document.getElementById('previewBudget').textContent =
+                formData.get('budget') ? '₽' + parseInt(formData.get('budget')).toLocaleString() : 'Не указан';
+
+            // Selected topics
+            const selectedTopics = Array.from(document.querySelectorAll('.chip.selected'))
+                .map(chip => chip.textContent).join(', ');
+            document.getElementById('previewTopics').textContent =
+                selectedTopics || 'Не выбраны';
+
+            // Selected audience
+            const selectedAudience = Array.from(document.querySelectorAll('.chip.selected[data-value*="-"]'))
+                .map(chip => chip.textContent).join(', ');
+            document.getElementById('previewAudience').textContent =
+                selectedAudience || 'Не указана';
+
+            // Geography
+            const geography = formData.get('geography');
+            const geographyMap = {
+                'russia': 'Россия',
+                'cis': 'СНГ',
+                'europe': 'Европа',
+                'world': 'Весь мир'
+            };
+            document.getElementById('previewGeography').textContent =
+                geographyMap[geography] || 'Не указана';
+        }
+
+        // Event listeners
+        nextBtn.addEventListener('click', function() {
+            if (currentStep < totalSteps) {
+                currentStep++;
+                updateStep(currentStep);
+            }
+        });
+
+        prevBtn.addEventListener('click', function() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateStep(currentStep);
+            }
+        });
+
+        // Form submission
+        document.getElementById('offerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const offerData = Object.fromEntries(formData.entries());
+
+            // Add selected chips data
+            offerData.topics = Array.from(document.querySelectorAll('.chip.selected'))
+                .map(chip => chip.dataset.value).filter(Boolean);
+
+            try {
+                const response = await fetch('/api/offers', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(offerData)
+                });
+
+                if (response.ok) {
+                    // Success - redirect or show success message
+                    if (window.Telegram && window.Telegram.WebApp) {
+                        window.Telegram.WebApp.showAlert('Оффер успешно создан!', () => {
+                            window.location.href = '/offers';
+                        });
+                    } else {
+                        alert('Оффер успешно создан!');
+                        window.location.href = '/offers';
+                    }
+                } else {
+                    throw new Error('Ошибка создания оффера');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                if (window.Telegram && window.Telegram.WebApp) {
+                    window.Telegram.WebApp.showAlert('Произошла ошибка при создании оффера');
+                } else {
+                    alert('Произошла ошибка при создании оффера');
+                }
+            }
+        });
+
+        // Initialize
+        updateStep(currentStep);
+    </script>
+</body>
+</html>

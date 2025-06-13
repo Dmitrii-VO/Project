@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ошибка</title>
+    <style>
+        body {
+            font-family: system-ui;
+            text-align: center;
+            padding: 50px;
+            background: #f5f5f5;
+        }
+        .error-container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            max-width: 500px;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1>❌ Ошибка</h1>
+        <p>{{ message or 'Произошла ошибка' }}</p>
+        <a href="/" style="color: #2196F3;">← Вернуться на главную</a>
+    </div>
+</body>
+</html>
