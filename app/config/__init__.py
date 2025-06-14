@@ -1,25 +1,7 @@
-# Auto-generated __init__.py
+
 # app/config/__init__.py
-"""
-Пакет конфигурации приложения
-"""
+"""Модуль конфигурации приложения"""
 
-# app/models/__init__.py
-"""
-Пакет моделей данных
-"""
+from .settings import Config
 
-# app/services/__init__.py
-"""
-Пакет сервисов и бизнес-логики
-"""
-
-# app/api/__init__.py
-"""
-Пакет API маршрутов
-"""
-
-# app/utils/__init__.py
-"""
-Пакет утилит и вспомогательных функций
-"""
+__all__ = ['Config']

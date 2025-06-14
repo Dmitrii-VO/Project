@@ -23,15 +23,15 @@ try:
     from enhanced_api_routes import add_enhanced_routes
 
     enhanced_routes_available = True
-    print("✅ Расширенные маршруты импортированы")
+    logger.info("✅ Расширенные маршруты импортированы")
 except ImportError as e:
-    print(f"⚠️ Расширенные маршруты недоступны: {e}")
+    logger.warning(f"⚠️ Расширенные маршруты недоступны: {e}")
     enhanced_routes_available = False
 
 
     # Создаем заглушку
     def add_enhanced_routes(app=None):
-        print("🔄 Используется заглушка для расширенных маршрутов")
+        logger.info("🔄 Используется заглушка для расширенных маршрутов")
         return False
 
 
@@ -51,8 +51,6 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Logger готов к использованию
 
 try:
     from dotenv import load_dotenv

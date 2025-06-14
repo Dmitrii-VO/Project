@@ -226,40 +226,35 @@ def initialize_systems(app: Flask):
 
     # Инициализация Telegram сервиса
     try:
-        from app.config.settings import Config
-        if Config.BOT_TOKEN:
-            try:
-                from app.services.telegram_service import create_telegram_service
+        if config_available and Config.BOT_TOKEN:
+            if telegram_service_class_available and TelegramService:
+                # Используем класс TelegramService если доступен
+                telegram_service = TelegramService(Config.BOT_TOKEN)
+                app.telegram_service = telegram_service
+                logger.info("✅ TelegramService инициализирован")
+            elif TELEGRAM_INTEGRATION and create_telegram_service:
+                # Fallback на функцию create_telegram_service
                 telegram_service = create_telegram_service(Config.BOT_TOKEN)
-                if telegram_service:
-                    app.telegram_service = telegram_service
-                    logger.info("✅ Telegram сервис инициализирован")
-                else:
-                    logger.error("❌ Не удалось создать Telegram сервис")
-            except Exception as e:
-                logger.error(f"❌ Ошибка инициализации Telegram сервиса: {e}")
-    except ImportError:
-        logger.warning("⚠️ Конфигурация недоступна для Telegram сервиса")
+                app.telegram_service = telegram_service
+                logger.info("✅ Telegram интеграция инициализирована (fallback)")
+            else:
+                logger.warning("⚠️ Telegram сервисы недоступны")
+                app.telegram_service = None
+        else:
+            logger.error("❌ BOT_TOKEN не настроен")
+            app.telegram_service = None
+    except Exception as e:
+        logger.error(f"❌ Ошибка инициализации Telegram: {e}")
+        app.telegram_service = None
 
     # Создаем базовые маршруты для проверки здоровья
     @app.route('/health')
     def health_check():
-        from flask import jsonify
-        import os
-
-        try:
-            from app.config.settings import Config
-            db_path = Config.DATABASE_PATH
-            bot_token = bool(Config.BOT_TOKEN)
-        except:
-            db_path = 'telegram_mini_app.db'
-            bot_token = bool(os.environ.get('BOT_TOKEN'))
-
         return jsonify({
             'status': 'healthy',
             'architecture': 'modular',
-            'database_exists': os.path.exists(db_path),
-            'bot_token_configured': bot_token,
+            'database_exists': os.path.exists(DATABASE_PATH),
+            'bot_token_configured': bool(BOT_TOKEN),
             'modules_loaded': True
         })
 
