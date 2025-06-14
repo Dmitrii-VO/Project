@@ -1,4 +1,5 @@
 # app/__init__.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
+
 import os
 import sys
 import logging
@@ -10,9 +11,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
+# Создаем глобальный объект приложения
+app = None
+
 
 def create_app() -> Flask:
     """Фабрика приложений Flask"""
+    global app
 
     # Создаем Flask приложение
     app = Flask(__name__)
@@ -21,39 +26,11 @@ def create_app() -> Flask:
     try:
         from app.config.settings import Config
         app.config.from_object(Config)
-
-        # Проверка критических настроек
-        if not Config.validate_config():
-            print("❌ Критическая ошибка конфигурации!")
-            sys.exit(1)
-
     except ImportError as e:
         print(f"❌ Ошибка импорта конфигурации: {e}")
         # Базовая конфигурация как fallback
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
         app.config['DEBUG'] = True
-
-    # Инициализация базы данных
-    try:
-        from app.models.database import db_manager
-        if not db_manager.init_database():
-            print("❌ Ошибка инициализации базы данных")
-            print("💡 Попробуйте: python sqlite_migration.py")
-            sys.exit(1)
-    except ImportError as e:
-        print(f"⚠️ Предупреждение: Модуль базы данных недоступен: {e}")
-
-    # Регистрация middleware
-    register_middleware(app)
-
-    # Регистрация маршрутов
-    register_routes(app)
-
-    # Обработчики ошибок
-    register_error_handlers(app)
-
-    # Инициализация дополнительных систем
-    initialize_systems(app)
 
     return app
 
@@ -265,14 +242,11 @@ def initialize_systems(app: Flask):
 
     logger.info("✅ Системы инициализированы")
 
-
-# Для обратной совместимости
-app = None
-
-
 def get_app():
     """Получение экземпляра приложения"""
     global app
     if app is None:
         app = create_app()
     return app
+
+__all__ = ['create_app', 'get_app', 'app']

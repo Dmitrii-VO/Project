@@ -12,7 +12,8 @@ try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
-    pass
+    # Определяем заглушку для load_dotenv
+    load_dotenv = lambda: None
 
 # Конфигурация
 OLD_DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:1994@localhost:5432/telegram_mini_app')

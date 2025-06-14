@@ -17,6 +17,8 @@ try:
     load_dotenv()
 except ImportError:
     print("⚠️ python-dotenv не установлен, используем переменные окружения по умолчанию")
+    # Определяем заглушку для load_dotenv
+    load_dotenv = lambda: None
 
 # Конфигурация
 DATABASE_PATH = 'telegram_mini_app.db'

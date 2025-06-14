@@ -3,7 +3,9 @@ from typing import Optional
 
 class Config:
     """Базовая конфигурация приложения"""
-    
+
+
+
     # Основные настройки
     SECRET_KEY: str = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
     DEBUG: bool = os.environ.get('DEBUG', 'False').lower() == 'true'
@@ -11,7 +13,15 @@ class Config:
     # База данных
     DATABASE_URL: str = os.environ.get('DATABASE_URL', 'sqlite:///telegram_mini_app.db')
     DATABASE_PATH: str = DATABASE_URL.replace('sqlite:///', '')
-    
+
+    # ДОБАВИТЬ ЭТИ СТРОКИ для Flask-SQLAlchemy:
+    SQLALCHEMY_DATABASE_URI: str = DATABASE_URL
+    SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,
+        'pool_recycle': 300,
+    }
+
     # Telegram
     BOT_TOKEN: Optional[str] = os.environ.get('BOT_TOKEN')
     YOUR_TELEGRAM_ID: int = int(os.environ.get('YOUR_TELEGRAM_ID', 373086959))
@@ -20,6 +30,8 @@ class Config:
     # Платежи
     TELEGRAM_PAYMENT_TOKEN: Optional[str] = os.environ.get('TELEGRAM_PAYMENT_TOKEN')
     WEBHOOK_SECRET: str = os.environ.get('WEBHOOK_SECRET', 'your-webhook-secret-here')
+
+
     
     # Безопасность
     REQUEST_LIMIT: int = 100

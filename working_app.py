@@ -10,11 +10,11 @@ import time
 from collections import defaultdict
 from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime, timedelta
-from flask import Flask, render_template_string, request, jsonify, session, redirect
+from app import create_app, get_app
+import app
+from flask import Flask, render_template_string, request, jsonify, session, redirect, render_template, Config
 from functools import wraps
 
-# from app import initialize_systems  # Временно закомментируем
-from flask import render_template
 # from app.api.channel_recommendations import analyze_offer_content  # Временно закомментируем
 
 try:
@@ -54,10 +54,12 @@ logger = logging.getLogger(__name__)
 
 try:
     from dotenv import load_dotenv
-
     load_dotenv()
 except ImportError:
     print("⚠️ python-dotenv не установлен. Используйте: pip install python-dotenv")
+    # Определяем заглушку для load_dotenv
+    load_dotenv = lambda: None
+
 
 # Импорт наших модулей
 try:
@@ -89,6 +91,31 @@ except ImportError as e:
     logger.error(f"❌ Не удалось подключить систему офферов: {e}")
     OFFERS_SYSTEM_ENABLED = False
 
+
+    # Определяем заглушки для функций
+    def add_offer(*args, **kwargs):
+        return {"success": False, "error": "Система офферов недоступна"}
+
+
+    def get_user_offers(*args, **kwargs):
+        return []
+
+
+    def get_offer_by_id(*args, **kwargs):
+        return None
+
+
+    def update_offer_status(*args, **kwargs):
+        return {"success": False, "error": "Система офферов недоступна"}
+
+
+    def validate_offer_data(*args, **kwargs):
+        return {"valid": False, "errors": ["Система офферов недоступна"]}
+
+
+    def ensure_user_exists(*args, **kwargs):
+        return {"success": False, "error": "Система офферов недоступна"}
+
 # === ИМПОРТ СИСТЕМЫ ОТКЛИКОВ ===
 try:
     from offer_responses import (
@@ -107,20 +134,82 @@ except ImportError as e:
     logger.error(f"❌ Не удалось подключить систему откликов: {e}")
     RESPONSES_SYSTEM_ENABLED = False
 
+
+    # Определяем заглушки для функций системы откликов
+    def get_suitable_offers_for_channel(*args, **kwargs):
+        return []
+
+
+    def create_offer_response(*args, **kwargs):
+        return {"success": False, "error": "Система откликов недоступна"}
+
+
+    def get_channel_responses(*args, **kwargs):
+        return []
+
+
+    def get_offer_responses(*args, **kwargs):
+        return []
+
+
+    def update_response_status(*args, **kwargs):
+        return {"success": False, "error": "Система откликов недоступна"}
+
+
+    def get_response_statistics(*args, **kwargs):
+        return {}
+
+
+    def calculate_suitability_score(*args, **kwargs):
+        return 0
+
 # === ИМПОРТ ПЛАТЕЖНОЙ СИСТЕМЫ ===
 try:
     from app.services.payments_system import (
         register_payments_routes,
         create_payments_tables,
         PaymentManager,
-        EscrowManager, MAX_RETRY_ATTEMPTS
+        EscrowManager,
+        MAX_RETRY_ATTEMPTS
     )
     from app.services.telegram_webhooks import register_webhook_routes
+
     PAYMENTS_SYSTEM_ENABLED = True
     logger.info("✅ Платежная система подключена")
 except ImportError as e:
-    logger.error(f"❌ Платежная система недоступна: {e}")
+    logger.error(f"❌ Не удалось подключить платежную систему: {e}")
     PAYMENTS_SYSTEM_ENABLED = False
+
+
+    # Определяем заглушки для всех функций
+    def register_payments_routes(app):
+        logger.warning("Платежные маршруты недоступны")
+        return False
+
+
+    def create_payments_tables():
+        logger.warning("Создание платежных таблиц недоступно")
+        return False
+
+
+    def register_webhook_routes(app):
+        logger.warning("Webhook маршруты недоступны")
+        return False
+
+
+    # Определяем заглушки для классов
+    class PaymentManager:
+        def __init__(self, *args, **kwargs):
+            logger.warning("PaymentManager недоступен")
+
+
+    class EscrowManager:
+        def __init__(self, *args, **kwargs):
+            logger.warning("EscrowManager недоступен")
+
+
+    # Определяем константы
+    MAX_RETRY_ATTEMPTS = 3
 # === ИМПОРТ ПРОДВИНУТОГО АЛГОРИТМА ===
 try:
     from app.services.advanced_matching_algorithm import (
@@ -128,11 +217,32 @@ try:
         analyze_offer_channel_compatibility,
         AdvancedMatchingEngine
     )
+
     ADVANCED_MATCHING_ENABLED = True
     logger.info("✅ Продвинутый алгоритм сопоставления подключен")
 except ImportError as e:
     logger.error(f"❌ Не удалось подключить продвинутый алгоритм: {e}")
     ADVANCED_MATCHING_ENABLED = False
+
+
+    # Определяем заглушки для функций
+    def get_advanced_suitable_offers_for_channel(channel_id: int, limit: int = 10):
+        logger.warning("Использована заглушка get_advanced_suitable_offers_for_channel")
+        return []
+
+
+    def analyze_offer_channel_compatibility(offer_id: int, channel_id: int):
+        logger.warning("Использована заглушка analyze_offer_channel_compatibility")
+        return {'error': 'Продвинутый алгоритм недоступен'}
+
+
+    # Заглушка для класса
+    class AdvancedMatchingEngine:
+        def __init__(self, db_path: str):
+            pass
+
+        def calculate_advanced_suitability_score(self, offer, channel):
+            return {'total_score': 0, 'error': 'Продвинутый алгоритм недоступен'}
 
 # === ИМПОРТ РАСШИРЕННОЙ АНАЛИТИКИ ===
 try:
@@ -196,9 +306,7 @@ app = Flask(__name__,
             template_folder='app/templates',
             static_folder='app/static')
 CHANNELS_FOLDER = os.path.join(os.path.dirname(__file__), 'app', 'pages', 'channels')
-
-app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-
+app.config.from_object(Config)
 
 # === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ БЕЗОПАСНОСТИ ===
 # Rate limiting storage
