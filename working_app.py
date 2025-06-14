@@ -1,6 +1,4 @@
 # working_app.py - Продуктивная версия без тестовых данных
-
-
 import os
 import sys
 import json
@@ -11,13 +9,15 @@ import html
 import time
 from collections import defaultdict
 from typing import Optional, Tuple, Dict, Any, List
-from typing import Optional
 from datetime import datetime, timedelta
-from flask import Flask, render_template_string, request, jsonify, session, g, redirect
+from flask import Flask, render_template_string, request, jsonify, session, redirect
 from functools import wraps
 
 from app import initialize_systems
 from flask import render_template
+from app.api.channel_recommendations import *
+from app.templates.pages import *
+
 
 try:
     from enhanced_api_routes import add_enhanced_routes
@@ -194,7 +194,10 @@ def check_services_availability():
 payout_manager = None
 
 # Создание Flask приложения
-app = Flask(__name__)
+app = Flask(__name__,
+            template_folder='app/templates',
+            static_folder='app/static',
+            channels_foleder='app/pages/channels')
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
@@ -2532,7 +2535,7 @@ def security_headers_middleware(response):
 def get_channel_recommendations():
     """API для получения рекомендованных каналов на основе анализа оффера"""
     try:
-        from channel_recommendations import get_channel_recommendations_api
+        from app.api.channel_recommendations import get_channel_recommendations_api
 
         data = request.get_json()
         if not data:
@@ -2645,7 +2648,7 @@ def compare_price_with_market(channel_price: float, offer_price: float) -> Dict[
 def quick_offer_analysis():
     """Быстрый анализ оффера для показа предварительных рекомендаций"""
     try:
-        from channel_recommendations import analyze_offer_content
+        from app.api.channel_recommendations import get_channel_recommendations_api
 
         data = request.get_json()
         if not data:
@@ -3144,8 +3147,7 @@ def api_analytics_dashboard_data():
             }
         }), 500
 
-
-@app.route('/api/analytics/create-demo-data', methods=['POST'])
+'''@app.route('/api/analytics/create-demo-data', methods=['POST'])
 @require_telegram_auth
 def api_create_demo_analytics_data():
     """Создание демо-данных для тестирования аналитики"""
@@ -3227,7 +3229,7 @@ def api_create_demo_analytics_data():
         return jsonify({
             'success': False,
             'error': str(e)
-        }), 500
+        }), 500'''
 
 
 @app.route('/payments-dashboard')

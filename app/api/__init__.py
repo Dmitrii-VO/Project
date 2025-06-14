@@ -7,7 +7,7 @@ API модуль для Telegram Mini App
 from flask import Blueprint
 
 # Для удобства импорта Blueprint'ов
-__all__ = ['main_bp', 'auth_bp', 'channels_bp', 'offers_bp', 'payments_bp', 'analytics_bp']
+__all__ = ['main_bp', 'auth_bp', 'channels_bp', 'offers_bp', 'payments_bp', 'analytics_bp', 'channel_recommendations_bp']
 
 
 def get_available_blueprints():
@@ -47,6 +47,12 @@ def get_available_blueprints():
     try:
         from .analytics import analytics_bp
         blueprints.append(('analytics', analytics_bp, '/api/analytics'))
+    except ImportError:
+        pass
+
+    try:
+        from .analytics import analytics_bp
+        blueprints.append(('channel_recommendations', analytics_bp, '/api/channel_recommendations'))
     except ImportError:
         pass
 

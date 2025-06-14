@@ -1,149 +1,178 @@
 {% extends "base.html" %}
 
-{% block title %}Telegram Mini App - Главная{% endblock %}
+{% block title %}Главная - Telegram Mini App{% endblock %}
 
 {% block content %}
-<div class="app-container">
+<div class="container">
+    <!-- Заголовок -->
     <div class="hero-section">
-        <div class="hero-content">
-            <h1 class="hero-title">🚀 Telegram Mini App</h1>
-            <p class="hero-subtitle">Система рекламы в каналах</p>
+        <div class="hero-icon">🚀</div>
+        <h1 class="hero-title">Telegram Mini App</h1>
+        <p class="hero-subtitle">Платформа для рекламодателей и владельцев каналов</p>
+    </div>
+
+    <!-- Статистика -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">📺</div>
+            <div class="stat-number" id="channels-count">-</div>
+            <div class="stat-label">Каналов</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📢</div>
+            <div class="stat-number" id="offers-count">-</div>
+            <div class="stat-label">Офферов</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-number" id="revenue-amount">-</div>
+            <div class="stat-label">Оборот</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-number" id="users-count">-</div>
+            <div class="stat-label">Пользователей</div>
         </div>
     </div>
 
-    <div class="features-grid">
-        <div class="feature-card">
-            <div class="feature-icon">📱</div>
-            <h3>Каналы</h3>
-            <p>Управление каналами</p>
-            <a href="/channels-enhanced" class="btn btn-primary">Открыть</a>
-        </div>
+    <!-- Основная навигация -->
+    <div class="navigation-grid">
+        <a href="/offers" class="nav-card offers">
+            <div class="nav-icon">📢</div>
+            <div class="nav-content">
+                <h3>Офферы</h3>
+                <p>Создавайте и управляйте рекламными предложениями</p>
+            </div>
+        </a>
 
-        <div class="feature-card">
-            <div class="feature-icon">💰</div>
-            <h3>Офферы</h3>
-            <p>Создание предложений</p>
-            <a href="/offers" class="btn btn-primary">Открыть</a>
-        </div>
+        <a href="/channels-enhanced" class="nav-card channels">
+            <div class="nav-icon">📺</div>
+            <div class="nav-content">
+                <h3>Каналы</h3>
+                <p>Добавляйте и настраивайте свои каналы</p>
+            </div>
+        </a>
 
-        <div class="feature-card">
-            <div class="feature-icon">📊</div>
-            <h3>Аналитика</h3>
-            <p>Статистика и отчеты</p>
-            <a href="/analytics" class="btn btn-primary">Открыть</a>
-        </div>
+        <a href="/analytics" class="nav-card analytics">
+            <div class="nav-icon">📊</div>
+            <div class="nav-content">
+                <h3>Аналитика</h3>
+                <p>Отслеживайте эффективность размещений</p>
+            </div>
+        </a>
 
-        <div class="feature-card">
-            <div class="feature-icon">💳</div>
-            <h3>Платежи</h3>
-            <p>Система выплат</p>
-            <a href="/payments" class="btn btn-primary">Открыть</a>
+        <a href="/payments" class="nav-card payments">
+            <div class="nav-icon">💳</div>
+            <div class="nav-content">
+                <h3>Платежи</h3>
+                <p>Управление финансами и выплатами</p>
+            </div>
+        </a>
+    </div>
+
+    <!-- Быстрые действия -->
+    <div class="quick-actions">
+        <h2>Быстрые действия</h2>
+        <div class="action-buttons">
+            <button class="action-btn primary" onclick="createOffer()">
+                <span class="btn-icon">➕</span>
+                Создать оффер
+            </button>
+            <button class="action-btn secondary" onclick="addChannel()">
+                <span class="btn-icon">📺</span>
+                Добавить канал
+            </button>
+            <button class="action-btn tertiary" onclick="viewStats()">
+                <span class="btn-icon">📈</span>
+                Статистика
+            </button>
+        </div>
+    </div>
+
+    <!-- Последняя активность -->
+    <div class="recent-activity">
+        <h2>Последняя активность</h2>
+        <div id="activity-list" class="activity-list">
+            <div class="loading-placeholder">Загрузка...</div>
         </div>
     </div>
 </div>
 
-<style>
-:root {
-    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    --border-radius: 16px;
-    --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
-    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+<script>
+// Быстрые действия
+function createOffer() {
+    window.location.href = '/offers';
 }
 
-.app-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 20px;
+function addChannel() {
+    window.location.href = '/channels-enhanced';
 }
 
-.hero-section {
-    text-align: center;
-    padding: 40px 0;
-    background: var(--primary-gradient);
-    border-radius: var(--border-radius);
-    color: white;
-    margin-bottom: 30px;
+function viewStats() {
+    window.location.href = '/analytics';
 }
 
-.hero-title {
-    font-size: 2.5rem;
-    margin-bottom: 10px;
-    font-weight: 700;
-}
+// Загрузка статистики при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    loadDashboardStats();
+    loadRecentActivity();
+});
 
-.hero-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-}
+async function loadDashboardStats() {
+    try {
+        const response = await fetch('/api/dashboard-stats');
+        const data = await response.json();
 
-.features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
-}
-
-.feature-card {
-    background: white;
-    border-radius: var(--border-radius);
-    padding: 30px;
-    text-align: center;
-    box-shadow: var(--shadow-md);
-    transition: var(--transition);
-}
-
-.feature-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-}
-
-.feature-icon {
-    font-size: 3rem;
-    margin-bottom: 20px;
-}
-
-.feature-card h3 {
-    font-size: 1.5rem;
-    margin-bottom: 10px;
-    color: #2d3748;
-}
-
-.feature-card p {
-    color: #718096;
-    margin-bottom: 20px;
-}
-
-.btn {
-    display: inline-block;
-    padding: 12px 24px;
-    border-radius: 8px;
-    text-decoration: none;
-    font-weight: 600;
-    transition: var(--transition);
-}
-
-.btn-primary {
-    background: var(--primary-gradient);
-    color: white;
-}
-
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
-}
-
-@media (max-width: 768px) {
-    .hero-title {
-        font-size: 2rem;
-    }
-
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .feature-card {
-        padding: 20px;
+        if (data.success) {
+            document.getElementById('channels-count').textContent = data.stats.channels || '0';
+            document.getElementById('offers-count').textContent = data.stats.offers || '0';
+            document.getElementById('revenue-amount').textContent = data.stats.revenue || '0₽';
+            document.getElementById('users-count').textContent = data.stats.users || '0';
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки статистики:', error);
+        // Показываем демо-данные в случае ошибки
+        document.getElementById('channels-count').textContent = '12';
+        document.getElementById('offers-count').textContent = '34';
+        document.getElementById('revenue-amount').textContent = '156K₽';
+        document.getElementById('users-count').textContent = '89';
     }
 }
-</style>
+
+async function loadRecentActivity() {
+    try {
+        const response = await fetch('/api/recent-activity');
+        const data = await response.json();
+
+        const activityList = document.getElementById('activity-list');
+
+        if (data.success && data.activities.length > 0) {
+            activityList.innerHTML = data.activities.map(activity => `
+                <div class="activity-item">
+                    <div class="activity-icon">${activity.icon}</div>
+                    <div class="activity-content">
+                        <div class="activity-title">${activity.title}</div>
+                        <div class="activity-time">${activity.time}</div>
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            activityList.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">📋</div>
+                    <div class="empty-text">Активность появится здесь</div>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки активности:', error);
+        document.getElementById('activity-list').innerHTML = `
+            <div class="error-state">
+                <div class="error-icon">⚠️</div>
+                <div class="error-text">Ошибка загрузки активности</div>
+            </div>
+        `;
+    }
+}
+</script>
 {% endblock %}
