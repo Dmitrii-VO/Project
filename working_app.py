@@ -10,12 +10,18 @@ import time
 from collections import defaultdict
 from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime, timedelta
+from app import api
+
+import logger
+
 from app import create_app, get_app
-from app import create_app
-from flask import Flask, render_template_string, request, jsonify, session, redirect, render_template, Config, Blueprint
+from flask import Flask, render_template_string, request, jsonify, session, redirect, render_template, Blueprint, Config
 from functools import wraps
 
+from app.routers import register_blueprints
 from app.services import auth_service
+
+
 
 # from app.api.channel_recommendations import analyze_offer_content  # Временно закомментируем
 
@@ -311,11 +317,7 @@ def check_services_availability():
 payout_manager = None
 
 # Создание Flask приложения
-app = create_app()
-app.template_folder = 'app/templates'
-app.static_folder = 'app/static'
-CHANNELS_FOLDER = os.path.join(os.path.dirname(__file__), 'app', 'pages', 'channels')
-app.config.from_object(Config)
+app = Flask(__name__)
 
 # === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ДЛЯ БЕЗОПАСНОСТИ ===
 # Rate limiting storage
@@ -500,7 +502,30 @@ if not TELEGRAM_INTEGRATION:
     sys.exit(1)
 
 # Инициализация Telegram сервиса
-telegram_service = create_telegram_service(BOT_TOKEN)
+telegram_service = None
+try:
+    from app.services.telegram_service import create_telegram_service
+
+    telegram_service = create_telegram_service(BOT_TOKEN)
+    if telegram_service:
+        logger.info("✅ Telegram сервис инициализирован")
+    else:
+        logger.error("❌ Не удалось создать Telegram сервис")
+except ImportError as e:
+    logger.warning(f"⚠️ Telegram сервис недоступен: {e}")
+
+
+    # Создаем заглушку
+    class MockTelegramService:
+        def __init__(self):
+            self.available = False
+
+        def send_message(self, *args, **kwargs):
+            logger.warning("Telegram сервис недоступен - сообщение не отправлено")
+            return False
+
+
+    telegram_service = MockTelegramService()
 if not telegram_service:
     logger.error("❌ Не удалось создать Telegram сервис!")
     sys.exit(1)
@@ -603,45 +628,6 @@ def validate_offer_data_secure(data):
         errors.append('Валюта должна быть RUB, USD или EUR')
 
     return errors
-
-
-def init_database():
-    """Проверка SQLite базы данных"""
-    try:
-        logger.info("🗄️ Проверка SQLite базы данных...")
-
-        # Проверяем существование файла базы данных
-        if not os.path.exists(DATABASE_PATH):
-            logger.error(f"❌ База данных не найдена: {DATABASE_PATH}")
-            logger.info("Запустите sqlite_migration.py для создания базы данных")
-            return False
-
-        # Проверяем таблицы
-        tables = safe_execute_query("""
-            SELECT name FROM sqlite_master 
-            WHERE type='table' AND name IN ('users', 'channels', 'offers', 'offer_responses')
-        """, fetch_all=True)
-
-        if not tables or len(tables) < 4:
-            logger.error(f"❌ Не все таблицы найдены. Найдено: {len(tables) if tables else 0}")
-            logger.info("Запустите sqlite_migration.py для создания схемы")
-            return False
-        if PAYMENTS_SYSTEM_ENABLED:
-            create_payments_tables()
-            if create_payout_tables():
-                logger.info("✅ Таблицы системы выплат инициализированы")
-            else:
-                logger.error("❌ Ошибка создания таблиц системы выплат")
-                return False
-        logger.info("✅ SQLite база данных готова к работе")
-        return True
-
-
-
-
-    except Exception as e:
-        logger.error(f"❌ Ошибка инициализации SQLite: {e}")
-        return False
 
 
 def initialize_analytics_system():
@@ -980,460 +966,10 @@ def ensure_user_exists(telegram_user_id, username=None, first_name=None):
 
 
 # === ОСНОВНЫЕ МАРШРУТЫ ===
-@app.before_request
-def security_middleware():
-    """Middleware безопасности - выполняется ПЕРЕД каждым запросом"""
 
-    # Получаем информацию о запросе
-    client_ip = get_client_ip()
-    user_agent = request.headers.get('User-Agent', '')
+main_bd = Flask(__name__)
+register_blueprints(main_bd)
 
-    # 1. Блокировка заблокированных IP
-    if client_ip in blocked_ips:
-        log_security_event('BLOCKED_IP_ACCESS', {
-            'ip': client_ip,
-            'path': request.path,
-            'method': request.method
-        })
-        return jsonify({'error': 'Access denied'}), 403
-
-    # 2. Rate limiting
-    if not rate_limit_check(f"global_{client_ip}"):
-        # Добавляем в подозрительные при превышении лимита
-        suspicious_ips.add(client_ip)
-
-        log_security_event('RATE_LIMIT_EXCEEDED', {
-            'ip': client_ip,
-            'path': request.path,
-            'user_agent': user_agent
-        })
-
-        return jsonify({'error': 'Too many requests'}), 429
-
-    # 3. Детекция подозрительных запросов
-    request_data = {
-        'user_agent': user_agent,
-        'ip': client_ip,
-        'path': request.path,
-        'method': request.method
-    }
-
-    if is_suspicious_request(request_data):
-        suspicious_ips.add(client_ip)
-        log_security_event('SUSPICIOUS_REQUEST', request_data)
-
-    # 4. Валидация размера запроса
-    if request.content_length and request.content_length > 10 * 1024 * 1024:  # 10MB
-        log_security_event('LARGE_REQUEST', {
-            'ip': client_ip,
-            'size': request.content_length,
-            'path': request.path
-        })
-        return jsonify({'error': 'Request too large'}), 413
-
-    # 5. Проверка Content-Type для POST запросов
-    if request.method == 'POST' and request.path.startswith('/api/'):
-        content_type = request.headers.get('Content-Type', '')
-        if not content_type.startswith('application/json'):
-            return jsonify({'error': 'Invalid Content-Type'}), 400
-    # 6 Логирование доступа к API каналов
-    if request.path.startswith('/api/channels'):
-        telegram_user_id = get_current_user_id()
-        logger.info(f"API Channels access: {request.method} {request.path} by user {telegram_user_id}")
-
-        # Логируем заголовки для отладки
-        headers_info = {
-            'X-Telegram-User-Id': request.headers.get('X-Telegram-User-Id'),
-            'Content-Type': request.headers.get('Content-Type'),
-            'User-Agent': request.headers.get('User-Agent')
-        }
-        logger.debug(f"Request headers: {headers_info}")
-        # Логируем заголовки для отладки
-        headers_info = {
-            'X-Telegram-User-Id': request.headers.get('X-Telegram-User-Id'),
-            'Content-Type': request.headers.get('Content-Type'),
-            'User-Agent': request.headers.get('User-Agent')
-        }
-        logger.debug(f"Request headers: {headers_info}")
-
-def telegram_auth_middleware():
-    """Middleware для автоматической аутентификации Telegram пользователей"""
-
-    # Применяем только к API эндпоинтам каналов
-    if not request.path.startswith('/api/channels'):
-        return
-
-    # Пропускаем GET запросы к общим эндпоинтам
-    if request.method == 'GET' and request.path in ['/api/channels', '/api/channels/']:
-        return
-
-    try:
-        telegram_user_id = get_current_user_id()
-
-        if telegram_user_id:
-            # Убеждаемся что пользователь существует в БД
-            user_db_id = ensure_user_exists(telegram_user_id)
-
-            if not user_db_id:
-                logger.warning(f"Failed to ensure user exists for Telegram ID: {telegram_user_id}")
-            else:
-                logger.debug(f"Telegram user {telegram_user_id} authenticated for {request.path}")
-
-    except Exception as e:
-        logger.error(f"Telegram auth middleware error: {e}")
-
-
-@app.route('/')
-def index():
-    """Главная страница"""
-    return render_template('index.html')
-
-
-@app.route('/channels-enhanced')
-def channels_page():
-    """Страница управления каналами"""
-    return render_template('pages/channels.html')
-
-
-@app.route('/analytics')
-def analytics_page():
-    """Страница аналитики"""
-    try:
-        telegram_user_id = auth_service.get_current_user_id()
-
-        if not telegram_user_id:
-            return render_template('pages/analytics.html', demo_mode=True)
-
-        user = app.execute_query(
-            'SELECT id, username FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
-            fetch_one=True
-        )
-
-        if not user:
-            return render_template('pages/analytics.html', demo_mode=True)
-
-        return render_template('pages/analytics.html',
-                               demo_mode=False,
-                               telegram_user_id=telegram_user_id,
-                               analytics_enabled=Config.ANALYTICS_SYSTEM_ENABLED)
-
-    except Exception as e:
-        logger.error(f"Ошибка загрузки страницы аналитики: {e}")
-        return render_template('pages/analytics.html', demo_mode=True, error=str(e))
-
-
-@app.route('/payments')
-def payments_page():
-    """Страница платежей"""
-    return render_template('payments.html')
-
-
-@app.route('/test')
-def api_test():
-    """Тестовая страница"""
-    return jsonify({
-        'status': 'OK',
-        'message': 'Модульная архитектура работает!',
-        'features': {
-            'telegram_api': bool(Config.BOT_TOKEN),
-            'telegram_integration': Config.TELEGRAM_INTEGRATION,
-            'offers_system': Config.OFFERS_SYSTEM_ENABLED,
-            'responses_system': Config.RESPONSES_SYSTEM_ENABLED,
-            'payments_system': Config.PAYMENTS_SYSTEM_ENABLED,
-            'analytics_system': Config.ANALYTICS_SYSTEM_ENABLED,
-            'database': 'SQLite',
-            'modular_architecture': True
-        },
-        'config': {
-            'bot_token_configured': bool(Config.BOT_TOKEN),
-            'database_path': Config.DATABASE_PATH,
-            'database_exists': os.path.exists(Config.DATABASE_PATH),
-            'your_telegram_id': Config.YOUR_TELEGRAM_ID
-        }
-    })
-
-
-@app.route('/health')
-def health_check():
-    """Проверка здоровья приложения"""
-    try:
-        # Тест базы данных
-        conn = app.get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT 1')
-        result = cursor.fetchone()
-        conn.close()
-
-        return jsonify({
-            'status': 'healthy',
-            'database': 'connected',
-            'database_type': 'SQLite',
-            'database_path': Config.DATABASE_PATH,
-            'database_size': f"{os.path.getsize(Config.DATABASE_PATH) / 1024:.1f} KB" if os.path.exists(
-                Config.DATABASE_PATH) else 'N/A',
-            'modular_architecture': True,
-            'systems': {
-                'telegram_integration': Config.TELEGRAM_INTEGRATION,
-                'offers_system': Config.OFFERS_SYSTEM_ENABLED,
-                'responses_system': Config.RESPONSES_SYSTEM_ENABLED,
-                'payments_system': Config.PAYMENTS_SYSTEM_ENABLED,
-                'analytics_system': Config.ANALYTICS_SYSTEM_ENABLED
-            }
-        })
-
-    except Exception as e:
-        return jsonify({
-            'status': 'unhealthy',
-            'database': 'disconnected',
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/stats')
-def api_stats():
-    """Общая статистика системы"""
-    try:
-        # Статистика пользователей
-        users_count = app.execute_query('SELECT COUNT(*) as count FROM users', fetch_one=True)
-
-        # Статистика каналов
-        channels_count = app.execute_query('SELECT COUNT(*) as count FROM channels', fetch_one=True)
-
-        # Статистика офферов
-        offers_count = app.execute_query('SELECT COUNT(*) as count FROM offers',
-                                                fetch_one=True) if Config.OFFERS_SYSTEM_ENABLED else {'count': 0}
-
-        # Статистика откликов
-        responses_count = app.execute_query('SELECT COUNT(*) as count FROM offer_responses',
-                                                   fetch_one=True) if Config.RESPONSES_SYSTEM_ENABLED else {'count': 0}
-
-        return jsonify({
-            'success': True,
-            'users': users_count['count'] if users_count else 0,
-            'channels': channels_count['count'] if channels_count else 0,
-            'offers': offers_count['count'] if offers_count else 0,
-            'responses': responses_count['count'] if responses_count else 0,
-            'features': {
-                'modular_architecture': True,
-                'telegram_integration': Config.TELEGRAM_INTEGRATION,
-                'offers_system': Config.OFFERS_SYSTEM_ENABLED,
-                'responses_system': Config.RESPONSES_SYSTEM_ENABLED,
-                'payments_system': Config.PAYMENTS_SYSTEM_ENABLED,
-                'database': 'SQLite',
-                'bot_configured': bool(Config.BOT_TOKEN)
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка получения статистики: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'users': 0,
-            'channels': 0,
-            'offers': 0,
-            'responses': 0
-        }), 500
-
-
-
-
-
-@app.route('/debug/templates')
-def debug_templates():
-    """Отладочный маршрут для проверки шаблонов"""
-    import os
-
-    templates_dir = os.path.join(app.root_path, 'templates')
-    static_dir = os.path.join(app.root_path, 'static')
-
-    debug_info = {
-        'templates_dir_exists': os.path.exists(templates_dir),
-        'static_dir_exists': os.path.exists(static_dir),
-        'templates_dir_path': templates_dir,
-        'static_dir_path': static_dir,
-        'templates_files': [],
-        'static_files': []
-    }
-
-    if os.path.exists(templates_dir):
-        debug_info['templates_files'] = os.listdir(templates_dir)
-
-    if os.path.exists(static_dir):
-        for root, dirs, files in os.walk(static_dir):
-            for file in files:
-                rel_path = os.path.relpath(os.path.join(root, file), static_dir)
-                debug_info['static_files'].append(rel_path)
-
-    return jsonify(debug_info)
-
-@app.route('/advanced-offers/<int:channel_id>')
-def advanced_offers_page(channel_id):
-    """Страница офферов с продвинутой аналитикой"""
-    try:
-        # Проверяем принадлежность канала
-        telegram_user_id = get_current_user_id()
-        if not telegram_user_id:
-            return redirect('/')
-
-        channel = safe_execute_query('''
-                                     SELECT c.*, u.telegram_id as owner_telegram_id
-                                     FROM channels c
-                                              JOIN users u ON c.owner_id = u.id
-                                     WHERE c.id = ?
-                                       AND u.telegram_id = ?
-                                     ''', (channel_id, telegram_user_id), fetch_one=True)
-
-        if not channel:
-            return render_template('error.html', message='Канал не найден')
-
-        return render_template('advanced_offers.html',
-                               channel=channel,
-                               channel_id=channel_id)
-
-    except Exception as e:
-        logger.error(f"Ошибка страницы продвинутых офферов: {e}")
-        return render_template('error.html', message='Ошибка загрузки')
-
-
-@app.route('/analytics-demo')
-def analytics_demo_page():
-    """Демо-страница системы аналитики"""
-    return render_template('analytics_demo.html')
-
-
-@app.route('/api/analytics/test-all-systems')
-@require_telegram_auth
-def api_test_all_systems():
-    """Комплексный тест всех систем аналитики"""
-    try:
-        telegram_user_id = get_current_user_id()
-
-        test_results = {
-            'timestamp': datetime.now().isoformat(),
-            'user_id': telegram_user_id,
-            'systems': {
-                'basic_analytics': False,
-                'placement_tracking': False,
-                'ai_recommendations': False,
-                'database': False
-            },
-            'details': {},
-            'errors': [],
-            'performance': {}
-        }
-
-        # 1. Тест базы данных
-        try:
-            start_time = datetime.now()
-            conn = get_db_connection()
-            if conn:
-                cursor = conn.cursor()
-                cursor.execute('SELECT COUNT(*) FROM users')
-                user_count = cursor.fetchone()[0]
-                conn.close()
-
-                test_results['systems']['database'] = True
-                test_results['details']['database'] = {
-                    'connection': 'success',
-                    'user_count': user_count,
-                    'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000
-                }
-
-        except Exception as e:
-            test_results['errors'].append(f'Database test failed: {str(e)}')
-
-        # 2. Тест базовой аналитики
-        if ANALYTICS_SYSTEM_ENABLED:
-            try:
-                start_time = datetime.now()
-                analytics_engine = AnalyticsEngine(DATABASE_PATH)
-                metrics = analytics_engine.get_user_metrics(telegram_user_id, '7d')
-
-                test_results['systems']['basic_analytics'] = True
-                test_results['details']['basic_analytics'] = {
-                    'metrics_generated': bool(metrics),
-                    'revenue': metrics.get('total_revenue', 0),
-                    'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000
-                }
-
-            except Exception as e:
-                test_results['errors'].append(f'Basic analytics test failed: {str(e)}')
-
-        # 3. Тест отслеживания размещений
-        if PLACEMENT_TRACKING_ENABLED:
-            try:
-                start_time = datetime.now()
-                placement_tracker = PlacementTracker(DATABASE_PATH)
-                summary = placement_tracker.get_performance_summary(telegram_user_id, 7)
-
-                test_results['systems']['placement_tracking'] = True
-                test_results['details']['placement_tracking'] = {
-                    'summary_generated': bool(summary),
-                    'placements_count': summary.get('total_placements', 0),
-                    'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000
-                }
-
-            except Exception as e:
-                test_results['errors'].append(f'Placement tracking test failed: {str(e)}')
-
-        # 4. Тест AI-рекомендаций
-        if AI_RECOMMENDATIONS_ENABLED:
-            try:
-                start_time = datetime.now()
-                ai_engine = AIRecommendationEngine(DATABASE_PATH)
-                recommendations = ai_engine.generate_recommendations(telegram_user_id, 7)
-
-                test_results['systems']['ai_recommendations'] = True
-                test_results['details']['ai_recommendations'] = {
-                    'recommendations_count': len(recommendations),
-                    'has_high_priority': any(r.priority == 'high' for r in recommendations),
-                    'response_time_ms': (datetime.now() - start_time).total_seconds() * 1000
-                }
-
-            except Exception as e:
-                test_results['errors'].append(f'AI recommendations test failed: {str(e)}')
-
-        # Общая статистика
-        working_systems = sum(test_results['systems'].values())
-        total_systems = len(test_results['systems'])
-
-        test_results['summary'] = {
-            'working_systems': working_systems,
-            'total_systems': total_systems,
-            'success_rate': round((working_systems / total_systems) * 100, 1),
-            'has_errors': len(test_results['errors']) > 0,
-            'overall_status': 'healthy' if working_systems >= 3 else 'partial' if working_systems >= 1 else 'failed'
-        }
-
-        # Рекомендации по улучшению
-        recommendations = []
-        if not test_results['systems']['database']:
-            recommendations.append('Проверьте подключение к базе данных SQLite')
-        if not test_results['systems']['basic_analytics']:
-            recommendations.append('Убедитесь что analytics_api.py установлен корректно')
-        if not test_results['systems']['placement_tracking']:
-            recommendations.append('Проверьте модуль placement_tracking.py')
-        if not test_results['systems']['ai_recommendations']:
-            recommendations.append('Убедитесь что ai_recommendations.py загружен')
-
-        test_results['recommendations'] = recommendations
-
-        return jsonify({
-            'success': True,
-            'test_results': test_results
-        })
-
-    except Exception as e:
-        logger.error(f"System test error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'test_results': {
-                'summary': {'overall_status': 'failed', 'error': str(e)}
-            }
-        }), 500
 # === API ENDPOINTS ===
 
 @app.route('/api/stats')
@@ -1579,6 +1115,7 @@ def api_analytics_status():
 
 # === API МАРШРУТЫ ДЛЯ ОФФЕРОВ ===
 if OFFERS_SYSTEM_ENABLED:
+
 
     @app.route('/api/offers', methods=['POST'])
     def api_create_offer():
@@ -1752,10 +1289,6 @@ if OFFERS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Ошибка получения статистики'}), 500
 
 
-    @app.route('/create-offer')
-    def create_offer_page():
-        """Страница создания оффера"""
-        return render_template('create_offer.html')
 
 # === API МАРШРУТЫ ДЛЯ ОТКЛИКОВ ===
 if RESPONSES_SYSTEM_ENABLED:
@@ -2523,9 +2056,9 @@ def delete_channel_secure(channel_id):
 
 
 # === ДОПОЛНИТЕЛЬНЫЕ API ENDPOINTS ===
-@app.route('/test')
-def api_test():
-    """Тестовая страница"""
+#@app.route('/test')
+#def api_test():
+'''    """Тестовая страница"""
     return jsonify({
         'status': 'OK',
         'message': 'Продуктивная версия приложения работает!',
@@ -2545,7 +2078,7 @@ def api_test():
             'your_telegram_id': YOUR_TELEGRAM_ID
         },
         'timestamp': datetime.now().isoformat()
-    })
+    })'''
 
 
 @app.route('/health')
@@ -3352,140 +2885,6 @@ def api_analytics_dashboard_data():
             }
         }), 500
 
-'''@app.route('/api/analytics/create-demo-data', methods=['POST'])
-@require_telegram_auth
-def api_create_demo_analytics_data():
-    """Создание демо-данных для тестирования аналитики"""
-    try:
-        telegram_user_id = get_current_user_id()
-
-        # Проверяем права администратора
-        if telegram_user_id != YOUR_TELEGRAM_ID:
-            return jsonify({
-                'success': False,
-                'error': 'Доступ запрещен. Только для администратора.'
-            }), 403
-
-        created_items = {
-            'demo_placement': None,
-            'demo_events': 0,
-            'demo_offers': 0
-        }
-
-        # Создаем демо-размещение если включено отслеживание
-        if PLACEMENT_TRACKING_ENABLED:
-            try:
-                # Создаем демо-размещение
-                from placement_tracking import create_demo_placement
-                placement_id = create_demo_placement(DATABASE_PATH)
-
-                if placement_id:
-                    created_items['demo_placement'] = placement_id
-                    created_items['demo_events'] = 50  # Примерное количество событий
-
-                    logger.info(f"Создано демо-размещение {placement_id}")
-
-            except Exception as e:
-                logger.error(f"Error creating demo placement: {e}")
-
-        # Создаем дополнительные демо-данные для офферов
-        try:
-            # Убеждаемся что пользователь существует
-            user_db_id = ensure_user_exists(telegram_user_id)
-
-            if user_db_id and OFFERS_SYSTEM_ENABLED:
-                # Создаем несколько демо-офферов
-                demo_offers = [
-                    {
-                        'title': 'Демо-оффер: Продвижение технологического стартапа',
-                        'description': 'Размещение рекламы инновационного IT-продукта',
-                        'content': 'Ищем каналы для размещения рекламы нашего нового мобильного приложения. Готовы предложить выгодные условия сотрудничества.',
-                        'price': 5000,
-                        'currency': 'RUB',
-                        'category': 'technology'
-                    },
-                    {
-                        'title': 'Демо-оффер: Реклама образовательного курса',
-                        'description': 'Продвижение онлайн-курса по интернет-маркетингу',
-                        'content': 'Запускаем новый курс по цифровому маркетингу. Ищем качественные каналы с активной аудиторией.',
-                        'price': 3500,
-                        'currency': 'RUB',
-                        'category': 'education'
-                    }
-                ]
-
-                for offer_data in demo_offers:
-                    result = add_offer(telegram_user_id, offer_data)
-                    if result.get('success'):
-                        created_items['demo_offers'] += 1
-
-        except Exception as e:
-            logger.error(f"Error creating demo offers: {e}")
-
-        return jsonify({
-            'success': True,
-            'message': 'Демо-данные созданы',
-            'created_items': created_items,
-            'note': 'Демо-данные помогут протестировать все функции аналитики'
-        })
-
-    except Exception as e:
-        logger.error(f"Create demo data error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500'''
-
-
-@app.route('/payments-dashboard')
-def payments_dashboard():
-    """Панель управления платежами"""
-    return render_template('payments_dashboard.html')
-
-
-@app.route('/api/payments/stats')
-def payments_stats():
-    """Статистика платежей"""
-    try:
-        telegram_user_id = get_current_user_id()
-        if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Пользователь не авторизован'}), 401
-
-        # Получаем статистику
-        stats = safe_execute_query('''
-                                   SELECT COUNT(*)                                                 as total_payments,
-                                          SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END)    as total_paid,
-                                          SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as pending_amount,
-                                          COUNT(CASE WHEN status = 'paid' THEN 1 END)              as successful_payments
-                                   FROM payments p
-                                            JOIN offers o ON p.offer_id = o.id
-                                            JOIN users u ON o.created_by = u.id
-                                   WHERE u.telegram_id = ?
-                                   ''', (telegram_user_id,), fetch_one=True)
-
-        # Получаем статистику эскроу
-        escrow_stats = safe_execute_query('''
-                                          SELECT COUNT(*)                                                        as total_escrows,
-                                                 SUM(CASE WHEN status = 'funds_held' THEN amount ELSE 0 END)     as held_amount,
-                                                 SUM(CASE WHEN status = 'funds_released' THEN amount ELSE 0 END) as released_amount,
-                                                 COUNT(CASE WHEN status = 'disputed' THEN 1 END)                 as disputed_count
-                                          FROM escrow_transactions et
-                                                   JOIN offers o ON et.offer_id = o.id
-                                                   JOIN users u ON o.created_by = u.id
-                                          WHERE u.telegram_id = ?
-                                          ''', (telegram_user_id,), fetch_one=True)
-
-        return jsonify({
-            'success': True,
-            'payments': stats or {},
-            'escrow': escrow_stats or {}
-        })
-
-    except Exception as e:
-        logger.error(f"❌ Ошибка получения статистики платежей: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
 def setup_payout_routes():
     """Настройка маршрутов системы выплат"""
     global payout_manager
@@ -3793,21 +3192,6 @@ def setup_payout_routes():
         except Exception as e:
             logger.error(f"Ошибка остановки планировщика: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@app.route('/payments')
-def payments_page():
-    """Страница управления платежами"""
-    try:
-        telegram_user_id = get_current_user_id()
-        logger.info(f"Загрузка страницы платежей для пользователя {telegram_user_id}")
-
-        # Можно передать дополнительные данные в шаблон
-        return render_template('payments.html', telegram_user_id=telegram_user_id)
-
-    except Exception as e:
-        logger.error(f"Ошибка загрузки страницы платежей: {e}")
-        return render_template('payments.html', error=str(e))
 
 
 @app.route('/api/payments/stats', methods=['GET'])
@@ -4500,30 +3884,36 @@ def api_navigation_menu():
 def validate_startup_requirements():
     """Проверка требований для запуска"""
     errors = []
+    warnings = []
 
     if not BOT_TOKEN:
         errors.append("BOT_TOKEN не настроен в переменных окружения")
 
-    if not TELEGRAM_INTEGRATION:
-        errors.append("Telegram интеграция недоступна")
+    if not os.path.exists(DATABASE_PATH):
+        errors.append(f"База данных не найдена: {DATABASE_PATH}")
 
-    if not OFFERS_SYSTEM_ENABLED:
-        errors.append("Система офферов недоступна")
-
+    # Проверка инициализации систем
     if errors:
         logger.error("❌ Критические ошибки запуска:")
         for error in errors:
             logger.error(f"  - {error}")
         return False
 
+    if warnings:
+        logger.warning("⚠️ Предупреждения:")
+        for warning in warnings:
+            logger.warning(f"  - {warning}")
+
     return True
 
 # === ЗАПУСК ПРИЛОЖЕНИЯ ===
 if __name__ == '__main__':
     try:
+        # Инициализация базы данных
+
         # Проверка требований
         if not validate_startup_requirements():
-            logger.error("❌ Не выполнены требования для запуска приложения")
+            logger.error("❌ Не выполнены требования для запуска")
             sys.exit(1)
 
         # Инициализация систем

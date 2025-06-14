@@ -448,10 +448,10 @@
             const tg = window.Telegram.WebApp;
             tg.ready();
             tg.expand();
-            
+
             // Set header color to match design
             tg.setHeaderColor('#667eea');
-            
+
             // Enable closing confirmation
             tg.enableClosingConfirmation();
         }
@@ -482,7 +482,7 @@
                 tab.classList.remove('active');
             });
             document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-            
+
             currentTab = tabName;
             loadPayments(tabName);
         }
@@ -499,7 +499,7 @@
                     loadPaymentStats(),
                     loadPayments(currentTab)
                 ]);
-                
+
             } catch (error) {
                 console.error('Error initializing payments:', error);
                 showError('Ошибка загрузки данных');
@@ -513,9 +513,9 @@
                         'X-Telegram-User-Id': currentUserId
                     }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     updateStats(data.payments, data.escrow);
                 }
@@ -533,16 +533,16 @@
 
         async function loadPayments(type) {
             showLoading();
-            
+
             try {
                 const response = await fetch(`/api/payments/${type}`, {
                     headers: {
                         'X-Telegram-User-Id': currentUserId
                     }
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     renderPayments(data.payments);
                 } else {
@@ -556,14 +556,14 @@
 
         function renderPayments(payments) {
             hideLoading();
-            
+
             const container = document.getElementById('payments-list');
-            
+
             if (!payments || payments.length === 0) {
                 showEmptyState();
                 return;
             }
-            
+
             hideEmptyState();
             container.innerHTML = payments.map(payment => createPaymentCard(payment)).join('');
         }
@@ -571,14 +571,14 @@
         function createPaymentCard(payment) {
             const statusClass = `status-${payment.status}`;
             const statusIcon = getStatusIcon(payment.status);
-            
+
             return `
                 <div class="payment-card" data-payment-id="${payment.id}">
                     <div class="payment-header">
                         <div class="payment-title">${payment.title || 'Платеж'}</div>
                         <div class="payment-amount">${payment.amount} ₽</div>
                     </div>
-                    
+
                     <div class="payment-meta">
                         <div class="payment-meta-item">
                             <span>📅</span>
@@ -594,7 +594,7 @@
                             </span>
                         </div>
                     </div>
-                    
+
                     <div class="payment-actions">
                         ${getPaymentActions(payment)}
                     </div>
@@ -626,15 +626,15 @@
             if (payment.status === 'pending' && currentTab === 'outgoing') {
                 return `<button class="btn btn-primary" onclick="openPaymentModal(${payment.offer_id}, ${payment.amount})">💳 Оплатить</button>`;
             }
-            
+
             if (payment.status === 'completed') {
                 return `<button class="btn btn-secondary" onclick="viewPaymentDetails(${payment.id})">📋 Детали</button>`;
             }
-            
+
             if (payment.status === 'failed') {
                 return `<button class="btn btn-warning" onclick="retryPayment(${payment.id})">🔄 Повторить</button>`;
             }
-            
+
             return '';
         }
 
@@ -642,15 +642,15 @@
         function openPaymentModal(offerId, amount) {
             const modal = document.getElementById('payment-modal');
             const content = document.getElementById('payment-modal-content');
-            
+
             content.innerHTML = `
                 <p><strong>Сумма к оплате:</strong> ${amount} ₽</p>
                 <p><strong>Оффер ID:</strong> ${offerId}</p>
                 <p>Оплата будет произведена через Telegram Wallet</p>
             `;
-            
+
             modal.style.display = 'flex';
-            
+
             // Set up payment button
             document.getElementById('confirm-payment').onclick = () => processPayment(offerId, amount);
         }
@@ -671,19 +671,19 @@
                         currency: 'RUB',
                         prices: [{ label: 'Размещение рекламы', amount: amount * 100 }]
                     };
-                    
+
                     window.Telegram.WebApp.openInvoice(invoice.payload);
                 }
-                
+
                 closePaymentModal();
                 showSuccess('Платеж инициирован');
-                
+
                 // Refresh payments
                 setTimeout(() => {
                     loadPayments(currentTab);
                     loadPaymentStats();
                 }, 2000);
-                
+
             } catch (error) {
                 console.error('Payment error:', error);
                 showError('Ошибка обработки платежа');
@@ -713,7 +713,7 @@
             const date = new Date(dateString);
             return date.toLocaleDateString('ru-RU', {
                 day: '2-digit',
-                month: '2-digit', 
+                month: '2-digit',
                 year: 'numeric',
                 hour: '2-digit',
                 minute: '2-digit'
@@ -724,30 +724,30 @@
             // Create temporary success notification
             const notification = document.createElement('div');
             notification.style.cssText = `
-                position: fixed; top: 20px; right: 20px; 
-                background: #10b981; color: white; 
-                padding: 16px 24px; border-radius: 8px; 
-                box-shadow: 0 4px 16px rgba(0,0,0,0.1); 
+                position: fixed; top: 20px; right: 20px;
+                background: #10b981; color: white;
+                padding: 16px 24px; border-radius: 8px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
                 z-index: 2000; font-weight: 600;
             `;
             notification.textContent = message;
             document.body.appendChild(notification);
-            
+
             setTimeout(() => notification.remove(), 3000);
         }
 
         function showError(message) {
             const notification = document.createElement('div');
             notification.style.cssText = `
-                position: fixed; top: 20px; right: 20px; 
-                background: #ef4444; color: white; 
-                padding: 16px 24px; border-radius: 8px; 
-                box-shadow: 0 4px 16px rgba(0,0,0,0.1); 
+                position: fixed; top: 20px; right: 20px;
+                background: #ef4444; color: white;
+                padding: 16px 24px; border-radius: 8px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1);
                 z-index: 2000; font-weight: 600;
             `;
             notification.textContent = message;
             document.body.appendChild(notification);
-            
+
             setTimeout(() => notification.remove(), 5000);
         }
 

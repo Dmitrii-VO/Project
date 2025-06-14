@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Telegram Mini App - Упрощенный файл запуска
-Перенаправляет на working_app.py для совместимости
+Telegram Mini App - Главный файл запуска
 """
 
 import os
@@ -9,17 +8,18 @@ import sys
 
 
 def main():
-    """Главная функция запуска - перенаправление на working_app.py"""
-    print("🔄 Перенаправление на working_app.py...")
+    """Главная функция запуска"""
+    print("🚀 Запуск Telegram Mini App...")
 
-    # Импортируем и запускаем working_app
+    # Проверяем существование working_app.py
+    if not os.path.exists('working_app.py'):
+        print("❌ Файл working_app.py не найден!")
+        sys.exit(1)
+
+    # Запускаем working_app.py
     try:
         import working_app
-        # working_app.py запустится автоматически при импорте
-    except ImportError as e:
-        print(f"❌ Ошибка импорта working_app.py: {e}")
-        print("💡 Убедитесь, что файл working_app.py существует")
-        sys.exit(1)
+        print("✅ working_app.py запущен успешно")
     except Exception as e:
         print(f"❌ Ошибка запуска: {e}")
         sys.exit(1)
