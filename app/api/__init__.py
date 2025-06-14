@@ -51,8 +51,8 @@ def get_available_blueprints():
         pass
 
     try:
-        from .analytics import analytics_bp
-        blueprints.append(('channel_recommendations', analytics_bp, '/api/channel_recommendations'))
+        from .channel_recommendations import channel_recommendations_bp
+        blueprints.append(('channel_recommendations', channel_recommendations_bp, '/api/channel_recommendations'))
     except ImportError:
         pass
 

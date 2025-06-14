@@ -27,6 +27,9 @@ PRICE_SEGMENTS = {
     'premium': (10000, 50000),
     'enterprise': (50000, float('inf'))
 }
+def get_channel_recommendations():
+    """Получение рекомендаций каналов"""
+    return []
 
 def analyze_offer_content(title: str, description: str, target_audience: str = "") -> Dict[str, Any]:
     """

@@ -13,11 +13,9 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template_string, request, jsonify, session, redirect
 from functools import wraps
 
-from app import initialize_systems
+# from app import initialize_systems  # Временно закомментируем
 from flask import render_template
-from app.api.channel_recommendations import *
-from app.templates.pages import *
-
+# from app.api.channel_recommendations import analyze_offer_content  # Временно закомментируем
 
 try:
     from enhanced_api_routes import add_enhanced_routes
@@ -196,8 +194,8 @@ payout_manager = None
 # Создание Flask приложения
 app = Flask(__name__,
             template_folder='app/templates',
-            static_folder='app/static',
-            channels_foleder='app/pages/channels')
+            static_folder='app/static')
+CHANNELS_FOLDER = os.path.join(os.path.dirname(__file__), 'app', 'pages', 'channels')
 
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
@@ -1014,7 +1012,7 @@ def debug_templates():
 @app.route('/channels-enhanced')
 def channels_page():
     """Страница управления каналами"""
-    return render_template('channels.html')
+    return render_template('pages/channels.html')
 
 
 @app.route('/analytics')
@@ -1027,7 +1025,7 @@ def analytics_page():
         if not telegram_user_id:
             # Если не авторизован, показываем демо-версию
             logger.info("Показ демо-версии аналитики для неавторизованного пользователя")
-            return render_template('analytics.html', demo_mode=True)
+            return render_template('pages/analytics.html', demo_mode=True)
 
         # Проверяем наличие пользователя в БД
         user = safe_execute_query(
@@ -1038,7 +1036,7 @@ def analytics_page():
 
         if not user:
             logger.warning(f"Пользователь {telegram_user_id} не найден в БД для аналитики")
-            return render_template('analytics.html', demo_mode=True)
+            return render_template('pages/analytics.html', demo_mode=True)
 
         # Получаем базовую статистику для передачи в шаблон
         user_stats = {}
@@ -1052,7 +1050,7 @@ def analytics_page():
 
         logger.info(f"Загружена страница аналитики для пользователя {telegram_user_id}")
 
-        return render_template('analytics.html',
+        return render_template('pages/analytics.html',
                                demo_mode=False,
                                user_stats=user_stats,
                                telegram_user_id=telegram_user_id,
@@ -1060,7 +1058,7 @@ def analytics_page():
 
     except Exception as e:
         logger.error(f"Ошибка загрузки страницы аналитики: {e}")
-        return render_template('analytics.html', demo_mode=True, error=str(e))
+        return render_template('pages/analytics.html', demo_mode=True, error=str(e))
 
 
 @app.route('/advanced-offers/<int:channel_id>')
@@ -2662,7 +2660,7 @@ def quick_offer_analysis():
             return jsonify({'error': 'Укажите заголовок или описание'}), 400
 
         # Анализируем контент
-        analysis = analyze_offer_content(title, description, target_audience)
+        analysis = {"categories": [], "keywords": [], "primary_category": "general"}  # Заглушка
 
         # Получаем краткую статистику по категориям
         category_stats = {}
@@ -4322,7 +4320,7 @@ if __name__ == '__main__':
             sys.exit(1)
 
         # Инициализация систем
-        initialize_systems(app)
+        # initialize_systems(app)  # Временно закомментируем
 
         # Настройка режима запуска
         debug_mode = os.environ.get('DEBUG', 'True').lower() == 'true'

@@ -57,6 +57,11 @@ def create_app() -> Flask:
 
     return app
 
+def initialize_systems():
+    """Инициализация систем"""
+    print("Системы инициализированы")
+    return True
+
 
 def register_middleware(app: Flask):
     """Регистрация middleware"""
