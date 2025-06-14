@@ -11,9 +11,11 @@ from collections import defaultdict
 from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime, timedelta
 from app import create_app, get_app
-import app
-from flask import Flask, render_template_string, request, jsonify, session, redirect, render_template, Config
+from app import create_app
+from flask import Flask, render_template_string, request, jsonify, session, redirect, render_template, Config, Blueprint
 from functools import wraps
+
+from app.services import auth_service
 
 # from app.api.channel_recommendations import analyze_offer_content  # Временно закомментируем
 
@@ -210,6 +212,13 @@ except ImportError as e:
 
     # Определяем константы
     MAX_RETRY_ATTEMPTS = 3
+
+# === ИМПОРТ API АНАЛИЗАТОРА КАНАЛОВ ===
+try:
+    from app.api.channel_analyzer import analyzer_bp
+    print("✅ API анализатора каналов зарегистрирован")
+except ImportError as e:
+    print(f"⚠️ API анализатора каналов недоступен: {e}")
 # === ИМПОРТ ПРОДВИНУТОГО АЛГОРИТМА ===
 try:
     from app.services.advanced_matching_algorithm import (
@@ -302,9 +311,9 @@ def check_services_availability():
 payout_manager = None
 
 # Создание Flask приложения
-app = Flask(__name__,
-            template_folder='app/templates',
-            static_folder='app/static')
+app = create_app()
+app.template_folder = 'app/templates'
+app.static_folder = 'app/static'
 CHANNELS_FOLDER = os.path.join(os.path.dirname(__file__), 'app', 'pages', 'channels')
 app.config.from_object(Config)
 
@@ -1073,20 +1082,162 @@ def telegram_auth_middleware():
     except Exception as e:
         logger.error(f"Telegram auth middleware error: {e}")
 
+
 @app.route('/')
 def index():
-    """Главная страница с новым дизайном"""
+    """Главная страница"""
     return render_template('index.html')
 
-@app.route('/index')
-def index_alt():
-    """Альтернативный маршрут для главной страницы"""
-    return redirect('/')
 
-@app.route('/channels')
-def channels_redirect():
-    """Редирект с /channels на /channels-enhanced для совместимости"""
-    return redirect('/channels-enhanced')
+@app.route('/channels-enhanced')
+def channels_page():
+    """Страница управления каналами"""
+    return render_template('pages/channels.html')
+
+
+@app.route('/analytics')
+def analytics_page():
+    """Страница аналитики"""
+    try:
+        telegram_user_id = auth_service.get_current_user_id()
+
+        if not telegram_user_id:
+            return render_template('pages/analytics.html', demo_mode=True)
+
+        user = app.execute_query(
+            'SELECT id, username FROM users WHERE telegram_id = ?',
+            (telegram_user_id,),
+            fetch_one=True
+        )
+
+        if not user:
+            return render_template('pages/analytics.html', demo_mode=True)
+
+        return render_template('pages/analytics.html',
+                               demo_mode=False,
+                               telegram_user_id=telegram_user_id,
+                               analytics_enabled=Config.ANALYTICS_SYSTEM_ENABLED)
+
+    except Exception as e:
+        logger.error(f"Ошибка загрузки страницы аналитики: {e}")
+        return render_template('pages/analytics.html', demo_mode=True, error=str(e))
+
+
+@app.route('/payments')
+def payments_page():
+    """Страница платежей"""
+    return render_template('payments.html')
+
+
+@app.route('/test')
+def api_test():
+    """Тестовая страница"""
+    return jsonify({
+        'status': 'OK',
+        'message': 'Модульная архитектура работает!',
+        'features': {
+            'telegram_api': bool(Config.BOT_TOKEN),
+            'telegram_integration': Config.TELEGRAM_INTEGRATION,
+            'offers_system': Config.OFFERS_SYSTEM_ENABLED,
+            'responses_system': Config.RESPONSES_SYSTEM_ENABLED,
+            'payments_system': Config.PAYMENTS_SYSTEM_ENABLED,
+            'analytics_system': Config.ANALYTICS_SYSTEM_ENABLED,
+            'database': 'SQLite',
+            'modular_architecture': True
+        },
+        'config': {
+            'bot_token_configured': bool(Config.BOT_TOKEN),
+            'database_path': Config.DATABASE_PATH,
+            'database_exists': os.path.exists(Config.DATABASE_PATH),
+            'your_telegram_id': Config.YOUR_TELEGRAM_ID
+        }
+    })
+
+
+@app.route('/health')
+def health_check():
+    """Проверка здоровья приложения"""
+    try:
+        # Тест базы данных
+        conn = app.get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT 1')
+        result = cursor.fetchone()
+        conn.close()
+
+        return jsonify({
+            'status': 'healthy',
+            'database': 'connected',
+            'database_type': 'SQLite',
+            'database_path': Config.DATABASE_PATH,
+            'database_size': f"{os.path.getsize(Config.DATABASE_PATH) / 1024:.1f} KB" if os.path.exists(
+                Config.DATABASE_PATH) else 'N/A',
+            'modular_architecture': True,
+            'systems': {
+                'telegram_integration': Config.TELEGRAM_INTEGRATION,
+                'offers_system': Config.OFFERS_SYSTEM_ENABLED,
+                'responses_system': Config.RESPONSES_SYSTEM_ENABLED,
+                'payments_system': Config.PAYMENTS_SYSTEM_ENABLED,
+                'analytics_system': Config.ANALYTICS_SYSTEM_ENABLED
+            }
+        })
+
+    except Exception as e:
+        return jsonify({
+            'status': 'unhealthy',
+            'database': 'disconnected',
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/stats')
+def api_stats():
+    """Общая статистика системы"""
+    try:
+        # Статистика пользователей
+        users_count = app.execute_query('SELECT COUNT(*) as count FROM users', fetch_one=True)
+
+        # Статистика каналов
+        channels_count = app.execute_query('SELECT COUNT(*) as count FROM channels', fetch_one=True)
+
+        # Статистика офферов
+        offers_count = app.execute_query('SELECT COUNT(*) as count FROM offers',
+                                                fetch_one=True) if Config.OFFERS_SYSTEM_ENABLED else {'count': 0}
+
+        # Статистика откликов
+        responses_count = app.execute_query('SELECT COUNT(*) as count FROM offer_responses',
+                                                   fetch_one=True) if Config.RESPONSES_SYSTEM_ENABLED else {'count': 0}
+
+        return jsonify({
+            'success': True,
+            'users': users_count['count'] if users_count else 0,
+            'channels': channels_count['count'] if channels_count else 0,
+            'offers': offers_count['count'] if offers_count else 0,
+            'responses': responses_count['count'] if responses_count else 0,
+            'features': {
+                'modular_architecture': True,
+                'telegram_integration': Config.TELEGRAM_INTEGRATION,
+                'offers_system': Config.OFFERS_SYSTEM_ENABLED,
+                'responses_system': Config.RESPONSES_SYSTEM_ENABLED,
+                'payments_system': Config.PAYMENTS_SYSTEM_ENABLED,
+                'database': 'SQLite',
+                'bot_configured': bool(Config.BOT_TOKEN)
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка получения статистики: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'users': 0,
+            'channels': 0,
+            'offers': 0,
+            'responses': 0
+        }), 500
+
+
+
 
 
 @app.route('/debug/templates')
@@ -1116,58 +1267,6 @@ def debug_templates():
                 debug_info['static_files'].append(rel_path)
 
     return jsonify(debug_info)
-
-@app.route('/channels-enhanced')
-def channels_page():
-    """Страница управления каналами"""
-    return render_template('pages/channels.html')
-
-
-@app.route('/analytics')
-def analytics_page():
-    """Страница аналитики с расширенными метриками"""
-    try:
-        # Проверяем авторизацию пользователя
-        telegram_user_id = get_current_user_id()
-
-        if not telegram_user_id:
-            # Если не авторизован, показываем демо-версию
-            logger.info("Показ демо-версии аналитики для неавторизованного пользователя")
-            return render_template('pages/analytics.html', demo_mode=True)
-
-        # Проверяем наличие пользователя в БД
-        user = safe_execute_query(
-            'SELECT id, username FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
-            fetch_one=True
-        )
-
-        if not user:
-            logger.warning(f"Пользователь {telegram_user_id} не найден в БД для аналитики")
-            return render_template('pages/analytics.html', demo_mode=True)
-
-        # Получаем базовую статистику для передачи в шаблон
-        user_stats = {}
-        if ANALYTICS_SYSTEM_ENABLED:
-            try:
-                analytics_engine = AnalyticsEngine(DATABASE_PATH)
-                user_stats = analytics_engine.get_user_metrics(telegram_user_id, '30d')
-            except Exception as e:
-                logger.error(f"Ошибка получения статистики для аналитики: {e}")
-                user_stats = {}
-
-        logger.info(f"Загружена страница аналитики для пользователя {telegram_user_id}")
-
-        return render_template('pages/analytics.html',
-                               demo_mode=False,
-                               user_stats=user_stats,
-                               telegram_user_id=telegram_user_id,
-                               analytics_enabled=ANALYTICS_SYSTEM_ENABLED)
-
-    except Exception as e:
-        logger.error(f"Ошибка загрузки страницы аналитики: {e}")
-        return render_template('pages/analytics.html', demo_mode=True, error=str(e))
-
 
 @app.route('/advanced-offers/<int:channel_id>')
 def advanced_offers_page(channel_id):

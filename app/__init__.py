@@ -1,5 +1,4 @@
 # app/__init__.py - ИСПРАВЛЕННАЯ ВЕРСИЯ
-
 import os
 import sys
 import logging
@@ -11,13 +10,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Создаем глобальный объект приложения
-app = None
-
 
 def create_app() -> Flask:
     """Фабрика приложений Flask"""
-    global app
 
     # Создаем Flask приложение
     app = Flask(__name__)
@@ -26,18 +21,41 @@ def create_app() -> Flask:
     try:
         from app.config.settings import Config
         app.config.from_object(Config)
+
+        # Проверка критических настроек
+        if not Config.validate_config():
+            print("❌ Критическая ошибка конфигурации!")
+            sys.exit(1)
+
     except ImportError as e:
         print(f"❌ Ошибка импорта конфигурации: {e}")
         # Базовая конфигурация как fallback
         app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key')
         app.config['DEBUG'] = True
 
-    return app
+    # Инициализация базы данных
+    try:
+        from app.models.database import db_manager
+        if not db_manager.init_database():
+            print("❌ Ошибка инициализации базы данных")
+            print("💡 Попробуйте: python sqlite_migration.py")
+            sys.exit(1)
+    except ImportError as e:
+        print(f"⚠️ Предупреждение: Модуль базы данных недоступен: {e}")
 
-def initialize_systems():
-    """Инициализация систем"""
-    print("Системы инициализированы")
-    return True
+    # Регистрация middleware
+    register_middleware(app)
+
+    # Регистрация маршрутов
+    register_routes(app)
+
+    # Обработчики ошибок
+    register_error_handlers(app)
+
+    # Инициализация дополнительных систем
+    initialize_systems(app)
+
+    return app
 
 
 def register_middleware(app: Flask):
@@ -105,14 +123,17 @@ def register_routes(app: Flask):
     # Основные маршруты
     try:
         from app.api.main_routes import main_bp
-        app.register_blueprint(main_bp)
+        # ИЗМЕНИТЬ ЭТУ СТРОКУ:
+        # app.register_blueprint(main_bp)
+        # НА:
+        app.register_blueprint(main_bp, name='main_routes')
         logger.info("✅ Основные маршруты зарегистрированы")
     except ImportError as e:
         logger.warning(f"⚠️ Основные маршруты недоступны: {e}")
 
-        # Создаем базовые маршруты как fallback
+        # Создаем базовые маршруты как fallback ТОЛЬКО если main_bp не загружен
         @app.route('/')
-        def index():
+        def fallback_index():
             return '''
             <!DOCTYPE html>
             <html>
@@ -129,33 +150,13 @@ def register_routes(app: Flask):
             '''
 
         @app.route('/test')
-        def test():
+        def fallback_test():
             from flask import jsonify
             return jsonify({
                 'status': 'OK',
                 'message': 'Модульная архитектура работает!',
                 'architecture': 'modular'
             })
-
-    # API маршруты
-    api_modules = [
-        ('app.api.auth', 'auth_bp', '/api/auth'),
-        ('app.api.channels', 'channels_bp', '/api/channels'),
-        ('app.api.offers', 'offers_bp', '/api/offers'),
-        ('app.api.payments', 'payments_bp', '/api/payments'),
-        ('app.api.analytics', 'analytics_bp', '/api/analytics')
-    ]
-
-    for module_name, blueprint_name, url_prefix in api_modules:
-        try:
-            module = __import__(module_name, fromlist=[blueprint_name])
-            blueprint = getattr(module, blueprint_name)
-            app.register_blueprint(blueprint, url_prefix=url_prefix)
-            logger.info(f"✅ {module_name} зарегистрирован")
-        except ImportError as e:
-            logger.warning(f"⚠️ {module_name} недоступен: {e}")
-        except AttributeError as e:
-            logger.warning(f"⚠️ Blueprint {blueprint_name} не найден в {module_name}: {e}")
 
 
 def register_error_handlers(app: Flask):
@@ -208,39 +209,49 @@ def initialize_systems(app: Flask):
 
     # Инициализация Telegram сервиса
     try:
-        if config_available and Config.BOT_TOKEN:
-            if telegram_service_class_available and TelegramService:
-                # Используем класс TelegramService если доступен
-                telegram_service = TelegramService(Config.BOT_TOKEN)
-                app.telegram_service = telegram_service
-                logger.info("✅ TelegramService инициализирован")
-            elif TELEGRAM_INTEGRATION and create_telegram_service:
-                # Fallback на функцию create_telegram_service
+        from app.config.settings import Config
+        if Config.BOT_TOKEN:
+            try:
+                from app.services.telegram_service import create_telegram_service
                 telegram_service = create_telegram_service(Config.BOT_TOKEN)
-                app.telegram_service = telegram_service
-                logger.info("✅ Telegram интеграция инициализирована (fallback)")
-            else:
-                logger.warning("⚠️ Telegram сервисы недоступны")
-                app.telegram_service = None
-        else:
-            logger.error("❌ BOT_TOKEN не настроен")
-            app.telegram_service = None
-    except Exception as e:
-        logger.error(f"❌ Ошибка инициализации Telegram: {e}")
-        app.telegram_service = None
+                if telegram_service:
+                    app.telegram_service = telegram_service
+                    logger.info("✅ Telegram сервис инициализирован")
+                else:
+                    logger.error("❌ Не удалось создать Telegram сервис")
+            except Exception as e:
+                logger.error(f"❌ Ошибка инициализации Telegram сервиса: {e}")
+    except ImportError:
+        logger.warning("⚠️ Конфигурация недоступна для Telegram сервиса")
 
     # Создаем базовые маршруты для проверки здоровья
     @app.route('/health')
     def health_check():
+        from flask import jsonify
+        import os
+
+        try:
+            from app.config.settings import Config
+            db_path = Config.DATABASE_PATH
+            bot_token = bool(Config.BOT_TOKEN)
+        except:
+            db_path = 'telegram_mini_app.db'
+            bot_token = bool(os.environ.get('BOT_TOKEN'))
+
         return jsonify({
             'status': 'healthy',
             'architecture': 'modular',
-            'database_exists': os.path.exists(DATABASE_PATH),
-            'bot_token_configured': bool(BOT_TOKEN),
+            'database_exists': os.path.exists(db_path),
+            'bot_token_configured': bot_token,
             'modules_loaded': True
         })
 
     logger.info("✅ Системы инициализированы")
+
+
+# Для обратной совместимости
+app = None
+
 
 def get_app():
     """Получение экземпляра приложения"""
@@ -248,5 +259,3 @@ def get_app():
     if app is None:
         app = create_app()
     return app
-
-__all__ = ['create_app', 'get_app', 'app']
