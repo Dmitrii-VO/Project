@@ -724,7 +724,7 @@ def create_payout_tables():
 
             # Переименовываем таблицы
             cursor.execute('DROP TABLE IF EXISTS payouts_old')
-            cursor.execute('ALTER TABLE payouts RENAME TO payouts_old')
+            cursor.execute('DROP TABLE IF EXISTS payouts_old')
             cursor.execute('ALTER TABLE payouts_extended RENAME TO payouts')
 
         # Создаем таблицу логов выплат
