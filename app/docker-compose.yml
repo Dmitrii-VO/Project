@@ -10,15 +10,53 @@ services:
     environment:
       - FLASK_ENV=development
       - DATABASE_URL=sqlite:///telegram_mini_app.db
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - BOT_TOKEN=${BOT_TOKEN}
+      - YOUR_TELEGRAM_ID=${YOUR_TELEGRAM_ID:-373086959}
+      - WEBAPP_URL=http://localhost:5000
+      - DEBUG=True
+      - TELEGRAM_PAYMENT_TOKEN=${TELEGRAM_PAYMENT_TOKEN}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET}
+    volumes:
+      - .:/app
+      - ./telegram_mini_app.db:/app/telegram_mini_app.db
+    restart: unless-stopped
+    # Команда запуска согласована с Dockerfile
+    command: ["python", "working_app.py"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Опциональный сервис для разработки с hot-reload
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=sqlite:///telegram_mini_app.db
       - SECRET_KEY=dev-secret-key
       - BOT_TOKEN=${BOT_TOKEN}
-      - WEBAPP_URL=http://localhost:5000
+      - YOUR_TELEGRAM_ID=${YOUR_TELEGRAM_ID:-373086959}
+      - WEBAPP_URL=http://localhost:5001
       - DEBUG=True
     volumes:
       - .:/app
     restart: unless-stopped
-    command: ["python", "working_app.py"]
+    command: ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000", "--reload"]
+    profiles:
+      - dev
 
 networks:
   default:
     driver: bridge
+
+# Volumes для постоянного хранения данных
+volumes:
+  app_data:
+    driver: local

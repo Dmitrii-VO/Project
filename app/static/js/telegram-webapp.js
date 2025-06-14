@@ -1,4 +1,4 @@
-    // static/js/telegram-webapp.js - Основная логика Telegram WebApp
+// static/js/telegram-webapp.js - Основная логика Telegram WebApp
 
 // === ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP ===
 function initTelegramWebApp() {
@@ -39,6 +39,7 @@ function initTelegramWebApp() {
         // Для тестирования в браузере
         if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
             setupBrowserMock();
+            return true; // Возвращаем true для mock-а
         }
 
         return false;
@@ -124,7 +125,10 @@ function setupTelegramEvents() {
 
 // === ПОЛУЧЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ ===
 async function getTelegramUser() {
-    if (!window.appGlobals.tg) return null;
+    if (!window.appGlobals.tg) {
+        console.log('⚠️ Telegram WebApp not available');
+        return null;
+    }
 
     const tg = window.appGlobals.tg;
 
@@ -162,6 +166,7 @@ async function getTelegramUser() {
         }
     }
 
+    console.log('⚠️ No user data available');
     return null;
 }
 
@@ -185,14 +190,19 @@ function handleViewportChange(eventData) {
 function handleMainButtonClick() {
     // Переопределяется в каждой странице
     console.log('Main button clicked - no handler defined');
+
+    // Пытаемся найти и выполнить глобальный обработчик
+    if (window.handleMainButtonClick && typeof window.handleMainButtonClick === 'function') {
+        window.handleMainButtonClick();
+    }
 }
 
 function handleBackButtonClick() {
     // Простая навигация назад
     if (window.history.length > 1) {
         window.history.back();
-    } else {
-        window.appGlobals.tg?.close();
+    } else if (window.appGlobals.tg) {
+        window.appGlobals.tg.close();
     }
 }
 
@@ -206,18 +216,25 @@ function setupBrowserMock() {
                 user: {
                     id: 373086959,
                     first_name: 'Test User',
+                    last_name: 'Developer',
                     username: 'testuser',
-                    language_code: 'ru'
+                    language_code: 'ru',
+                    is_premium: false
                 }
             },
+            initData: '',
             platform: 'web',
             version: '6.0',
             colorScheme: 'light',
             themeParams: {
                 bg_color: '#ffffff',
                 text_color: '#000000',
-                header_bg_color: '#667eea'
+                header_bg_color: '#667eea',
+                secondary_bg_color: '#f7fafc',
+                hint_color: '#718096'
             },
+            viewportHeight: window.innerHeight,
+            viewportStableHeight: window.innerHeight,
             ready: () => console.log('Mock: ready'),
             expand: () => console.log('Mock: expand'),
             close: () => console.log('Mock: close'),
@@ -232,27 +249,100 @@ function setupBrowserMock() {
                 const result = confirm(message);
                 callback(result);
             },
-            onEvent: (event, callback) => console.log('Mock: onEvent', event),
+            onEvent: (event, callback) => {
+                console.log('Mock: onEvent', event);
+
+                // Эмулируем некоторые события для тестирования
+                if (event === 'themeChanged') {
+                    window.mockThemeCallback = callback;
+                } else if (event === 'viewportChanged') {
+                    window.mockViewportCallback = callback;
+                } else if (event === 'mainButtonClicked') {
+                    window.mockMainButtonCallback = callback;
+                } else if (event === 'backButtonClicked') {
+                    window.mockBackButtonCallback = callback;
+                }
+            },
             MainButton: {
-                setText: (text) => console.log('Mock MainButton setText:', text),
-                show: () => console.log('Mock MainButton show'),
-                hide: () => console.log('Mock MainButton hide'),
-                onClick: (callback) => console.log('Mock MainButton onClick set')
+                text: 'Готово',
+                isVisible: false,
+                setText: function(text) {
+                    console.log('Mock MainButton setText:', text);
+                    this.text = text;
+                },
+                show: function() {
+                    console.log('Mock MainButton show');
+                    this.isVisible = true;
+                },
+                hide: function() {
+                    console.log('Mock MainButton hide');
+                    this.isVisible = false;
+                },
+                onClick: function(callback) {
+                    console.log('Mock MainButton onClick set');
+                    this.callback = callback;
+                },
+                click: function() {
+                    if (this.callback) this.callback();
+                }
             },
             BackButton: {
-                show: () => console.log('Mock BackButton show'),
-                hide: () => console.log('Mock BackButton hide'),
-                onClick: (callback) => console.log('Mock BackButton onClick set')
+                isVisible: false,
+                show: function() {
+                    console.log('Mock BackButton show');
+                    this.isVisible = true;
+                },
+                hide: function() {
+                    console.log('Mock BackButton hide');
+                    this.isVisible = false;
+                },
+                onClick: function(callback) {
+                    console.log('Mock BackButton onClick set');
+                    this.callback = callback;
+                },
+                click: function() {
+                    if (this.callback) this.callback();
+                }
             },
             HapticFeedback: {
-                impactOccurred: (style) => console.log('Mock haptic:', style),
+                impactOccurred: (style) => console.log('Mock haptic impact:', style),
                 notificationOccurred: (type) => console.log('Mock notification haptic:', type)
             }
         }
     };
 
-    // Повторно инициализируем с mock данными
-    initTelegramWebApp();
+    // Устанавливаем глобальные переменные для mock
+    window.appGlobals.tg = window.Telegram.WebApp;
+    window.appGlobals.isInTelegram = true; // Для тестирования считаем что в Telegram
+
+    console.log('✅ Browser mock setup complete');
 }
+
+// === УТИЛИТЫ ДЛЯ РАЗРАБОТКИ ===
+function testTelegramFunctions() {
+    console.log('🧪 Testing Telegram functions...');
+
+    if (window.appGlobals.tg) {
+        // Тест главной кнопки
+        window.appGlobals.tg.MainButton.setText('Тест');
+        window.appGlobals.tg.MainButton.show();
+
+        // Тест haptic feedback
+        if (window.appGlobals.tg.HapticFeedback) {
+            window.appGlobals.tg.HapticFeedback.impactOccurred('light');
+        }
+
+        console.log('✅ Test complete');
+    } else {
+        console.log('❌ Telegram WebApp not available for testing');
+    }
+}
+
+// Экспортируем функции для глобального использования
+window.initTelegramWebApp = initTelegramWebApp;
+window.getTelegramUser = getTelegramUser;
+window.applyTelegramTheme = applyTelegramTheme;
+window.setupTelegramEvents = setupTelegramEvents;
+window.testTelegramFunctions = testTelegramFunctions;
 
 console.log('📱 Telegram WebApp module loaded');

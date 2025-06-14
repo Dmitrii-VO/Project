@@ -1,4 +1,4 @@
-# Dockerfile - Конфигурация для контейнеризации приложения
+# Dockerfile - Исправленная конфигурация для контейнеризации приложения
 FROM python:3.11-slim
 
 # Метаданные образа
@@ -17,8 +17,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     make \
-    postgresql-client \
-    libpq-dev \
+    sqlite3 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
@@ -36,18 +35,24 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Копирование исходного кода
 COPY . /app/
 
-# Создание директорий
+# Создание необходимых директорий
 RUN mkdir -p /app/logs /app/uploads /app/static /app/templates
 
+# Создание базы данных SQLite (если не существует)
+RUN touch /app/telegram_mini_app.db
+
 # Настройка прав доступа
-RUN chown -R appuser:appuser /app
+RUN chown -R appuser:appuser /app && \
+    chmod +x /app/working_app.py && \
+    chmod +x /app/main.py
 USER appuser
 
 # Переменные окружения
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-ENV FLASK_APP=app.py
+ENV FLASK_APP=working_app.py
 ENV FLASK_ENV=production
+ENV DATABASE_URL=sqlite:///telegram_mini_app.db
 
 # Открытие порта
 EXPOSE 5000
@@ -56,5 +61,5 @@ EXPOSE 5000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:5000/test || exit 1
 
-# Команда запуска
-CMD ["python", "app.py"]
+# Команда запуска (исправлено на существующий файл)
+CMD ["python", "working_app.py"]

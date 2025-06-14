@@ -101,6 +101,141 @@ class TelegramMiniApp {
         }
     }
 
+    setupUI() {
+        // Настройка элементов интерфейса
+        this.setupEventListeners();
+        this.setupTelegramTheme();
+        this.setupKeyboardHandling();
+    }
+
+    setupEventListeners() {
+        // Обработчики для форм
+        document.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', this.handleFormSubmit.bind(this));
+        });
+
+        // Обработчики для кнопок
+        document.querySelectorAll('[data-action]').forEach(button => {
+            button.addEventListener('click', this.handleButtonClick.bind(this));
+        });
+    }
+
+    setupTelegramTheme() {
+        if (window.appGlobals && window.appGlobals.tg) {
+            const tg = window.appGlobals.tg;
+
+            // Применяем цвета Telegram
+            if (tg.themeParams) {
+                document.documentElement.style.setProperty('--tg-bg-color', tg.themeParams.bg_color || '#ffffff');
+                document.documentElement.style.setProperty('--tg-text-color', tg.themeParams.text_color || '#000000');
+                document.documentElement.style.setProperty('--tg-button-color', tg.themeParams.button_color || '#0088cc');
+            }
+        }
+    }
+
+    setupKeyboardHandling() {
+        // Обработка клавиатуры для лучшего UX в Telegram
+        if (window.appGlobals && window.appGlobals.tg) {
+            const tg = window.appGlobals.tg;
+
+            // Настройка главной кнопки
+            if (tg.MainButton) {
+                tg.MainButton.text = 'Готово';
+                tg.MainButton.show();
+                tg.MainButton.onClick(this.handleMainButtonClick.bind(this));
+            }
+
+            // Настройка кнопки назад
+            if (tg.BackButton) {
+                tg.BackButton.show();
+                tg.BackButton.onClick(this.handleBackButtonClick.bind(this));
+            }
+        }
+    }
+
+    async handleFormSubmit(event) {
+        event.preventDefault();
+        const form = event.target;
+
+        try {
+            showLoading('Сохранение...');
+
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            const response = await apiRequest(form.action || '/api/submit', {
+                method: form.method || 'POST',
+                body: JSON.stringify(data),
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            hideLoading();
+
+            if (response.success) {
+                showAlert('Сохранено успешно!');
+
+                // Haptic feedback при успехе
+                if (window.appGlobals.tg && window.appGlobals.tg.HapticFeedback) {
+                    window.appGlobals.tg.HapticFeedback.notificationOccurred('success');
+                }
+
+                // Перенаправление после успеха
+                if (response.redirect) {
+                    setTimeout(() => navigateTo(response.redirect), 1000);
+                }
+            }
+
+        } catch (error) {
+            hideLoading();
+            showAlert('Произошла ошибка при сохранении');
+
+            if (window.appGlobals.tg && window.appGlobals.tg.HapticFeedback) {
+                window.appGlobals.tg.HapticFeedback.notificationOccurred('error');
+            }
+        }
+    }
+
+    handleButtonClick(event) {
+        const button = event.target;
+        const action = button.dataset.action;
+
+        switch (action) {
+            case 'navigate':
+                const url = button.dataset.url;
+                if (url) navigateTo(url);
+                break;
+            case 'submit':
+                this.submitCurrentForm();
+                break;
+            case 'reload':
+                this.loadAppData();
+                break;
+            default:
+                console.log('Unknown action:', action);
+        }
+    }
+
+    handleMainButtonClick() {
+        this.submitCurrentForm();
+    }
+
+    handleBackButtonClick() {
+        if (window.history.length > 1) {
+            window.history.back();
+        } else if (window.appGlobals.tg) {
+            window.appGlobals.tg.close();
+        }
+    }
+
+    submitCurrentForm() {
+        const form = document.querySelector('form');
+        if (form) {
+            form.dispatchEvent(new Event('submit'));
+        }
+    }
+
     async loadStats() {
         try {
             const stats = await apiRequest('/api/stats');
@@ -165,152 +300,25 @@ class TelegramMiniApp {
 
     updateActivityUI(activities) {
         const activityList = document.getElementById('activityList');
-        if (!activityList) return;
-
-        if (!activities || activities.length === 0) {
-            activityList.innerHTML = `
-                <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                    <span style="font-size: 48px; display: block; margin-bottom: 16px; opacity: 0.6;">📭</span>
-                    <div>Пока нет активности</div>
+        if (activityList && activities) {
+            activityList.innerHTML = activities.map(activity => `
+                <div class="activity-item">
+                    <span class="activity-icon">${this.getActivityIcon(activity.type)}</span>
+                    <span class="activity-text">${activity.description}</span>
+                    <span class="activity-time">${formatTime(activity.created_at)}</span>
                 </div>
-            `;
-            return;
+            `).join('');
         }
-
-        activityList.innerHTML = activities.map(activity => `
-            <div class="activity-item">
-                <div class="activity-icon ${activity.type}">
-                    ${this.getActivityIcon(activity.type)}
-                </div>
-                <div class="activity-content">
-                    <div class="activity-text">${activity.text}</div>
-                    <div class="activity-time">${formatTime(activity.timestamp)}</div>
-                </div>
-            </div>
-        `).join('');
     }
 
     getActivityIcon(type) {
         const icons = {
-            'offer': '🎯',
-            'channel': '📺',
-            'payment': '💰',
-            'response': '📨'
+            'channel_added': '📢',
+            'offer_created': '💼',
+            'response_sent': '📩',
+            'payment_received': '💰'
         };
         return icons[type] || '📋';
-    }
-
-    setupUI() {
-        // Настройка кнопок Telegram
-        this.setupTelegramButtons();
-
-        // Настройка обработчиков форм
-        this.setupFormHandlers();
-
-        // Настройка навигации
-        this.setupNavigation();
-    }
-
-    setupTelegramButtons() {
-        if (!window.appGlobals.tg) return;
-
-        const tg = window.appGlobals.tg;
-        const path = window.location.pathname;
-
-        // Настройка главной кнопки в зависимости от страницы
-        if (path === '/' || path === '/index') {
-            // На главной - кнопка создания оффера
-            tg.MainButton.setText('Создать оффер');
-            tg.MainButton.onClick(() => navigateTo('/create-offer'));
-            tg.MainButton.show();
-        } else if (path.includes('create-offer')) {
-            // На странице создания - кнопка отправки формы
-            tg.MainButton.setText('Создать оффер');
-            tg.MainButton.onClick(() => this.submitCurrentForm());
-            tg.MainButton.show();
-        } else {
-            // На других страницах скрываем главную кнопку
-            tg.MainButton.hide();
-        }
-
-        // Показываем кнопку "Назад" если не на главной
-        if (path !== '/' && path !== '/index') {
-            tg.BackButton.show();
-        } else {
-            tg.BackButton.hide();
-        }
-    }
-
-    setupFormHandlers() {
-        // Настройка всех форм на странице
-        const forms = document.querySelectorAll('form');
-
-        forms.forEach(form => {
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await this.handleFormSubmit(form);
-            });
-        });
-    }
-
-    setupNavigation() {
-        // Настройка всех ссылок для навигации
-        const navLinks = document.querySelectorAll('a[href^="/"], button[onclick*="navigateTo"]');
-
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                // Haptic feedback при навигации
-                if (window.appGlobals.tg && window.appGlobals.tg.HapticFeedback) {
-                    window.appGlobals.tg.HapticFeedback.impactOccurred('light');
-                }
-            });
-        });
-    }
-
-    async handleFormSubmit(form) {
-        const formData = new FormData(form);
-        const url = form.action || '/api/default';
-        const method = form.method || 'POST';
-
-        try {
-            showLoading();
-
-            const response = await apiRequest(url, {
-                method: method.toUpperCase(),
-                body: JSON.stringify(Object.fromEntries(formData))
-            });
-
-            hideLoading();
-
-            if (response.status === 'success') {
-                showAlert(response.message || 'Успешно сохранено!');
-
-                // Haptic feedback при успехе
-                if (window.appGlobals.tg && window.appGlobals.tg.HapticFeedback) {
-                    window.appGlobals.tg.HapticFeedback.notificationOccurred('success');
-                }
-
-                // Перенаправление после успеха
-                if (response.redirect) {
-                    setTimeout(() => navigateTo(response.redirect), 1000);
-                }
-            }
-
-        } catch (error) {
-            hideLoading();
-            showAlert('Произошла ошибка при сохранении');
-
-            if (window.appGlobals.tg && window.appGlobals.tg.HapticFeedback) {
-                window.appGlobals.tg.HapticFeedback.notificationOccurred('error');
-            }
-        }
-    }
-
-    submitCurrentForm() {
-        const form = document.querySelector('form');
-        if (form) {
-            form.dispatchEvent(new Event('submit'));
-        }
     }
 
     showApp() {
@@ -319,6 +327,7 @@ class TelegramMiniApp {
         // Анимация появления
         const appContainer = document.getElementById('app-container');
         if (appContainer) {
+            appContainer.style.display = 'block';
             appContainer.style.opacity = '0';
             appContainer.style.transform = 'translateY(20px)';
             appContainer.style.transition = 'all 0.3s ease-out';

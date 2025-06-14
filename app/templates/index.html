@@ -3,482 +3,147 @@
 {% block title %}Telegram Mini App - Главная{% endblock %}
 
 {% block content %}
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Telegram Mini App - Система рекламы в каналах</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-            --danger-gradient: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
-
-            --primary-color: #667eea;
-            --success-color: #4facfe;
-            --warning-color: #ff9a56;
-            --danger-color: #ff6b6b;
-
-            --text-primary: #2d3748;
-            --text-secondary: #718096;
-            --text-muted: #a0aec0;
-            --bg-primary: #ffffff;
-            --bg-secondary: #f7fafc;
-            --bg-tertiary: #edf2f7;
-            --border-color: #e2e8f0;
-
-            --border-radius: 16px;
-            --border-radius-sm: 8px;
-            --border-radius-lg: 24px;
-            --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
-            --shadow-lg: 0 10px 40px rgba(0,0,0,0.15);
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-            --font-size-xs: 0.75rem;
-            --font-size-sm: 0.875rem;
-            --font-size-base: 1rem;
-            --font-size-lg: 1.125rem;
-            --font-size-xl: 1.25rem;
-            --font-size-2xl: 1.5rem;
-            --font-size-3xl: 1.875rem;
-            --font-size-4xl: 2.25rem;
-
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: var(--font-family);
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        /* === HEADER === */
-        .hero-section {
-            background: var(--primary-gradient);
-            color: white;
-            padding: 60px 0;
-            margin-bottom: 40px;
-            border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            pointer-events: none;
-        }
-
-        .hero-content {
-            position: relative;
-            text-align: center;
-        }
-
-        .hero-content h1 {
-            font-size: var(--font-size-4xl);
-            font-weight: 800;
-            margin-bottom: 16px;
-            background: linear-gradient(45deg, #ffffff, #f0f4ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .hero-content p {
-            font-size: var(--font-size-xl);
-            opacity: 0.9;
-            margin-bottom: 32px;
-            max-width: 600px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        /* === STATS === */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 24px;
-            margin-bottom: 40px;
-        }
-
-        .stat-card {
-            background: var(--bg-primary);
-            padding: 32px 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
-            text-align: center;
-            transition: var(--transition);
-            border: 1px solid var(--border-color);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .stat-value {
-            display: block;
-            font-size: var(--font-size-3xl);
-            font-weight: 800;
-            color: var(--primary-color);
-            margin-bottom: 8px;
-        }
-
-        .stat-label {
-            color: var(--text-secondary);
-            font-weight: 500;
-            font-size: var(--font-size-sm);
-        }
-
-        /* === FEATURES === */
-        .features-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 32px;
-            margin-bottom: 40px;
-        }
-
-        .feature-card {
-            background: var(--bg-primary);
-            padding: 32px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
-            transition: var(--transition);
-            border: 1px solid var(--border-color);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .feature-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: var(--primary-gradient);
-        }
-
-        .feature-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-lg);
-        }
-
-        .feature-icon {
-            font-size: 48px;
-            margin-bottom: 20px;
-            display: block;
-        }
-
-        .feature-title {
-            font-size: var(--font-size-xl);
-            font-weight: 700;
-            margin-bottom: 12px;
-            color: var(--text-primary);
-        }
-
-        .feature-description {
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-            line-height: 1.6;
-        }
-
-        /* === BUTTONS === */
-        .btn {
-            display: inline-block;
-            padding: 12px 24px;
-            border: none;
-            border-radius: var(--border-radius-sm);
-            font-weight: 600;
-            text-decoration: none;
-            text-align: center;
-            transition: var(--transition);
-            cursor: pointer;
-            font-size: var(--font-size-base);
-            min-height: 44px;
-            line-height: 1.5;
-        }
-
-        .btn-primary {
-            background: var(--primary-gradient);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .btn-secondary {
-            background: transparent;
-            color: var(--primary-color);
-            border: 2px solid var(--primary-color);
-        }
-
-        .btn-secondary:hover {
-            background: var(--primary-color);
-            color: white;
-        }
-
-        .btn-success {
-            background: var(--success-gradient);
-            color: white;
-        }
-
-        .btn-success:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        /* === CARD === */
-        .card {
-            background: var(--bg-primary);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
-            overflow: hidden;
-            border: 1px solid var(--border-color);
-        }
-
-        .card-header {
-            padding: 24px 24px 0;
-        }
-
-        .card-title {
-            font-size: var(--font-size-xl);
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .card-subtitle {
-            color: var(--text-secondary);
-            font-size: var(--font-size-sm);
-        }
-
-        .card-body {
-            padding: 24px;
-        }
-
-        .mb-4 {
-            margin-bottom: 32px;
-        }
-
-        /* === ALERTS === */
-        .alert {
-            padding: 16px 20px;
-            border-radius: var(--border-radius-sm);
-            margin-bottom: 20px;
-            border-left: 4px solid;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .alert-info {
-            background: #ebf8ff;
-            border-left-color: var(--primary-color);
-            color: #2b6cb0;
-        }
-
-        /* === ANIMATIONS === */
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .animate-fade-in-up {
-            animation: fadeInUp 0.6s ease-out forwards;
-            opacity: 0;
-        }
-
-        /* === RESPONSIVE === */
-        @media (max-width: 768px) {
-            .container {
-                padding: 16px;
-            }
-
-            .hero-section {
-                padding: 40px 0;
-                margin-bottom: 24px;
-            }
-
-            .hero-content h1 {
-                font-size: var(--font-size-3xl);
-            }
-
-            .hero-content p {
-                font-size: var(--font-size-lg);
-            }
-
-            .features-grid {
-                grid-template-columns: 1fr;
-                gap: 24px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-                gap: 16px;
-            }
-
-            .feature-card {
-                padding: 24px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- Hero Section -->
+<div class="app-container">
     <div class="hero-section">
-        <div class="container">
-            <div class="hero-content">
-                <h1>🚀 Telegram Mini App</h1>
-                <p>Современная платформа для размещения рекламы в Telegram каналах. Управляйте каналами, создавайте офферы и отслеживайте аналитику.</p>
-            </div>
+        <div class="hero-content">
+            <h1 class="hero-title">🚀 Telegram Mini App</h1>
+            <p class="hero-subtitle">Система рекламы в каналах</p>
         </div>
     </div>
 
-    <div class="container">
-        <!-- Статистика -->
-        <div class="stats-grid">
-            <div class="stat-card animate-fade-in-up">
-                <span class="stat-value">3</span>
-                <span class="stat-label">Каналов</span>
-            </div>
-            <div class="stat-card animate-fade-in-up" style="animation-delay: 0.1s;">
-                <span class="stat-value">12</span>
-                <span class="stat-label">Офферов</span>
-            </div>
-            <div class="stat-card animate-fade-in-up" style="animation-delay: 0.2s;">
-                <span class="stat-value">₽84.2K</span>
-                <span class="stat-label">Доходы</span>
-            </div>
+    <div class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">📱</div>
+            <h3>Каналы</h3>
+            <p>Управление каналами</p>
+            <a href="/channels-enhanced" class="btn btn-primary">Открыть</a>
         </div>
 
-        <!-- Основные функции -->
-        <div class="features-grid">
-            <div class="feature-card animate-fade-in-up">
-                <span class="feature-icon">🎯</span>
-                <div class="feature-title">Создать оффер</div>
-                <div class="feature-description">Создайте рекламное предложение для размещения в Telegram каналах с указанием бюджета и целевой аудитории</div>
-                <a href="/create-offer" class="btn btn-primary">Создать предложение</a>
-            </div>
-
-            <div class="feature-card animate-fade-in-up" style="animation-delay: 0.1s;">
-                <span class="feature-icon">📺</span>
-                <div class="feature-title">Мои каналы</div>
-                <div class="feature-description">Управляйте вашими Telegram каналами, настраивайте цены и принимайте предложения от рекламодателей</div>
-                <!-- ИСПРАВЛЕНО: Изменили href с /channels на /channels-enhanced -->
-                <a href="/channels-enhanced" class="btn btn-secondary">Управление каналами</a>
-            </div>
-
-            <div class="feature-card animate-fade-in-up" style="animation-delay: 0.2s;">
-                <span class="feature-icon">📊</span>
-                <div class="feature-title">Аналитика</div>
-                <div class="feature-description">Детальная статистика по доходам, расходам и эффективности рекламных кампаний</div>
-                <a href="/analytics" class="btn btn-success">Открыть аналитику</a>
-            </div>
+        <div class="feature-card">
+            <div class="feature-icon">💰</div>
+            <h3>Офферы</h3>
+            <p>Создание предложений</p>
+            <a href="/offers" class="btn btn-primary">Открыть</a>
         </div>
 
-        <!-- Информационная карточка -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <div class="card-title">Недавние офферы</div>
-                <div class="card-subtitle">Последние рекламные предложения в системе</div>
-            </div>
-            <div class="card-body">
-                <div class="alert alert-info">
-                    <span>💡</span>
-                    <div>
-                        <strong>Новый функционал!</strong><br>
-                        Теперь вы можете настроить автоматическое принятие офферов по заданным критериям.
-                    </div>
-                </div>
-            </div>
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <h3>Аналитика</h3>
+            <p>Статистика и отчеты</p>
+            <a href="/analytics" class="btn btn-primary">Открыть</a>
+        </div>
+
+        <div class="feature-card">
+            <div class="feature-icon">💳</div>
+            <h3>Платежи</h3>
+            <p>Система выплат</p>
+            <a href="/payments" class="btn btn-primary">Открыть</a>
         </div>
     </div>
+</div>
 
-    <script>
-        // Инициализация Telegram WebApp
-        if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand();
+<style>
+:root {
+    --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --border-radius: 16px;
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-            // Адаптация под тему Telegram
-            if (tg.colorScheme === 'dark') {
-                document.documentElement.style.setProperty('--bg-primary', '#1a1a1a');
-                document.documentElement.style.setProperty('--bg-secondary', '#2d2d2d');
-                document.documentElement.style.setProperty('--text-primary', '#ffffff');
-                document.documentElement.style.setProperty('--text-secondary', '#a0a0a0');
-            }
-        }
+.app-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
 
-        // Анимации при скролле
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        };
+.hero-section {
+    text-align: center;
+    padding: 40px 0;
+    background: var(--primary-gradient);
+    border-radius: var(--border-radius);
+    color: white;
+    margin-bottom: 30px;
+}
 
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.classList.add('animate-fade-in-up');
-                }
-            });
-        }, observerOptions);
+.hero-title {
+    font-size: 2.5rem;
+    margin-bottom: 10px;
+    font-weight: 700;
+}
 
-        // Наблюдаем за всеми карточками
-        document.querySelectorAll('.feature-card, .stat-card, .card').forEach(el => {
-            observer.observe(el);
-        });
-    </script>
-</body>
-</html>
+.hero-subtitle {
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
 
-{% endblock %}
+.features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
 
-{% block extra_scripts %}
-<script>
-// Специфичные скрипты для главной страницы
-console.log('📊 Main page scripts loaded');
+.feature-card {
+    background: white;
+    border-radius: var(--border-radius);
+    padding: 30px;
+    text-align: center;
+    box-shadow: var(--shadow-md);
+    transition: var(--transition);
+}
 
-// Отладочная информация
-console.log('🔧 Debug: Available routes check');
-fetch('/debug/templates')
-    .then(response => response.json())
-    .then(data => {
-        console.log('📁 Templates debug info:', data);
-    })
-    .catch(error => {
-        console.log('⚠️ Could not fetch debug info:', error);
-    });
-</script>
+.feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.feature-icon {
+    font-size: 3rem;
+    margin-bottom: 20px;
+}
+
+.feature-card h3 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: #2d3748;
+}
+
+.feature-card p {
+    color: #718096;
+    margin-bottom: 20px;
+}
+
+.btn {
+    display: inline-block;
+    padding: 12px 24px;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    transition: var(--transition);
+}
+
+.btn-primary {
+    background: var(--primary-gradient);
+    color: white;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .features-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .feature-card {
+        padding: 20px;
+    }
+}
+</style>
 {% endblock %}
