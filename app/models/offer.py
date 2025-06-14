@@ -1,0 +1,2 @@
+def Offer():
+    return None

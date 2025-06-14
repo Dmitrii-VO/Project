@@ -10,18 +10,11 @@ import time
 from collections import defaultdict
 from typing import Optional, Tuple, Dict, Any, List
 from datetime import datetime, timedelta
-from app import api
-
 import logger
-
-from app import create_app, get_app
 from flask import Flask, render_template_string, request, jsonify, session, redirect, render_template, Blueprint, Config
 from functools import wraps
 
 from app.routers import register_blueprints
-from app.services import auth_service
-
-
 
 # from app.api.channel_recommendations import analyze_offer_content  # Временно закомментируем
 

@@ -1,0 +1,2 @@
+def Response():
+    return None
