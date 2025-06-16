@@ -840,7 +840,7 @@ def validate_data():
             # Валидация URL канала Telegram
             import re
             
-            telegram_channel_pattern = r'^https://t\.me/([a-zA-Z0-9_]+)
+            telegram_channel_pattern = r'^https://t\.me/([a-zA-Z0-9_]+)'
             match = re.match(telegram_channel_pattern, value)
             
             if match:
@@ -860,7 +860,7 @@ def validate_data():
             # Валидация username канала
             import re
             
-            if re.match(r'^[a-zA-Z0-9_]{5,32}, value):
+            if re.match(r'^[a-zA-Z0-9_]{5,32}$', value):
                 result.update({
                     'valid': True,
                     'message': 'Valid Telegram channel username',
@@ -875,7 +875,7 @@ def validate_data():
             # Валидация обычного URL
             import re
             
-            url_pattern = r'^https?://[^\s/$.?#].[^\s]*
+            url_pattern = r'^https?://[^\s/$.?#].[^\s]*$'
             if re.match(url_pattern, value):
                 result.update({
                     'valid': True,

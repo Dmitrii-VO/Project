@@ -336,9 +336,6 @@ def get_dashboard():
             }
         }
 
-# Добавляем методы в класс AnalyticsService
-AnalyticsService.get_channel_owner_dashboard = staticmethod(AnalyticsService.get_channel_owner_dashboard)
-AnalyticsService.get_advertiser_dashboard = staticmethod(AnalyticsService.get_advertiser_dashboard)
 
 @analytics_bp.route('/channels/<int:channel_id>', methods=['GET'])
 @require_telegram_auth
