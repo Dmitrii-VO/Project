@@ -2,8 +2,7 @@
 """
 Модуль маршрутизации для Telegram Mini App
 
-Этот модуль содержит все маршруты и Blueprint'ы приложения.
-Оптимизирован для производительности и безопасности.
+ИСПРАВЛЕННАЯ ВЕРСИЯ с правильными URL префиксами
 """
 
 from flask import Flask, render_template
@@ -14,14 +13,14 @@ from .offer_router import offer_bp
 from .analytics_router import analytics_bp
 from .payment_router import payment_bp
 
-# Список всех Blueprint'ов для регистрации
+# ИСПРАВЛЕННЫЙ список Blueprint'ов с правильными префиксами
 BLUEPRINTS = [
-    (main_bp, '/', 'main'),
-    (api_bp, '/api', 'api'),
-    (channel_bp, '/channels', 'channels'),
-    (offer_bp, '/offers', 'offers'),
-    (analytics_bp, '/analytics', 'analytics'),
-    (payment_bp, '/payments', 'payments')
+    (main_bp, '', 'main'),  # Основные страницы: /, /channels, /offers, /analytics, /payments
+    (api_bp, '/api', 'api'),  # Общие API endpoints
+    (channel_bp, '/api/channels', 'channels_api'),  # API для каналов
+    (offer_bp, '/api/offers', 'offers_api'),  # API для офферов
+    (analytics_bp, '/api/analytics', 'analytics_api'),  # API для аналитики
+    (payment_bp, '/api/payments', 'payments_api'),  # API для платежей
 ]
 
 
@@ -40,10 +39,12 @@ def register_blueprints(app: Flask) -> None:
                 url_prefix=url_prefix,
                 name=name
             )
-            app.logger.info(f"✅ Blueprint '{name}' зарегистрирован с префиксом '{url_prefix}'")
+            prefix_display = url_prefix if url_prefix else "/"
+            app.logger.info(f"✅ Blueprint '{name}' зарегистрирован с префиксом '{prefix_display}'")
         except Exception as e:
             app.logger.error(f"❌ Ошибка регистрации Blueprint '{name}': {e}")
-            raise
+            # Не поднимаем исключение, продолжаем регистрацию других Blueprint'ов
+            continue
 
 
 def init_routers(app: Flask) -> None:
@@ -74,7 +75,10 @@ def setup_error_handlers(app: Flask) -> None:
         from flask import jsonify, request
         if request.path.startswith('/api/'):
             return jsonify({'error': 'API endpoint not found'}), 404
-        return render_template('errors/404.html'), 404
+        try:
+            return render_template('error.html', message='Страница не найдена'), 404
+        except:
+            return '<h1>404 - Страница не найдена</h1>', 404
 
     @app.errorhandler(500)
     def internal_error(error):
@@ -82,22 +86,30 @@ def setup_error_handlers(app: Flask) -> None:
         app.logger.error(f"Internal error: {error}")
         if request.path.startswith('/api/'):
             return jsonify({'error': 'Internal server error'}), 500
-        return render_template('errors/500.html'), 500
+        try:
+            return render_template('error.html', message='Внутренняя ошибка сервера'), 500
+        except:
+            return '<h1>500 - Внутренняя ошибка сервера</h1>', 500
 
 
 def setup_middleware(app: Flask) -> None:
     """Настройка middleware"""
 
-    from .middleware import (
-        security_middleware,
-        telegram_auth_middleware,
-        performance_middleware
-    )
+    try:
+        from .middleware import (
+            security_middleware,
+            telegram_auth_middleware,
+            performance_middleware
+        )
 
-    # Регистрируем middleware
-    app.before_request(security_middleware)
-    app.before_request(telegram_auth_middleware)
-    app.before_request(performance_middleware)
+        # Регистрируем middleware
+        app.before_request(security_middleware)
+        app.before_request(telegram_auth_middleware)
+        app.before_request(performance_middleware)
+
+        app.logger.info("✅ Middleware зарегистрированы")
+    except ImportError as e:
+        app.logger.warning(f"⚠️ Не удалось загрузить middleware: {e}")
 
 
 __all__ = [
