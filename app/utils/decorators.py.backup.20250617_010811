@@ -37,22 +37,53 @@ _security_events = []
 
 def require_telegram_auth(f):
     """
-    Заглушка декоратора аутентификации (отключена)
-    
+    Декоратор для обязательной Telegram аутентификации
+
     Использование:
     @require_telegram_auth
     def protected_route():
-        return "Доступ разрешен всем"
+        return "Только для аутентифицированных пользователей"
     """
+
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Аутентификация отключена - разрешаем доступ всем
-        if FLASK_AVAILABLE and hasattr(g, '__setattr__'):
-            g.telegram_user_id = "test_user_123"
-            g.current_user_id = "test_user_123"
-        
+        if not FLASK_AVAILABLE:
+            return {"error": "Flask not available"}, 500
+
+        # Получаем Telegram User ID из заголовков или сессии
+        telegram_user_id = None
+
+        # Проверяем заголовки
+        if hasattr(request, 'headers'):
+            telegram_user_id = request.headers.get('X-Telegram-User-Id')
+
+        # Проверяем сессию
+        if not telegram_user_id and hasattr(session, 'get'):
+            telegram_user_id = session.get('telegram_user_id')
+
+        # Проверяем данные Telegram WebApp
+        if not telegram_user_id and hasattr(request, 'json'):
+            try:
+                data = request.get_json(silent=True) or {}
+                if 'initData' in data:
+                    # Парсинг initData от Telegram WebApp
+                    telegram_user_id = _parse_telegram_init_data(data['initData'])
+            except:
+                pass
+
+        if not telegram_user_id:
+            return jsonify({
+                'error': 'Authentication required',
+                'message': 'Telegram authentication is required for this endpoint'
+            }), 401
+
+        # Сохраняем в g для использования в маршруте
+        if hasattr(g, '__setattr__'):
+            g.telegram_user_id = telegram_user_id
+            g.current_user_id = telegram_user_id
+
         return f(*args, **kwargs)
-    
+
     return decorated_function
 
 
