@@ -510,6 +510,7 @@ def dashboard_stats():
         from ..models.channels import Channel
         from ..models.offer import Offer
         from ..models.response import Response
+        from ..models.database import db
         from sqlalchemy import func
         from datetime import datetime, timedelta
         

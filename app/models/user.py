@@ -16,8 +16,7 @@ from enum import Enum
 
 from .database import db_manager
 from ..utils.exceptions import UserError, ValidationError, AuthenticationError
-from ..config.settings import (TELEGRAM_BOT_TOKEN, MIN_WITHDRAWAL_AMOUNT,
-                               REFERRAL_BONUS_AMOUNT, DEFAULT_USER_TYPE)
+from ..config.settings import TELEGRAM_BOT_TOKEN, MIN_WITHDRAWAL_AMOUNT, REFERRAL_BONUS_AMOUNT, DEFAULT_USER_TYPE
 
 class UserType(Enum):
     """Типы пользователей"""

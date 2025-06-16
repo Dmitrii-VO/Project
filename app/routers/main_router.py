@@ -7,7 +7,7 @@
 """
 
 import time
-from flask import Blueprint, render_template, jsonify, current_app
+from flask import Blueprint, render_template, jsonify, current_app, request
 from .middleware import (
     require_telegram_auth,
     cache_response,

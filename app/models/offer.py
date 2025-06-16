@@ -516,7 +516,7 @@ class Offer:
 
     def get_responses(self, status: str = None) -> List['OfferResponse']:
         """Получение откликов на оффер"""
-        from .response import OfferResponse
+        from .response import Response
         return OfferResponse.get_by_offer_id(self.id, status)
 
     def get_matching_channels(self, limit: int = 20) -> List[Dict[str, Any]]:
