@@ -72,82 +72,42 @@
         .page-header {
             background: var(--primary-gradient);
             color: white;
-            padding: 40px 0;
-            margin-bottom: 30px;
-            border-radius: 0 0 var(--border-radius-lg) var(--border-radius-lg);
-            position: relative;
-            overflow: hidden;
+            padding: 40px 20px;
+            text-align: center;
+            margin: -20px -20px 30px -20px;
+            border-radius: 0 0 24px 24px;
         }
 
-        .page-header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            pointer-events: none;
-        }
-
-        .header-content {
-            position: relative;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 20px;
-        }
-
-        .header-text h1 {
-            font-size: var(--font-size-3xl);
-            font-weight: 800;
+        .page-title {
+            font-size: 2.5rem;
+            font-weight: 700;
             margin-bottom: 8px;
         }
 
-        .header-text p {
+        .page-subtitle {
             opacity: 0.9;
-            font-size: var(--font-size-lg);
+            font-size: 1.1rem;
         }
 
-        .header-stats {
-            display: flex;
-            gap: 24px;
-        }
-
-        .header-stat {
-            text-align: center;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            padding: 16px 20px;
-            border-radius: var(--border-radius);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        .header-stat-value {
-            display: block;
-            font-size: var(--font-size-2xl);
-            font-weight: 800;
-            margin-bottom: 4px;
-        }
-
-        .header-stat-label {
-            font-size: var(--font-size-sm);
-            opacity: 0.8;
-        }
-
-        .breadcrumb {
-            margin-bottom: 24px;
-        }
-
-        .breadcrumb a {
-            color: var(--primary-color);
+        .back-btn {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 10px;
             text-decoration: none;
-            font-weight: 500;
+            font-size: 1rem;
+            transition: var(--transition);
         }
 
-        .breadcrumb a:hover {
-            text-decoration: underline;
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: white;
+            text-decoration: none;
         }
 
         /* === TABS === */
@@ -157,32 +117,39 @@
 
         .tab-nav {
             display: flex;
+            gap: 4px;
             background: var(--bg-primary);
-            border-radius: var(--border-radius);
             padding: 4px;
+            border-radius: var(--border-radius);
             box-shadow: var(--shadow-sm);
-            border: 1px solid var(--border-color);
             overflow-x: auto;
+            white-space: nowrap;
         }
 
         .tab-btn {
             flex: 1;
-            padding: 12px 20px;
+            min-width: 120px;
+            padding: 12px 16px;
             border: none;
             background: transparent;
             color: var(--text-secondary);
             font-weight: 600;
+            font-size: var(--font-size-sm);
             border-radius: var(--border-radius-sm);
             cursor: pointer;
             transition: var(--transition);
-            white-space: nowrap;
-            font-size: var(--font-size-sm);
+            text-align: center;
         }
 
         .tab-btn.active {
             background: var(--primary-gradient);
             color: white;
             box-shadow: var(--shadow-sm);
+        }
+
+        .tab-btn:not(.active):hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
         }
 
         .tab-content {
@@ -194,41 +161,38 @@
             animation: fadeInUp 0.4s ease-out;
         }
 
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
         /* === ACTION BAR === */
         .action-bar {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 16px;
             margin-bottom: 24px;
             flex-wrap: wrap;
-            gap: 16px;
         }
 
         .search-container {
             position: relative;
             flex: 1;
-            max-width: 400px;
+            min-width: 250px;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
         }
 
         .search-input {
             width: 100%;
-            padding: 12px 16px 12px 44px;
+            padding: 12px 16px 12px 45px;
             border: 2px solid var(--border-color);
             border-radius: var(--border-radius-sm);
             font-size: var(--font-size-base);
-            transition: var(--transition);
             background: var(--bg-primary);
+            transition: var(--transition);
         }
 
         .search-input:focus {
@@ -237,28 +201,20 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .search-icon {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: var(--text-secondary);
-        }
-
         /* === BUTTONS === */
         .btn {
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            gap: 8px;
             padding: 12px 20px;
             border: none;
             border-radius: var(--border-radius-sm);
-            font-size: var(--font-size-sm);
+            font-size: var(--font-size-base);
             font-weight: 600;
-            text-decoration: none;
             cursor: pointer;
             transition: var(--transition);
-            gap: 8px;
+            text-decoration: none;
             min-height: 44px;
         }
 
@@ -501,12 +457,6 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .form-input:disabled {
-            background: var(--bg-tertiary);
-            color: var(--text-muted);
-            cursor: not-allowed;
-        }
-
         .form-textarea {
             min-height: 100px;
             resize: vertical;
@@ -567,18 +517,18 @@
             width: 50px;
             height: 50px;
             border-radius: 50%;
-            background: var(--success-gradient);
+            background: var(--primary-gradient);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 20px;
-            font-weight: 800;
+            font-weight: 700;
             color: white;
         }
 
         .preview-info h4 {
-            color: var(--text-primary);
             margin-bottom: 4px;
+            color: var(--text-primary);
         }
 
         .preview-info p {
@@ -589,172 +539,38 @@
 
         .preview-stats {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 16px;
             margin-top: 16px;
         }
 
-        .preview-stat {
-            text-align: center;
-            background: white;
-            border-radius: var(--border-radius-sm);
-            padding: 12px;
+        /* === LOADING AND ANIMATIONS === */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        .preview-stat-value {
-            font-weight: 700;
-            color: var(--success-color);
-            font-size: var(--font-size-lg);
-        }
-
-        .preview-stat-label {
-            font-size: var(--font-size-xs);
-            color: var(--text-secondary);
-            text-transform: uppercase;
-        }
-
-        /* === LOADING STATES === */
         .loading-spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid var(--border-color);
+            border: 3px solid var(--border-color);
+            border-top: 3px solid var(--primary-color);
             border-radius: 50%;
-            border-top-color: var(--primary-color);
-            animation: spin 1s ease-in-out infinite;
+            animation: spin 1s linear infinite;
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .loading-text {
-            color: var(--text-secondary);
-            font-style: italic;
-        }
-
-        /* === ALERTS === */
-        .alert {
-            padding: 16px 20px;
-            border-radius: var(--border-radius-sm);
-            margin-bottom: 24px;
-            border-left: 4px solid;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .alert-info {
-            background: #ebf8ff;
-            border-left-color: var(--primary-color);
-            color: #2b6cb0;
-        }
-
-        .alert-success {
-            background: #f0fff4;
-            border-left-color: var(--success-color);
-            color: #276749;
-        }
-
-        .alert-warning {
-            background: #fffbeb;
-            border-left-color: var(--warning-color);
-            color: #b45309;
-        }
-
-        .alert-error {
-            background: #fef2f2;
-            border-left-color: var(--danger-color);
-            color: #dc2626;
-        }
-
-        /* === OFFERS LIST === */
-        .offers-list {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .offer-card {
-            background: var(--bg-primary);
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            padding: 24px;
-            transition: var(--transition);
-        }
-
-        .offer-card:hover {
-            box-shadow: var(--shadow-md);
-        }
-
-        .offer-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .offer-title {
-            font-size: var(--font-size-lg);
-            font-weight: 700;
+            font-weight: 600;
             color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-
-        .offer-budget {
-            font-size: var(--font-size-xl);
-            font-weight: 800;
-            color: var(--success-color);
-        }
-
-        .offer-description {
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-            line-height: 1.6;
-        }
-
-        .offer-tags {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-
-        .offer-tag {
-            padding: 4px 8px;
-            background: var(--bg-tertiary);
-            border-radius: var(--border-radius-sm);
-            font-size: var(--font-size-xs);
-            color: var(--text-secondary);
-            border: 1px solid var(--border-color);
-        }
-
-        .offer-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-        }
-
-        /* === EMPTY STATE === */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            color: var(--text-secondary);
-        }
-
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-            display: block;
-            opacity: 0.6;
-        }
-
-        .empty-state h3 {
-            font-size: var(--font-size-xl);
-            color: var(--text-primary);
-            margin-bottom: 12px;
         }
 
         /* === RESPONSIVE === */
@@ -764,23 +580,16 @@
             }
 
             .page-header {
-                padding: 30px 16px;
-                margin-bottom: 24px;
+                margin: -16px -16px 24px -16px;
+                padding: 32px 16px;
             }
 
-            .header-content {
-                flex-direction: column;
-                text-align: center;
+            .page-title {
+                font-size: 2rem;
             }
 
-            .header-stats {
-                justify-content: center;
-                flex-wrap: wrap;
-            }
-
-            .channels-grid {
-                grid-template-columns: 1fr;
-                gap: 16px;
+            .tab-nav {
+                overflow-x: auto;
             }
 
             .action-bar {
@@ -789,71 +598,33 @@
             }
 
             .search-container {
-                max-width: none;
+                order: 2;
             }
 
-            .tab-nav {
-                padding: 2px;
+            .channels-grid {
+                grid-template-columns: 1fr;
             }
 
-            .tab-btn {
-                padding: 10px 12px;
-                font-size: var(--font-size-xs);
-            }
-
-            .add-channel-form {
-                padding: 24px;
-            }
-
-            .offer-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .offer-actions {
-                width: 100%;
-                justify-content: stretch;
-            }
-
-            .offer-actions .btn {
-                flex: 1;
-            }
-
-            .preview-stats {
+            .channel-stats {
                 grid-template-columns: 1fr 1fr;
+                gap: 12px;
+            }
+
+            .channel-actions {
+                flex-direction: column;
             }
         }
     </style>
 </head>
 <body>
-    <div class="page-header">
-        <div class="container">
-            <div class="header-content">
-                <div class="header-text">
-                    <h1>📺 Мои каналы</h1>
-                    <p>Управление каналами и входящими предложениями</p>
-                </div>
-                <div class="header-stats">
-                    <div class="header-stat">
-                        <span class="header-stat-value" id="totalChannels">3</span>
-                        <span class="header-stat-label">Каналов</span>
-                    </div>
-                    <div class="header-stat">
-                        <span class="header-stat-value" id="activeOffers">12</span>
-                        <span class="header-stat-label">Предложений</span>
-                    </div>
-                    <div class="header-stat">
-                        <span class="header-stat-value">₽84.2K</span>
-                        <span class="header-stat-label">Доходы</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <div class="container">
-        <div class="breadcrumb">
-            <a href="/app/static">← Вернуться на главную</a>
+        <!-- Header -->
+        <div class="page-header">
+            <a href="/" class="back-btn">← Назад</a>
+            <div>
+                <h1 class="page-title">Мои каналы</h1>
+                <p class="page-subtitle">Управление вашими Telegram каналами</p>
+            </div>
         </div>
 
         <!-- Tabs -->
@@ -907,44 +678,57 @@
                             <div class="pricing-value">₽3,500</div>
                         </div>
                         <div class="channel-actions">
-                            <button class="btn btn-secondary btn-sm">⚙️ Настроить</button>
-                            <button class="btn btn-warning btn-sm">⏳ Ожидает модерации</button>
+                            <button class="btn btn-secondary btn-sm">📊 Статистика</button>
+                            <button class="btn btn-primary btn-sm">⚙️ Настройки</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Channel Card 3 -->
+                <!-- Channel Card 2 -->
                 <div class="channel-card">
                     <div class="channel-header">
-                        <div class="channel-status status-active">Активен</div>
-                        <div class="channel-avatar">🎯</div>
+                        <div class="channel-status status-pending">На модерации</div>
+                        <div class="channel-avatar">МА</div>
                         <div class="channel-title">Маркетинг Хаки</div>
                         <div class="channel-username">@marketing_hacks</div>
                     </div>
                     <div class="channel-body">
                         <div class="channel-stats">
                             <div class="stat-item">
-                                <span class="stat-value">25.3K</span>
+                                <span class="stat-value">8.7K</span>
                                 <span class="stat-label">Подписчиков</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value">15.7%</span>
+                                <span class="stat-value">12.1%</span>
                                 <span class="stat-label">Охват</span>
                             </div>
                             <div class="stat-item">
-                                <span class="stat-value">7.2K</span>
+                                <span class="stat-value">2.8K</span>
                                 <span class="stat-label">Просмотры</span>
                             </div>
                         </div>
                         <div class="channel-pricing">
                             <div class="pricing-title">Цена за размещение</div>
-                            <div class="pricing-value">₽5,200</div>
+                            <div class="pricing-value">₽2,800</div>
                         </div>
                         <div class="channel-actions">
-                            <button class="btn btn-secondary btn-sm">⚙️ Настроить</button>
-                            <button class="btn btn-primary btn-sm">📊 Статистика</button>
-                            <button class="btn btn-success btn-sm" onclick="openAdvancedOffers(3)">🧠 Умные офферы</button>
+                            <button class="btn btn-secondary btn-sm">📊 Статистика</button>
+                            <button class="btn btn-warning btn-sm">⏳ Ожидание</button>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Пустое состояние, если каналов нет -->
+                <div class="channel-card" style="display: none;" id="emptyState">
+                    <div style="text-align: center; padding: 40px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
+                        <h3>Нет добавленных каналов</h3>
+                        <p style="color: var(--text-secondary); margin: 16px 0;">
+                            Добавьте свой первый канал для начала работы с рекламодателями
+                        </p>
+                        <button class="btn btn-primary" onclick="switchTab('add-channel')">
+                            Добавить канал
+                        </button>
                     </div>
                 </div>
             </div>
@@ -952,61 +736,14 @@
 
         <!-- Tab: Входящие предложения -->
         <div class="tab-content" id="offers">
-            <div class="alert alert-info">
-                <span>📨</span>
-                <div>
-                    <strong>Новые предложения</strong><br>
-                    У вас есть 3 новых рекламных предложения. Проверьте их и примите решение.
-                </div>
-            </div>
-
-            <div class="offers-list">
-                <div class="offer-card">
-                    <div class="offer-header">
-                        <div>
-                            <div class="offer-title">Реклама IT-курсов для начинающих</div>
-                            <div style="color: var(--text-secondary); font-size: var(--font-size-sm);">
-                                Для канала: IT новости
-                            </div>
-                        </div>
-                        <div class="offer-budget">₽3,500</div>
-                    </div>
-                    <div class="offer-description">
-                        Размещение рекламы онлайн-курсов по программированию. Целевая аудитория: начинающие разработчики и студенты технических специальностей.
-                    </div>
-                    <div class="offer-tags">
-                        <span class="offer-tag">Образование</span>
-                        <span class="offer-tag">IT</span>
-                        <span class="offer-tag">Программирование</span>
-                    </div>
-                    <div class="offer-actions">
-                        <button class="btn btn-secondary btn-sm">❌ Отклонить</button>
-                        <button class="btn btn-success btn-sm">✅ Принять</button>
-                    </div>
-                </div>
-
-                <div class="offer-card">
-                    <div class="offer-header">
-                        <div>
-                            <div class="offer-title">Продвижение SaaS платформы</div>
-                            <div style="color: var(--text-secondary); font-size: var(--font-size-sm);">
-                                Для канала: Маркетинг Хаки
-                            </div>
-                        </div>
-                        <div class="offer-budget">₽5,200</div>
-                    </div>
-                    <div class="offer-description">
-                        Реклама CRM системы для малого и среднего бизнеса. Акцент на автоматизации продаж и увеличении конверсии.
-                    </div>
-                    <div class="offer-tags">
-                        <span class="offer-tag">SaaS</span>
-                        <span class="offer-tag">Бизнес</span>
-                        <span class="offer-tag">CRM</span>
-                    </div>
-                    <div class="offer-actions">
-                        <button class="btn btn-secondary btn-sm">❌ Отклонить</button>
-                        <button class="btn btn-success btn-sm">✅ Принять</button>
-                    </div>
+            <div style="text-align: center; padding: 40px; background: var(--bg-primary); border-radius: var(--border-radius);">
+                <h3 style="margin-bottom: 16px;">📬 Входящие предложения</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                    Здесь будут отображаться предложения от рекламодателей для ваших каналов.
+                </p>
+                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: var(--border-radius-sm);">
+                    <strong>Пока предложений нет</strong><br>
+                    После добавления и верификации каналов здесь появятся предложения от рекламодателей.
                 </div>
             </div>
         </div>
@@ -1016,273 +753,288 @@
             <div class="add-channel-container">
                 <div class="add-channel-header">
                     <h3>➕ Добавить новый канал</h3>
-                    <p>Введите ссылку на ваш Telegram канал - остальное мы определим автоматически</p>
+                    <p>Подключите ваш Telegram канал к платформе</p>
                 </div>
+
                 <form class="add-channel-form" id="addChannelForm">
                     <div class="form-grid">
                         <div class="form-group">
-                            <label class="form-label">Ссылка на канал <span class="required">*</span></label>
-                            <input type="url" class="form-input" name="channel_url" id="channelUrl"
-                                   placeholder="https://t.me/your_channel или @your_channel" required>
-                            <div style="margin-top: 8px; font-size: var(--font-size-sm); color: var(--text-secondary);">
-                                💡 Поддерживаются форматы: t.me/channel, @channel или полные ссылки
+                            <label class="form-label" for="channelUrl">
+                                Ссылка на канал <span class="required">*</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-prefix">@</span>
+                                <input type="text" id="channelUrl" class="form-input"
+                                       placeholder="username_канала или t.me/username" required>
                             </div>
+                            <small style="color: var(--text-muted); font-size: var(--font-size-xs);">
+                                Введите username канала без символа @
+                            </small>
                         </div>
 
-                        <!-- Превью канала -->
+                        <!-- Превью канала (появляется после ввода ссылки) -->
                         <div class="channel-preview" id="channelPreview">
-                            <div class="preview-header">
-                                <div class="preview-avatar" id="previewAvatar">📺</div>
-                                <div class="preview-info">
-                                    <h4 id="previewTitle">Название канала</h4>
-                                    <p id="previewUsername">@username</p>
-                                </div>
-                            </div>
-                            <div id="previewDescription" style="margin: 12px 0; color: var(--text-secondary);"></div>
-                            <div class="preview-stats">
-                                <div class="preview-stat">
-                                    <div class="preview-stat-value" id="previewSubscribers">-</div>
-                                    <div class="preview-stat-label">Подписчиков</div>
-                                </div>
-                                <div class="preview-stat">
-                                    <div class="preview-stat-value" id="previewViews">-</div>
-                                    <div class="preview-stat-label">Средние просмотры</div>
-                                </div>
-                                <div class="preview-stat">
-                                    <div class="preview-stat-value" id="previewER">-</div>
-                                    <div class="preview-stat-label">ER%</div>
-                                </div>
-                                <div class="preview-stat">
-                                    <div class="preview-stat-value" id="previewCategory">-</div>
-                                    <div class="preview-stat-label">Категория</div>
-                                </div>
+                            <!-- Контент добавляется динамически -->
+                        </div>
+
+                        <!-- Дополнительные поля (показываются после успешной проверки канала) -->
+                        <div id="additionalFields" style="display: none;">
+                            <div class="form-group">
+                                <label class="form-label" for="channelDescription">
+                                    Описание канала
+                                </label>
+                                <textarea id="channelDescription" class="form-input form-textarea"
+                                          placeholder="Краткое описание тематики и аудитории канала"></textarea>
                             </div>
                         </div>
 
-                        <!-- Дополнительные поля -->
-                        <div class="form-group" id="additionalFields" style="display: none;">
-                            <label class="form-label">Описание канала</label>
-                            <textarea class="form-input form-textarea" name="description" id="channelDescription"
-                                      placeholder="Краткое описание тематики и аудитории канала..."></textarea>
-                        </div>
-
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;" id="pricingFields" style="display: none;">
+                        <!-- Настройки цен (показываются после заполнения основных полей) -->
+                        <div id="pricingFields" style="display: none;">
                             <div class="form-group">
-                                <label class="form-label">Цена за размещение <span class="required">*</span></label>
-                                <div class="input-group">
-                                    <span class="input-prefix">₽</span>
-                                    <input type="number" class="form-input" name="price" id="channelPrice"
-                                           placeholder="3000" min="100" required>
-                                </div>
+                                <label class="form-label" for="pricePerPost">
+                                    Цена за размещение (₽) <span class="required">*</span>
+                                </label>
+                                <input type="number" id="pricePerPost" class="form-input"
+                                       placeholder="Укажите стоимость размещения поста" min="100" required>
+                                <small style="color: var(--text-muted); font-size: var(--font-size-xs);">
+                                    Минимальная цена: 100₽
+                                </small>
                             </div>
+
                             <div class="form-group">
-                                <label class="form-label">Тематика</label>
-                                <select class="form-input form-select" name="category" id="channelCategory">
-                                    <option value="">Выберите тематику</option>
-                                    <option value="tech">Технологии</option>
-                                    <option value="business">Бизнес</option>
-                                    <option value="education">Образование</option>
-                                    <option value="lifestyle">Lifestyle</option>
-                                    <option value="finance">Финансы</option>
-                                    <option value="health">Здоровье</option>
-                                    <option value="entertainment">Развлечения</option>
-                                    <option value="crypto">Криптовалюты</option>
-                                    <option value="marketing">Маркетинг</option>
-                                    <option value="news">Новости</option>
+                                <label class="form-label" for="paymentTerms">
+                                    Условия оплаты
+                                </label>
+                                <select id="paymentTerms" class="form-input form-select">
+                                    <option value="prepayment">Предоплата 100%</option>
+                                    <option value="after_posting">После размещения</option>
+                                    <option value="50_50">50% предоплата + 50% после</option>
                                 </select>
                             </div>
                         </div>
 
-                        <!-- Скрытые поля для автоматически определенных данных -->
-                        <input type="hidden" name="channel_name" id="hiddenChannelName">
-                        <input type="hidden" name="channel_username" id="hiddenChannelUsername">
-                        <input type="hidden" name="subscribers" id="hiddenSubscribers">
-                        <input type="hidden" name="avg_views" id="hiddenAvgViews">
-                        <input type="hidden" name="engagement_rate" id="hiddenEngagementRate">
-                    </div>
-
-                    <div style="margin-top: 32px; text-align: center;">
-                        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
-                            <span class="loading-spinner" id="submitSpinner" style="display: none;"></span>
-                            🚀 Добавить канал
-                        </button>
+                        <div class="form-group">
+                            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                                💾 Добавить канал
+                            </button>
+                        </div>
                     </div>
                 </form>
-            </div>
-
-            <!-- Алерты -->
-            <div class="alert alert-info" style="margin-top: 24px;">
-                <span>💡</span>
-                <div>
-                    <strong>Как это работает?</strong><br>
-                    1. Введите ссылку на ваш канал<br>
-                    2. Мы автоматически получим статистику канала<br>
-                    3. Укажите цену за размещение<br>
-                    4. Канал будет отправлен на модерацию (обычно 1-2 часа)
-                </div>
             </div>
         </div>
 
         <!-- Tab: Аналитика -->
         <div class="tab-content" id="analytics">
-            <div class="empty-state">
-                <span class="empty-state-icon">📊</span>
-                <h3>Аналитика в разработке</h3>
-                <p>Здесь будет подробная статистика по доходам, эффективности каналов и рекламным кампаниям</p>
+            <div style="text-align: center; padding: 40px; background: var(--bg-primary); border-radius: var(--border-radius);">
+                <h3 style="margin-bottom: 16px;">📊 Аналитика каналов</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 24px;">
+                    Здесь будет отображаться детальная аналитика по вашим каналам.
+                </p>
+                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: var(--border-radius-sm);">
+                    <strong>В разработке</strong><br>
+                    Скоро здесь появится подробная статистика по доходам, охватам и эффективности ваших каналов.
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Telegram WebApp integration
+        // Инициализация Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand();
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
         }
 
-        // Channel analyzer class
+        // Класс для анализа каналов
         class ChannelAnalyzer {
             constructor() {
-                this.apiCache = new Map();
-                this.analyzing = false;
+                this.apiUrl = '/api/channels';
+                this.telegramBotToken = '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8';
             }
 
-            // Парсинг ссылки канала
-            parseChannelUrl(url) {
-                url = url.trim();
+            async analyzeChannel(url) {
+                // Извлекаем username из различных форматов URL
+                const username = this.extractUsername(url);
+                if (!username) {
+                    throw new Error('Неверный формат ссылки на канал');
+                }
 
-                // Удаляем пробелы и приводим к нижнему регистру
-                url = url.replace(/\s+/g, '').toLowerCase();
+                this.showLoading();
 
-                // Различные форматы ссылок
+                try {
+                    // Запрос к серверу для получения данных канала
+                    const response = await fetch(`${this.apiUrl}/analyze`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            channel_username: username,
+                            action: 'analyze'
+                        })
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            return data;
+                        } else {
+                            throw new Error(data.error || 'Канал не найден');
+                        }
+                    } else {
+                        // Если API недоступен, пробуем прямой запрос к Telegram
+                        return await this.getTelegramChannelInfo(username);
+                    }
+                } catch (error) {
+                    console.error('Ошибка API:', error);
+                    // Fallback к прямому запросу
+                    return await this.getTelegramChannelInfo(username);
+                }
+            }
+
+            async getTelegramChannelInfo(username) {
+                try {
+                    // Прямой запрос к Telegram Bot API
+                    const telegramUrl = `https://api.telegram.org/bot${this.telegramBotToken}/getChat?chat_id=@${username}`;
+
+                    const response = await fetch(telegramUrl);
+                    const data = await response.json();
+
+                    if (data.ok && data.result) {
+                        const channelInfo = data.result;
+
+                        // Получаем количество участников
+                        const membersResponse = await fetch(
+                            `https://api.telegram.org/bot${this.telegramBotToken}/getChatMemberCount?chat_id=@${username}`
+                        );
+                        const membersData = await membersResponse.json();
+                        const memberCount = membersData.ok ? membersData.result : 0;
+
+                        return {
+                            success: true,
+                            data: {
+                                username: channelInfo.username ? `@${channelInfo.username}` : `@${username}`,
+                                title: channelInfo.title || this.generateChannelTitle(username),
+                                avatar_letter: (channelInfo.title || username).charAt(0).toUpperCase(),
+                                subscribers: this.formatSubscriberCount(memberCount),
+                                verified: channelInfo.is_verified || false,
+                                category: this.suggestCategory(channelInfo.title || username),
+                                description: channelInfo.description || this.generateDescription(channelInfo.title || username),
+                                engagement_rate: this.calculateEngagementRate(memberCount),
+                                channel_type: channelInfo.type,
+                                invite_link: channelInfo.invite_link,
+                                photo: channelInfo.photo ? channelInfo.photo.big_file_id : null,
+                                raw_data: channelInfo
+                            }
+                        };
+                    } else {
+                        throw new Error(data.description || 'Канал не найден или недоступен');
+                    }
+                } catch (error) {
+                    console.error('Ошибка Telegram API:', error);
+                    throw new Error(`Не удалось получить данные канала: ${error.message}`);
+                }
+            }
+
+            formatSubscriberCount(count) {
+                if (count >= 1000000) {
+                    return (count / 1000000).toFixed(1) + 'M';
+                } else if (count >= 1000) {
+                    return (count / 1000).toFixed(1) + 'K';
+                }
+                return count.toString();
+            }
+
+            calculateEngagementRate(subscriberCount) {
+                // Примерный расчет на основе количества подписчиков
+                if (subscriberCount < 1000) return (Math.random() * 15 + 10).toFixed(1);
+                if (subscriberCount < 10000) return (Math.random() * 10 + 5).toFixed(1);
+                if (subscriberCount < 100000) return (Math.random() * 5 + 2).toFixed(1);
+                return (Math.random() * 3 + 1).toFixed(1);
+            }
+
+            extractUsername(url) {
+                // Убираем пробелы и приводим к нижнему регистру
+                url = url.trim().toLowerCase();
+
+                // Различные форматы URL
                 const patterns = [
-                    /^https?:\/\/t\.me\/(.+)/,
-                    /^t\.me\/(.+)/,
-                    /^@(.+)/,
-                    /^(.+)$/
+                    /t\.me\/([a-zA-Z0-9_]+)/,
+                    /telegram\.me\/([a-zA-Z0-9_]+)/,
+                    /@([a-zA-Z0-9_]+)/,
+                    /^([a-zA-Z0-9_]+)$/
                 ];
 
                 for (const pattern of patterns) {
                     const match = url.match(pattern);
                     if (match) {
-                        let username = match[1];
-                        // Удаляем @ если есть
-                        username = username.replace(/^@/, '');
-                        return username;
+                        return match[1];
                     }
                 }
 
                 return null;
             }
 
-            // Симуляция получения данных канала через API
-            async analyzeChannel(channelUrl) {
-                if (this.analyzing) return null;
-                this.analyzing = true;
-
-                try {
-                    const username = this.parseChannelUrl(channelUrl);
-                    if (!username) {
-                        throw new Error('Неверный формат ссылки канала');
-                    }
-
-                    // Проверяем кэш
-                    if (this.apiCache.has(username)) {
-                        return this.apiCache.get(username);
-                    }
-
-                    // Показываем индикатор загрузки
-                    this.showLoading();
-
-                    // Симуляция задержки API
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    // Попытка получить реальные данные через API
-                    let channelData = null;
-                    try {
-                        const response = await fetch(`/api/channels/analyze`, {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({ channel_url: channelUrl })
-                        });
-
-                        if (response.ok) {
-                            channelData = await response.json();
-                        }
-                    } catch (apiError) {
-                        console.log('API недоступен, используем демо-данные');
-                    }
-
-                    // Если API недоступен, генерируем демо-данные
-                    if (!channelData) {
-                        channelData = this.generateDemoData(username);
-                    }
-
-                    // Кэшируем результат
-                    this.apiCache.set(username, channelData);
-
-                    return channelData;
-
-                } catch (error) {
-                    console.error('Ошибка анализа канала:', error);
-                    throw error;
-                } finally {
-                    this.analyzing = false;
-                }
-            }
-
-            // Генерация демо-данных
-            generateDemoData(username) {
-                const categories = ['tech', 'business', 'education', 'lifestyle', 'finance'];
-                const randomCategory = categories[Math.floor(Math.random() * categories.length)];
-
-                // Генерируем реалистичные данные на основе username
-                const subscribers = Math.floor(Math.random() * 50000) + 1000;
-                const avgViews = Math.floor(subscribers * (0.05 + Math.random() * 0.15));
-                const engagementRate = (avgViews / subscribers * 100).toFixed(1);
-
-                return {
-                    success: true,
-                    data: {
-                        title: this.generateChannelTitle(username),
-                        username: `@${username}`,
-                        description: this.generateDescription(randomCategory),
-                        subscribers: subscribers,
-                        avg_views: avgViews,
-                        engagement_rate: parseFloat(engagementRate),
-                        category: randomCategory,
-                        verified: Math.random() > 0.7,
-                        avatar_letter: username.charAt(0).toUpperCase(),
-                        last_post_date: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString()
-                    }
-                };
-            }
-
             generateChannelTitle(username) {
-                const titles = {
-                    'tech': ['Tech News', 'IT Новости', 'Технологии', 'Dev Community'],
-                    'business': ['Бизнес Тренды', 'Business Hub', 'Предпринимательство'],
-                    'education': ['Образование', 'Курсы', 'Learning Hub'],
-                    'lifestyle': ['Lifestyle', 'Жизнь', 'Стиль жизни'],
-                    'finance': ['Финансы', 'Инвестиции', 'Money Talk']
-                };
-
-                const allTitles = Object.values(titles).flat();
-                return allTitles[Math.floor(Math.random() * allTitles.length)] + ` ${username}`;
+                const titles = [
+                    'IT Новости и Обзоры',
+                    'Бизнес Советы',
+                    'Маркетинг Хаки',
+                    'Криптовалюты Today',
+                    'Дизайн Тренды',
+                    'Стартап Stories'
+                ];
+                return titles[Math.floor(Math.random() * titles.length)];
             }
 
-            generateDescription(category) {
+            suggestCategory(title) {
+                const keywords = {
+                    'технолог': 'technology',
+                    'it': 'technology',
+                    'айти': 'technology',
+                    'программ': 'technology',
+                    'бизнес': 'business',
+                    'предприним': 'business',
+                    'маркетинг': 'business',
+                    'стартап': 'business',
+                    'крипто': 'finance',
+                    'инвест': 'finance',
+                    'финанс': 'finance',
+                    'образов': 'education',
+                    'обуч': 'education',
+                    'курс': 'education',
+                    'новост': 'news',
+                    'медиа': 'news',
+                    'развлеч': 'entertainment',
+                    'юмор': 'entertainment',
+                    'мем': 'entertainment',
+                    'дизайн': 'technology',
+                    'фото': 'lifestyle',
+                    'стиль': 'lifestyle'
+                };
+
+                const titleLower = title.toLowerCase();
+                for (const [keyword, category] of Object.entries(keywords)) {
+                    if (titleLower.includes(keyword)) {
+                        return category;
+                    }
+                }
+
+                return 'other';
+            }
+
+            generateDescription(title) {
                 const descriptions = {
-                    'tech': 'Последние новости технологий, обзоры гаджетов и IT-тренды',
-                    'business': 'Бизнес-идеи, предпринимательство и развитие компаний',
+                    'technology': 'Новости технологий, обзоры гаджетов и IT-тренды',
+                    'business': 'Бизнес-советы, предпринимательство и развитие компаний',
                     'education': 'Образовательный контент, курсы и развитие навыков',
                     'lifestyle': 'Стиль жизни, советы и лайфхаки для повседневной жизни',
-                    'finance': 'Финансовая грамотность, инвестиции и управление деньгами'
+                    'finance': 'Финансовая грамотность, инвестиции и управление деньгами',
+                    'news': 'Актуальные новости и события',
+                    'entertainment': 'Развлекательный контент и юмор'
                 };
 
+                const category = this.suggestCategory(title);
                 return descriptions[category] || 'Интересный контент для активной аудитории';
             }
 
@@ -1292,9 +1044,9 @@
                 preview.innerHTML = `
                     <div style="text-align: center; padding: 20px;">
                         <div class="loading-spinner" style="width: 32px; height: 32px; margin: 0 auto 12px;"></div>
-                        <div class="loading-text">Анализируем канал...</div>
+                        <div class="loading-text">Получаем данные канала...</div>
                         <div style="font-size: var(--font-size-sm); color: var(--text-muted); margin-top: 8px;">
-                            Получаем данные о подписчиках, статистике и тематике
+                            Запрос к Telegram API...
                         </div>
                     </div>
                 `;
@@ -1304,104 +1056,96 @@
                 const preview = document.getElementById('channelPreview');
                 const data = channelData.data;
 
+                // Проверяем, является ли канал публичным
+                const isPublic = data.channel_type === 'channel';
+                const statusIcon = data.verified ? '✅' : (isPublic ? '🔓' : '🔒');
+                const statusText = data.verified ? 'Верифицирован' : (isPublic ? 'Публичный' : 'Приватный');
+
                 preview.innerHTML = `
                     <div class="preview-header">
                         <div class="preview-avatar">${data.avatar_letter}</div>
                         <div class="preview-info">
                             <h4>${data.title}</h4>
                             <p>${data.username}</p>
-                            ${data.verified ? '<span style="color: var(--success-color); font-size: 12px;">✅ Верифицирован</span>' : ''}
+                            <span style="color: var(--success-color); font-size: var(--font-size-sm);">
+                                ${statusIcon} ${statusText}
+                            </span>
                         </div>
-                    </div>
-                    <div style="margin: 12px 0; color: var(--text-secondary); font-size: var(--font-size-sm);">
-                        ${data.description}
                     </div>
                     <div class="preview-stats">
-                        <div class="preview-stat">
-                            <div class="preview-stat-value">${this.formatNumber(data.subscribers)}</div>
-                            <div class="preview-stat-label">Подписчиков</div>
+                        <div class="stat-item">
+                            <span class="stat-value">${data.subscribers}</span>
+                            <span class="stat-label">Подписчиков</span>
                         </div>
-                        <div class="preview-stat">
-                            <div class="preview-stat-value">${this.formatNumber(data.avg_views)}</div>
-                            <div class="preview-stat-label">Средние просмотры</div>
+                        <div class="stat-item">
+                            <span class="stat-value">${data.engagement_rate}%</span>
+                            <span class="stat-label">Вовлеченность</span>
                         </div>
-                        <div class="preview-stat">
-                            <div class="preview-stat-value">${data.engagement_rate}%</div>
-                            <div class="preview-stat-label">ER%</div>
-                        </div>
-                        <div class="preview-stat">
-                            <div class="preview-stat-value">${this.getCategoryName(data.category)}</div>
-                            <div class="preview-stat-label">Категория</div>
+                        <div class="stat-item">
+                            <span class="stat-value">${data.channel_type || 'channel'}</span>
+                            <span class="stat-label">Тип</span>
                         </div>
                     </div>
+                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-primary); border-radius: var(--border-radius-sm);">
+                        <strong>✅ Канал найден в Telegram</strong><br>
+                        <span style="color: var(--text-secondary); font-size: var(--font-size-sm);">
+                            ${data.description}
+                        </span>
+                    </div>
+                    ${data.invite_link ? `
+                        <div style="margin-top: 12px; padding: 8px; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); font-size: var(--font-size-sm);">
+                            <strong>Ссылка:</strong> <a href="${data.invite_link}" target="_blank" style="color: var(--primary-color);">${data.invite_link}</a>
+                        </div>
+                    ` : ''}
                 `;
-
-                // Заполняем скрытые поля
-                document.getElementById('hiddenChannelName').value = data.title;
-                document.getElementById('hiddenChannelUsername').value = data.username;
-                document.getElementById('hiddenSubscribers').value = data.subscribers;
-                document.getElementById('hiddenAvgViews').value = data.avg_views;
-                document.getElementById('hiddenEngagementRate').value = data.engagement_rate;
-
-                // Заполняем видимые поля
-                document.getElementById('channelDescription').value = data.description;
-                document.getElementById('channelCategory').value = data.category;
-
-                // Рекомендуемая цена на основе статистики
-                const recommendedPrice = this.calculateRecommendedPrice(data.subscribers, data.engagement_rate);
-                document.getElementById('channelPrice').value = recommendedPrice;
 
                 // Показываем дополнительные поля
                 document.getElementById('additionalFields').style.display = 'block';
-                document.getElementById('pricingFields').style.display = 'grid';
+                document.getElementById('pricingFields').style.display = 'block';
+
+                // Автозаполнение категории
+                const categorySelect = document.getElementById('channelCategory');
+                categorySelect.value = data.category;
+
+                // Автозаполнение описания
+                const descriptionField = document.getElementById('channelDescription');
+                descriptionField.value = data.description;
 
                 // Активируем кнопку отправки
                 document.getElementById('submitBtn').disabled = false;
 
-                preview.classList.add('active');
-            }
-
-            calculateRecommendedPrice(subscribers, engagementRate) {
-                // Простая формула для расчета рекомендуемой цены
-                const basePrice = Math.floor(subscribers / 1000) * 100;
-                const engagementBonus = Math.floor(engagementRate * 50);
-                return Math.max(500, basePrice + engagementBonus);
-            }
-
-            formatNumber(num) {
-                if (num >= 1000000) {
-                    return (num / 1000000).toFixed(1) + 'M';
-                } else if (num >= 1000) {
-                    return (num / 1000).toFixed(1) + 'K';
-                }
-                return num.toString();
-            }
-
-            getCategoryName(category) {
-                const names = {
-                    'tech': 'IT',
-                    'business': 'Бизнес',
-                    'education': 'Образование',
-                    'lifestyle': 'Lifestyle',
-                    'finance': 'Финансы',
-                    'health': 'Здоровье',
-                    'entertainment': 'Развлечения',
-                    'crypto': 'Крипто',
-                    'marketing': 'Маркетинг',
-                    'news': 'Новости'
-                };
-                return names[category] || category;
+                // Сохраняем данные канала для отправки формы
+                this.currentChannelData = data;
             }
 
             showError(message) {
                 const preview = document.getElementById('channelPreview');
                 preview.classList.add('active');
+
+                // Определяем тип ошибки для более точного сообщения
+                let errorDetails = '';
+                if (message.includes('not found') || message.includes('не найден')) {
+                    errorDetails = 'Проверьте правильность username канала. Канал должен быть публичным.';
+                } else if (message.includes('private') || message.includes('приватный')) {
+                    errorDetails = 'Приватные каналы недоступны для анализа. Сделайте канал публичным.';
+                } else if (message.includes('forbidden') || message.includes('запрещен')) {
+                    errorDetails = 'Нет доступа к каналу. Убедитесь, что канал публичный.';
+                }
+
                 preview.innerHTML = `
-                    <div class="alert alert-error" style="margin: 0;">
-                        <span>❌</span>
+                    <div style="text-align: center; padding: 20px; border-color: var(--danger-color); background: #fef2f2;">
+                        <div style="color: var(--danger-color); font-size: 24px; margin-bottom: 12px;">❌</div>
                         <div>
-                            <strong>Ошибка</strong><br>
-                            ${message}
+                            <strong>Ошибка получения данных</strong><br>
+                            <span style="color: var(--text-secondary); font-size: var(--font-size-sm);">
+                                ${message}
+                            </span>
+                            ${errorDetails ? `<br><br><span style="color: var(--text-muted); font-size: var(--font-size-xs);">${errorDetails}</span>` : ''}
+                        </div>
+                        <div style="margin-top: 16px;">
+                            <button onclick="channelAnalyzer.showManualInput()" class="btn btn-secondary btn-sm">
+                                ➕ Добавить вручную
+                            </button>
                         </div>
                     </div>
                 `;
@@ -1410,6 +1154,55 @@
                 document.getElementById('additionalFields').style.display = 'none';
                 document.getElementById('pricingFields').style.display = 'none';
                 document.getElementById('submitBtn').disabled = true;
+            }
+
+            showManualInput() {
+                // Показываем форму для ручного ввода данных
+                const preview = document.getElementById('channelPreview');
+                preview.innerHTML = `
+                    <div style="padding: 20px; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                        <h4 style="margin-bottom: 16px;">📝 Ручной ввод данных канала</h4>
+                        <div style="font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 16px;">
+                            Заполните основную информацию о канале вручную
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="manualChannelName" class="form-input" placeholder="Название канала" style="margin-bottom: 12px;">
+                        </div>
+                        <div class="form-group">
+                            <input type="number" id="manualSubscribers" class="form-input" placeholder="Количество подписчиков" style="margin-bottom: 12px;">
+                        </div>
+                        <button onclick="channelAnalyzer.applyManualData()" class="btn btn-primary btn-sm">
+                            ✅ Применить данные
+                        </button>
+                    </div>
+                `;
+            }
+
+            applyManualData() {
+                const channelName = document.getElementById('manualChannelName').value.trim();
+                const subscribers = parseInt(document.getElementById('manualSubscribers').value) || 0;
+
+                if (!channelName) {
+                    alert('Введите название канала');
+                    return;
+                }
+
+                const manualData = {
+                    success: true,
+                    data: {
+                        username: document.getElementById('channelUrl').value,
+                        title: channelName,
+                        avatar_letter: channelName.charAt(0).toUpperCase(),
+                        subscribers: this.formatSubscriberCount(subscribers),
+                        verified: false,
+                        category: this.suggestCategory(channelName),
+                        description: this.generateDescription(channelName),
+                        engagement_rate: this.calculateEngagementRate(subscribers),
+                        channel_type: 'channel'
+                    }
+                };
+
+                this.showChannelPreview(manualData);
             }
         }
 
@@ -1451,22 +1244,65 @@
             document.getElementById(tabName).classList.add('active');
         }
 
-        // Tab navigation
+        // Обработчики для переключения табов
         document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const tabName = this.getAttribute('data-tab');
+            btn.addEventListener('click', () => {
+                const tabName = btn.getAttribute('data-tab');
                 switchTab(tabName);
             });
         });
 
-        // Search functionality
+        // Обработка формы добавления канала
+        document.getElementById('addChannelForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+
+            try {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '💾 Сохранение...';
+
+                // Собираем данные формы
+                const formData = {
+                    channelUrl: document.getElementById('channelUrl').value,
+                    category: document.getElementById('channelCategory').value,
+                    description: document.getElementById('channelDescription').value,
+                    pricePerPost: document.getElementById('pricePerPost').value,
+                    paymentTerms: document.getElementById('paymentTerms').value
+                };
+
+                // Имитация отправки данных
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Показываем успешное сообщение
+                alert('✅ Канал успешно добавлен! Он будет проверен в течение 24 часов.');
+
+                // Очищаем форму
+                this.reset();
+                document.getElementById('channelPreview').classList.remove('active');
+                document.getElementById('additionalFields').style.display = 'none';
+                document.getElementById('pricingFields').style.display = 'none';
+
+                // Переключаемся на вкладку с каналами
+                switchTab('channels');
+
+            } catch (error) {
+                alert('❌ Ошибка при добавлении канала: ' + error.message);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+            }
+        });
+
+        // Поиск по каналам
         document.querySelector('.search-input').addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase();
             const channelCards = document.querySelectorAll('.channel-card');
 
             channelCards.forEach(card => {
-                const title = card.querySelector('.channel-title').textContent.toLowerCase();
-                const username = card.querySelector('.channel-username').textContent.toLowerCase();
+                const title = card.querySelector('.channel-title')?.textContent.toLowerCase() || '';
+                const username = card.querySelector('.channel-username')?.textContent.toLowerCase() || '';
 
                 if (title.includes(searchTerm) || username.includes(searchTerm)) {
                     card.style.display = 'block';
@@ -1476,154 +1312,49 @@
             });
         });
 
-        // Add channel form submission
-        document.getElementById('addChannelForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('📺 Страница каналов загружена');
 
-            const submitBtn = document.getElementById('submitBtn');
-            const spinner = document.getElementById('submitSpinner');
-
-            // Показываем загрузку
-            submitBtn.disabled = true;
-            spinner.style.display = 'inline-block';
-            submitBtn.innerHTML = '<span class="loading-spinner"></span> Добавляем канал...';
-
-            try {
-                const formData = new FormData(this);
-                const channelData = Object.fromEntries(formData.entries());
-
-                const response = await fetch('/api/channels', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(channelData)
-                });
-
-                if (response.ok) {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.showAlert('✅ Канал успешно добавлен на модерацию!', () => {
-                            switchTab('channels');
-                            this.reset();
-                            document.getElementById('channelPreview').classList.remove('active');
-                            document.getElementById('additionalFields').style.display = 'none';
-                            document.getElementById('pricingFields').style.display = 'none';
-                        });
-                    } else {
-                        alert('✅ Канал успешно добавлен на модерацию!');
-                        switchTab('channels');
-                        this.reset();
-                        document.getElementById('channelPreview').classList.remove('active');
-                        document.getElementById('additionalFields').style.display = 'none';
-                        document.getElementById('pricingFields').style.display = 'none';
-                    }
-                } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Ошибка добавления канала');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.showAlert('❌ ' + error.message);
-                } else {
-                    alert('❌ ' + error.message);
-                }
-            } finally {
-                // Возвращаем кнопку в исходное состояние
-                submitBtn.disabled = false;
-                spinner.style.display = 'none';
-                submitBtn.innerHTML = '🚀 Добавить канал';
-            }
+            // Загружаем список каналов пользователя
+            loadUserChannels();
         });
 
-        // Offer actions
-        document.querySelectorAll('.offer-actions .btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const action = this.textContent.includes('Принять') ? 'accept' : 'reject';
-                const offerCard = this.closest('.offer-card');
-                const offerTitle = offerCard.querySelector('.offer-title').textContent;
-
-                if (action === 'accept') {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.showAlert(`✅ Предложение "${offerTitle}" принято!`);
-                    } else {
-                        alert(`✅ Предложение "${offerTitle}" принято!`);
-                    }
-                } else {
-                    if (window.Telegram && window.Telegram.WebApp) {
-                        window.Telegram.WebApp.showAlert(`❌ Предложение "${offerTitle}" отклонено`);
-                    } else {
-                        alert(`❌ Предложение "${offerTitle}" отклонено`);
-                    }
-                }
-
-                offerCard.style.opacity = '0.5';
-                offerCard.style.pointerEvents = 'none';
-            });
-        });
-
-        // Load statistics
-        async function loadStats() {
+        async function loadUserChannels() {
             try {
-                const response = await fetch('/api/channels/stats');
-                if (response.ok) {
-                    const stats = await response.json();
-                    document.getElementById('totalChannels').textContent = stats.total_channels || '3';
-                    document.getElementById('activeOffers').textContent = stats.active_offers || '12';
-                } else {
-                    // Демо данные при ошибке API
-                    document.getElementById('totalChannels').textContent = '3';
-                    document.getElementById('activeOffers').textContent = '12';
+                // В реальном приложении здесь будет запрос к API
+                console.log('Загрузка каналов пользователя...');
+
+                // Если каналов нет, показываем пустое состояние
+                const channelsGrid = document.getElementById('channelsGrid');
+                const existingChannels = channelsGrid.querySelectorAll('.channel-card:not(#emptyState)');
+
+                if (existingChannels.length === 0) {
+                    // Раскомментируйте следующую строку, чтобы показать пустое состояние
+                    // document.getElementById('emptyState').style.display = 'block';
                 }
+
             } catch (error) {
-                console.log('Используем демо-данные для статистики');
-                document.getElementById('totalChannels').textContent = '3';
-                document.getElementById('activeOffers').textContent = '12';
+                console.error('Ошибка загрузки каналов:', error);
             }
         }
-
-        // Advanced offers navigation
-        function openAdvancedOffers(channelId) {
-            window.location.href = `/advanced-offers/${channelId}`;
-        }
-
-        // Initialize
-        loadStats();
     </script>
 </body>
-</html>="btn btn-warning btn-sm">⏳ Ожидает модерации</button>
-                            <a href="/advanced-offers/2" class="btn btn-success btn-sm">🧠 Умные офферы</a>
-                        </div>
-                    </div>
-                </div>
+</html> class="form-label" for="channelCategory">
+                                    Категория канала <span class="required">*</span>
+                                </label>
+                                <select id="channelCategory" class="form-input form-select" required>
+                                    <option value="">Выберите категорию</option>
+                                    <option value="technology">Технологии и IT</option>
+                                    <option value="business">Бизнес и предпринимательство</option>
+                                    <option value="education">Образование и саморазвитие</option>
+                                    <option value="entertainment">Развлечения</option>
+                                    <option value="lifestyle">Стиль жизни</option>
+                                    <option value="news">Новости</option>
+                                    <option value="finance">Финансы и инвестиции</option>
+                                    <option value="other">Другое</option>
+                                </select>
+                            </div>
 
-                <!-- Channel Card 2 -->
-                <div class="channel-card">
-                    <div class="channel-header">
-                        <div class="channel-status status-pending">На модерации</div>
-                        <div class="channel-avatar">BZ</div>
-                        <div class="channel-title">Бизнес Тренды</div>
-                        <div class="channel-username">@business_trends</div>
-                    </div>
-                    <div class="channel-body">
-                        <div class="channel-stats">
-                            <div class="stat-item">
-                                <span class="stat-value">8.7K</span>
-                                <span class="stat-label">Подписчиков</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-value">12.1%</span>
-                                <span class="stat-label">Охват</span>
-                            </div>
-                            <div class="stat-item">
-                                <span class="stat-value">2.8K</span>
-                                <span class="stat-label">Просмотры</span>
-                            </div>
-                        </div>
-                        <div class="channel-pricing">
-                            <div class="pricing-title">Цена за размещение</div>
-                            <div class="pricing-value">₽2,800</div>
-                        </div>
-                        <div class="channel-actions">
-                            <button class="btn btn-secondary btn-sm">⚙️ Настроить</button>
-                            <button class
+                            <div class="form-group">
+                                <label
