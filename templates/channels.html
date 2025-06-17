@@ -839,6 +839,29 @@
     </div>
 
     <script>
+
+        function getTelegramUser() {
+            // Пытаемся получить данные из Telegram WebApp
+            if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
+                const user = window.Telegram.WebApp.initDataUnsafe.user;
+                if (user) {
+                    return user;
+                }
+            }
+
+            // Fallback: тестовый пользователь для разработки
+            if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return {
+                    id: 373086959, // YOUR_TELEGRAM_ID из .env
+                    username: 'test_user',
+                    first_name: 'Test',
+                    last_name: 'User'
+                };
+            }
+
+            return null;
+        }
+
         // Инициализация Telegram WebApp
         if (window.Telegram && window.Telegram.WebApp) {
             window.Telegram.WebApp.ready();
@@ -1427,22 +1450,277 @@
         });
 
         async function loadUserChannels() {
-            try {
-                // В реальном приложении здесь будет запрос к API
-                console.log('Загрузка каналов пользователя...');
+    try {
+        console.log('🔍 Начинаем загрузку каналов пользователя...');
 
-                // Если каналов нет, показываем пустое состояние
-                const channelsGrid = document.getElementById('channelsGrid');
-                const existingChannels = channelsGrid.querySelectorAll('.channel-card:not(#emptyState)');
+        // Получаем данные Telegram пользователя
+        const telegramUser = getTelegramUser();
+        console.log('👤 Telegram пользователь:', telegramUser);
 
-                if (existingChannels.length === 0) {
-                    // Раскомментируйте следующую строку, чтобы показать пустое состояние
-                    // document.getElementById('emptyState').style.display = 'block';
-                }
+        const headers = {
+            'Content-Type': 'application/json'
+        };
 
-            } catch (error) {
-                console.error('Ошибка загрузки каналов:', error);
+        // Добавляем Telegram данные в заголовки если доступны
+        if (telegramUser) {
+            headers['X-Telegram-User-Id'] = telegramUser.id.toString();
+            console.log('🔑 Добавлен заголовок X-Telegram-User-Id:', telegramUser.id);
+            if (telegramUser.username) {
+                headers['X-Telegram-Username'] = telegramUser.username;
             }
+            if (telegramUser.first_name) {
+                headers['X-Telegram-First-Name'] = telegramUser.first_name;
+            }
+            if (telegramUser.last_name) {
+                headers['X-Telegram-Last-Name'] = telegramUser.last_name;
+            }
+        } else {
+            console.error('❌ Нет данных Telegram пользователя!');
+        }
+
+        console.log('📤 Отправляем запрос к /api/channels/my с заголовками:', headers);
+
+        const response = await fetch('/api/channels/my', {
+            method: 'GET',
+            headers: headers
+        });
+
+        console.log('📥 Получен ответ:', response.status, response.statusText);
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Ошибка ответа:', errorText);
+            throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json();
+        console.log('📊 Получены данные каналов:', data);
+
+        const channelsGrid = document.getElementById('channelsGrid');
+        console.log('🎯 Элемент channelsGrid:', channelsGrid);
+
+        if (!channelsGrid) {
+            console.error('❌ Элемент channelsGrid не найден!');
+            return;
+        }
+
+        // Очищаем существующие карточки каналов пользователя
+        const existingCards = channelsGrid.querySelectorAll('.channel-card[data-user-channel="true"]');
+        console.log('🗑️ Удаляем существующие карточки:', existingCards.length);
+        existingCards.forEach(card => card.remove());
+
+        if (data.channels && data.channels.length > 0) {
+            console.log('✅ Найдено каналов:', data.channels.length);
+
+            // Скрываем пустое состояние если оно было показано
+            const emptyState = document.getElementById('emptyState');
+            if (emptyState) {
+                emptyState.style.display = 'none';
+                console.log('👻 Скрыто пустое состояние');
+            }
+
+            // Добавляем каналы пользователя
+            data.channels.forEach((channel, index) => {
+                console.log(`📺 Добавляем канал ${index + 1}:`, channel);
+                const channelCard = createChannelCard(channel);
+                channelsGrid.appendChild(channelCard);
+            });
+
+            console.log('🎉 Все каналы добавлены в DOM');
+        } else {
+            console.log('📭 Каналов не найдено, показываем пустое состояние');
+            showEmptyState();
+        }
+
+    } catch (error) {
+        console.error('💥 Ошибка загрузки каналов:', error);
+        showEmptyState();
+    }
+}
+
+        function createChannelCard(channel) {
+    const card = document.createElement('div');
+    card.className = 'channel-card';
+    card.setAttribute('data-user-channel', 'true');
+
+    const statusClass = channel.is_verified ? 'status-active' : 'status-pending';
+    const statusText = channel.is_verified ? 'Верифицирован' : 'На проверке';
+
+    const avatar = channel.channel_name ? channel.channel_name.substring(0, 2).toUpperCase() : 'CH';
+
+    card.innerHTML = `
+        <div class="channel-header">
+            <div class="channel-status ${statusClass}">${statusText}</div>
+            <div class="channel-avatar">${avatar}</div>
+            <div class="channel-title">${channel.channel_name || 'Без названия'}</div>
+            <div class="channel-username">${channel.channel_username || channel.channel_id}</div>
+        </div>
+        <div class="channel-body">
+            <div class="channel-stats">
+                <div class="stat-item">
+                    <span class="stat-value">${formatNumber(channel.subscribers_count)}</span>
+                    <span class="stat-label">Подписчиков</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">${channel.category || 'other'}</span>
+                    <span class="stat-label">Категория</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value">${new Date(channel.created_at).toLocaleDateString()}</span>
+                    <span class="stat-label">Добавлен</span>
+                </div>
+            </div>
+            <div class="channel-pricing">
+                <div class="pricing-title">Цена за размещение</div>
+                <div class="pricing-value">₽${formatNumber(channel.price_per_post)}</div>
+            </div>
+            ${!channel.is_verified && channel.verification_code ? `
+            <div class="verification-info" style="margin: 10px 0; padding: 8px; background: #fff3cd; border-radius: 4px; border-left: 3px solid #ffc107;">
+                <small style="display: block; font-weight: bold;">Код верификации: ${channel.verification_code}</small>
+                <small style="color: #856404;">Отправьте этот код в канал для подтверждения</small>
+            </div>
+            ` : ''}
+            <div class="channel-actions">
+                <button class="btn btn-secondary btn-sm" onclick="showChannelStats(${channel.id})">📊 Статистика</button>
+                <button class="btn btn-primary btn-sm" onclick="editChannel(${channel.id})">⚙️ Настройки</button>
+                ${!channel.is_verified ? `<button class="btn btn-success btn-sm" onclick="verifyChannel(${channel.id})">✅ Проверить</button>` : ''}
+            </div>
+        </div>
+    `;
+
+    return card;
+}
+
+        function showEmptyState() {
+            const channelsGrid = document.getElementById('channelsGrid');
+
+            if (!document.getElementById('emptyState')) {
+                const emptyState = document.createElement('div');
+                emptyState.id = 'emptyState';
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
+                        <h3>У вас пока нет каналов</h3>
+                        <p>Добавьте свой первый канал, чтобы начать зарабатывать на рекламе</p>
+                        <button class="btn btn-primary" onclick="switchTab('add-channel')">➕ Добавить канал</button>
+                    </div>
+                `;
+                channelsGrid.appendChild(emptyState);
+            }
+
+            document.getElementById('emptyState').style.display = 'block';
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function verifyChannel(channelId) {
+    const telegramUser = getTelegramUser();
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+
+    if (telegramUser) {
+        headers['X-Telegram-User-Id'] = telegramUser.id.toString();
+        if (telegramUser.username) headers['X-Telegram-Username'] = telegramUser.username;
+        if (telegramUser.first_name) headers['X-Telegram-First-Name'] = telegramUser.first_name;
+        if (telegramUser.last_name) headers['X-Telegram-Last-Name'] = telegramUser.last_name;
+    }
+
+    fetch(`/api/channels/${channelId}/verify`, {
+        method: 'PUT',
+        headers: headers
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Канал успешно верифицирован!');
+            loadUserChannels();
+        } else {
+            alert('❌ ' + (data.message || 'Ошибка верификации'));
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка верификации:', error);
+        alert('❌ Ошибка при проверке верификации');
+    });
+}
+
+        function showChannelStats(channelId) {
+            alert('Статистика канала (в разработке)');
+        }
+
+        function editChannel(channelId) {
+            alert('Редактирование канала (в разработке)');
+        }
+
+        function showEmptyState() {
+            const channelsGrid = document.getElementById('channelsGrid');
+
+            // Проверяем, есть ли уже пустое состояние
+            if (!document.getElementById('emptyState')) {
+                const emptyState = document.createElement('div');
+                emptyState.id = 'emptyState';
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
+                        <h3>У вас пока нет каналов</h3>
+                        <p>Добавьте свой первый канал, чтобы начать зарабатывать на рекламе</p>
+                        <button class="btn btn-primary" onclick="switchTab('add-channel')">➕ Добавить канал</button>
+                    </div>
+                `;
+                channelsGrid.appendChild(emptyState);
+            }
+
+            document.getElementById('emptyState').style.display = 'block';
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function verifyChannel(channelId) {
+            // Функция для ручной проверки верификации
+            fetch(`/api/channels/${channelId}/verify`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Канал успешно верифицирован!');
+                    loadUserChannels(); // Перезагружаем список каналов
+                } else {
+                    alert('❌ ' + (data.message || 'Ошибка верификации'));
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка верификации:', error);
+                alert('❌ Ошибка при проверке верификации');
+            });
+        }
+
+        function showChannelStats(channelId) {
+            alert('Статистика канала (в разработке)');
+        }
+
+        function editChannel(channelId) {
+            alert('Редактирование канала (в разработке)');
         }
     </script>
 </body>

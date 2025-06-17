@@ -217,46 +217,33 @@ class TelegramAuth:
     def ensure_user_exists(telegram_user_id: str) -> Optional[int]:
         """Проверка и создание пользователя в БД"""
         try:
-            from ..models.user import User
-            from ..models.database import db
+            from ..models.database import db_manager
 
-            user = User.query.filter_by(telegram_id=telegram_user_id).first()
+            # Получаем данные из заголовков
+            username = request.headers.get('X-Telegram-Username')
+            first_name = request.headers.get('X-Telegram-First-Name')
+            last_name = request.headers.get('X-Telegram-Last-Name')
 
-            if not user:
-                # Создаем нового пользователя
-                user = User(
-                    telegram_id=telegram_user_id,
-                    username=request.headers.get('X-Telegram-Username'),
-                    first_name=request.headers.get('X-Telegram-First-Name'),
-                    last_name=request.headers.get('X-Telegram-Last-Name')
-                )
+            current_app.logger.info(f"Trying to ensure user exists: {telegram_user_id}")
 
-                db.session.add(user)
-                db.session.commit()
+            # Используем метод db_manager для создания/получения пользователя
+            user_id = db_manager.ensure_user_exists(
+                telegram_id=int(telegram_user_id),
+                username=username,
+                first_name=first_name
+            )
 
-                current_app.logger.info(f"Created new user: {telegram_user_id}")
+            if user_id:
+                current_app.logger.info(f"User exists/created with ID: {user_id}")
+                return user_id
             else:
-                # Обновляем информацию о пользователе
-                updated = False
-
-                username = request.headers.get('X-Telegram-Username')
-                if username and user.username != username:
-                    user.username = username
-                    updated = True
-
-                first_name = request.headers.get('X-Telegram-First-Name')
-                if first_name and user.first_name != first_name:
-                    user.first_name = first_name
-                    updated = True
-
-                if updated:
-                    db.session.commit()
-                    current_app.logger.debug(f"Updated user info: {telegram_user_id}")
-
-            return user.id
+                current_app.logger.error(f"Failed to create/get user for telegram_id: {telegram_user_id}")
+                return None
 
         except Exception as e:
             current_app.logger.error(f"Error ensuring user exists: {e}")
+            import traceback
+            current_app.logger.error(traceback.format_exc())
             return None
 
 
