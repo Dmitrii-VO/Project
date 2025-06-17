@@ -757,17 +757,17 @@
             <div class="channels-grid" id="channelsGrid">
                 <!-- Пустое состояние - ОСТАВИТЬ, НО НЕМНОГО ИЗМЕНИТЬ -->
                 <div class="channel-card" style="display: none;" id="emptyState">
-    <div style="text-align: center; padding: 40px;">
-        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
-        <h3>Нет добавленных каналов</h3>
-        <p style="color: var(--text-secondary); margin: 16px 0;">
-            Добавьте свой первый канал для начала работы с рекламодателями
-        </p>
-        <button class="btn btn-primary" onclick="switchTab('add-channel')">
-            Добавить канал
-        </button>
-    </div>
-</div>
+                    <div style="text-align: center; padding: 40px;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
+                        <h3>Нет добавленных каналов</h3>
+                        <p style="color: var(--text-secondary); margin: 16px 0;">
+                        Добавьте свой первый канал для начала работы с рекламодателями
+                        </p>
+                        <button class="btn btn-primary" onclick="switchTab('add-channel')">
+                        Добавить канал
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -816,6 +816,22 @@
 
                         <!-- Дополнительные поля (показываются после успешной проверки канала) -->
                         <div id="additionalFields" style="display: none;">
+                            <div class="form-group">
+                                    <label class="form-label" for="channelCategory">
+                                        Категория канала <span class="required">*</span>
+                                    </label>
+                                    <select id="channelCategory" class="form-input form-select" required>
+                                        <option value="">Выберите категорию</option>
+                                        <option value="technology">Технологии и IT</option>
+                                        <option value="business">Бизнес и предпринимательство</option>
+                                        <option value="education">Образование и саморазвитие</option>
+                                        <option value="entertainment">Развлечения</option>
+                                        <option value="lifestyle">Стиль жизни</option>
+                                        <option value="news">Новости</option>
+                                        <option value="finance">Финансы и инвестиции</option>
+                                        <option value="other">Другое</option>
+                                    </select>
+                            </div>
                             <div class="form-group">
                                 <label class="form-label" for="channelDescription">
                                     Описание канала
@@ -1112,70 +1128,153 @@
                 `;
             }
 
+            // ИСПРАВЛЕННАЯ ФУНКЦИЯ showChannelPreview
+            // Замените существующую функцию на эту:
+
             showChannelPreview(channelData) {
+                console.log('📊 Показываем превью канала:', channelData);
+
                 const preview = document.getElementById('channelPreview');
-                const data = channelData.data;
+                if (!preview) {
+                    console.error('❌ Элемент channelPreview не найден');
+                    return;
+                }
+
+                // ИСПРАВЛЕНИЕ 1: Безопасное извлечение данных
+                const data = channelData?.data || channelData; // Поддерживаем оба формата
+
+                if (!data) {
+                    console.error('❌ Данные канала отсутствуют');
+                    return;
+                }
+
+                // ИСПРАВЛЕНИЕ 2: Проверка обязательных полей
+                const title = data.title || 'Неизвестный канал';
+                const username = data.username || 'unknown';
+                const subscribers = data.subscribers || '0';
+                const engagement_rate = data.engagement_rate || '0';
+                const description = data.description || 'Описание отсутствует';
+                const avatar_letter = data.avatar_letter || title.charAt(0).toUpperCase() || '?';
+                const category = data.category || 'other';
 
                 // Проверяем, является ли канал публичным
                 const isPublic = data.channel_type === 'channel';
                 const statusIcon = data.verified ? '✅' : (isPublic ? '🔓' : '🔒');
                 const statusText = data.verified ? 'Верифицирован' : (isPublic ? 'Публичный' : 'Приватный');
 
-                preview.innerHTML = `
-                    <div class="preview-header">
-                        <div class="preview-avatar">${data.avatar_letter}</div>
-                        <div class="preview-info">
-                            <h4>${data.title}</h4>
-                            <p>${data.username}</p>
-                            <span style="color: var(--success-color); font-size: var(--font-size-sm);">
-                                ${statusIcon} ${statusText}
+                // ИСПРАВЛЕНИЕ 3: Безопасное формирование HTML
+                try {
+                    preview.innerHTML = `
+                        <div class="preview-header">
+                            <div class="preview-avatar">${avatar_letter}</div>
+                            <div class="preview-info">
+                                <h4>${title}</h4>
+                                <p>@${username}</p>
+                                <span style="color: var(--success-color); font-size: var(--font-size-sm);">
+                                    ${statusIcon} ${statusText}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="preview-stats">
+                            <div class="stat-item">
+                                <span class="stat-value">${subscribers}</span>
+                                <span class="stat-label">Подписчиков</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${engagement_rate}%</span>
+                                <span class="stat-label">Вовлеченность</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value">${data.channel_type || 'channel'}</span>
+                                <span class="stat-label">Тип</span>
+                            </div>
+                        </div>
+                        <div style="margin-top: 16px; padding: 12px; background: var(--bg-primary); border-radius: var(--border-radius-sm);">
+                            <strong>✅ Канал найден в Telegram</strong><br>
+                            <span style="color: var(--text-secondary); font-size: var(--font-size-sm);">
+                                ${description}
                             </span>
                         </div>
-                    </div>
-                    <div class="preview-stats">
-                        <div class="stat-item">
-                            <span class="stat-value">${data.subscribers}</span>
-                            <span class="stat-label">Подписчиков</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-value">${data.engagement_rate}%</span>
-                            <span class="stat-label">Вовлеченность</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-value">${data.channel_type || 'channel'}</span>
-                            <span class="stat-label">Тип</span>
-                        </div>
-                    </div>
-                    <div style="margin-top: 16px; padding: 12px; background: var(--bg-primary); border-radius: var(--border-radius-sm);">
-                        <strong>✅ Канал найден в Telegram</strong><br>
-                        <span style="color: var(--text-secondary); font-size: var(--font-size-sm);">
-                            ${data.description}
-                        </span>
-                    </div>
-                    ${data.invite_link ? `
-                        <div style="margin-top: 12px; padding: 8px; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); font-size: var(--font-size-sm);">
-                            <strong>Ссылка:</strong> <a href="${data.invite_link}" target="_blank" style="color: var(--primary-color);">${data.invite_link}</a>
-                        </div>
-                    ` : ''}
-                `;
+                        ${data.invite_link ? `
+                            <div style="margin-top: 12px; padding: 8px; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); font-size: var(--font-size-sm);">
+                                <strong>Ссылка:</strong> <a href="${data.invite_link}" target="_blank" style="color: var(--primary-color);">${data.invite_link}</a>
+                            </div>
+                        ` : ''}
+                    `;
 
-                // Показываем дополнительные поля
-                document.getElementById('additionalFields').style.display = 'block';
-                document.getElementById('pricingFields').style.display = 'block';
+                    // Показываем превью
+                    preview.classList.add('active');
 
-                // Автозаполнение категории
-                const categorySelect = document.getElementById('channelCategory');
-                categorySelect.value = data.category;
+                } catch (error) {
+                    console.error('❌ Ошибка при создании HTML превью:', error);
+                    return;
+                }
 
-                // Автозаполнение описания
-                const descriptionField = document.getElementById('channelDescription');
-                descriptionField.value = data.description;
+                // ИСПРАВЛЕНИЕ 4: Безопасное показывание дополнительных полей
+                try {
+                    const additionalFields = document.getElementById('additionalFields');
+                    const pricingFields = document.getElementById('pricingFields');
 
-                // Активируем кнопку отправки
-                document.getElementById('submitBtn').disabled = false;
+                    if (additionalFields) {
+                        additionalFields.style.display = 'block';
+                    } else {
+                        console.warn('⚠️ Элемент additionalFields не найден');
+                    }
+
+                    if (pricingFields) {
+                        pricingFields.style.display = 'block';
+                    } else {
+                        console.warn('⚠️ Элемент pricingFields не найден');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка при показе дополнительных полей:', error);
+                }
+
+                // ИСПРАВЛЕНИЕ 5: Безопасное автозаполнение
+                try {
+                    const categorySelect = document.getElementById('channelCategory');
+                    if (categorySelect) {
+                        categorySelect.value = category;
+                        console.log('✅ Категория установлена:', category);
+                    } else {
+                        console.warn('⚠️ Элемент channelCategory не найден');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка при установке категории:', error);
+                }
+
+                try {
+                    const descriptionField = document.getElementById('channelDescription');
+                    if (descriptionField) {
+                        descriptionField.value = description;
+                        console.log('✅ Описание установлено');
+                    } else {
+                        console.warn('⚠️ Элемент channelDescription не найден');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка при установке описания:', error);
+                }
+
+                // ИСПРАВЛЕНИЕ 6: Безопасная активация кнопки
+                try {
+                    const submitBtn = document.getElementById('submitBtn');
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        console.log('✅ Кнопка отправки активирована');
+                    } else {
+                        console.warn('⚠️ Элемент submitBtn не найден');
+                    }
+                } catch (error) {
+                    console.error('❌ Ошибка при активации кнопки:', error);
+                }
 
                 // Сохраняем данные канала для отправки формы
-                this.currentChannelData = data;
+                try {
+                    this.currentChannelData = data;
+                    console.log('✅ Данные канала сохранены для отправки формы');
+                } catch (error) {
+                    console.error('❌ Ошибка при сохранении данных канала:', error);
+                }
             }
 
             showError(message) {
@@ -1239,8 +1338,16 @@
             }
 
             applyManualData() {
-                const channelName = document.getElementById('manualChannelName').value.trim();
-                const subscribers = parseInt(document.getElementById('manualSubscribers').value) || 0;
+                const channelNameElement = document.getElementById('manualChannelName');
+                const subscribersElement = document.getElementById('manualSubscribers');
+
+                if (!channelNameElement) {
+                    alert('Ошибка: поле названия канала не найдено');
+                    return;
+                }
+
+                const channelName = channelNameElement.value.trim();
+                const subscribers = parseInt(subscribersElement?.value || 0);
 
                 if (!channelName) {
                     alert('Введите название канала');
@@ -1250,7 +1357,7 @@
                 const manualData = {
                     success: true,
                     data: {
-                        username: document.getElementById('channelUrl').value,
+                        username: document.getElementById('channelUrl')?.value || '',
                         title: channelName,
                         avatar_letter: channelName.charAt(0).toUpperCase(),
                         subscribers: this.formatSubscriberCount(subscribers),
@@ -1373,7 +1480,7 @@
                             background: white; padding: 30px; border-radius: 15px;
                             max-width: 500px; margin: 20px; text-align: center;
                             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                        ">
+                            ">
                             <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
                             <h3 style="color: #333; margin-bottom: 20px;">Канал добавлен!</h3>
 
@@ -1434,72 +1541,72 @@
                                     color: #007bff; text-decoration: none; font-size: 14px;
                                 ">📱 Открыть канал в Telegram</a>
                             </div>
-                        </div>
-                    `;
+                            </div>
+                            `;
 
-                    document.body.appendChild(modal);
+                            document.body.appendChild(modal);
 
-                } else {
-                    // Fallback для случаев без кода верификации
-                    alert('✅ Канал успешно добавлен и находится на модерации.');
-                }
+                            } else {
+                            // Fallback для случаев без кода верификации
+                            alert('✅ Канал успешно добавлен и находится на модерации.');
+                            }
 
-                // Очищаем форму
-                this.reset();
-                document.getElementById('channelPreview').classList.remove('active');
-                document.getElementById('additionalFields').style.display = 'none';
-                document.getElementById('pricingFields').style.display = 'none';
+                            // Очищаем форму
+                            this.reset();
+                            document.getElementById('channelPreview').classList.remove('active');
+                            document.getElementById('additionalFields').style.display = 'none';
+                            document.getElementById('pricingFields').style.display = 'none';
 
-                // Переключаемся на вкладку с каналами
-                switchTab('channels');
+                                    // Переключаемся на вкладку с каналами
+                                    switchTab('channels');
 
-            } catch (error) {
-                alert('❌ Ошибка при добавлении канала: ' + error.message);
-            } finally {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
-            }
-        });
+                                } catch (error) {
+                                    alert('❌ Ошибка при добавлении канала: ' + error.message);
+                                } finally {
+                                    submitBtn.disabled = false;
+                                    submitBtn.textContent = originalText;
+                                }
+                            });
 
-        // Поиск по каналам
-        document.querySelector('.search-input').addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase();
-            const channelCards = document.querySelectorAll('.channel-card');
+                                // Поиск по каналам
+                                document.querySelector('.search-input').addEventListener('input', function() {
+                                    const searchTerm = this.value.toLowerCase();
+                                    const channelCards = document.querySelectorAll('.channel-card');
 
-            channelCards.forEach(card => {
-                const title = card.querySelector('.channel-title')?.textContent.toLowerCase() || '';
-                const username = card.querySelector('.channel-username')?.textContent.toLowerCase() || '';
+                                    channelCards.forEach(card => {
+                                        const title = card.querySelector('.channel-title')?.textContent.toLowerCase() || '';
+                                        const username = card.querySelector('.channel-username')?.textContent.toLowerCase() || '';
 
-                if (title.includes(searchTerm) || username.includes(searchTerm)) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        });
+                                        if (title.includes(searchTerm) || username.includes(searchTerm)) {
+                                            card.style.display = 'block';
+                                        } else {
+                                            card.style.display = 'none';
+                                        }
+                                    });
+                                                            });
 
-        // Инициализация при загрузке страницы
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('📺 Страница каналов загружена');
+                                    // Инициализация при загрузке страницы
+                                    document.addEventListener('DOMContentLoaded', function() {
+                                        console.log('📺 Страница каналов загружена');
 
-            // Загружаем список каналов пользователя
-            loadUserChannels();
-        });
+                                        // Загружаем список каналов пользователя
+                                        loadUserChannels();
+                                    });
 
-        async function loadUserChannels() {
-    try {
-        console.log('🔍 Начинаем загрузку каналов пользователя...');
+                                    async function loadUserChannels() {
+                                try {
+                                    console.log('🔍 Начинаем загрузку каналов пользователя...');
 
-        // Показываем индикатор загрузки
-        showLoadingState();
+                                    // Показываем индикатор загрузки
+                                    showLoadingState();
 
-        // Получаем данные Telegram пользователя
-        const telegramUser = getTelegramUser();
-        console.log('👤 Telegram пользователь:', telegramUser);
+                                    // Получаем данные Telegram пользователя
+                                    const telegramUser = getTelegramUser();
+                                    console.log('👤 Telegram пользователь:', telegramUser);
 
-        const headers = {
-            'Content-Type': 'application/json'
-        };
+                                    const headers = {
+                                        'Content-Type': 'application/json'
+                                    };
 
         // Добавляем Telegram данные в заголовки если доступны
         if (telegramUser) {
@@ -1582,103 +1689,103 @@
 }
 
         function createChannelCard(channel) {
-    const card = document.createElement('div');
-    card.className = 'channel-card';
-    card.setAttribute('data-user-channel', 'true');
-    card.setAttribute('data-channel-id', channel.id);
+            const card = document.createElement('div');
+            card.className = 'channel-card';
+            card.setAttribute('data-user-channel', 'true');
+            card.setAttribute('data-channel-id', channel.id);
 
-    // Определяем статус канала - используем правильные поля
-    const status = (channel.is_verified || channel.status === 'verified')
-        ? { class: 'status-verified', text: 'Верифицирован', emoji: '✅' }
-        : { class: 'status-pending', text: 'На модерации', emoji: '⏳' };
+            // Определяем статус канала - используем правильные поля
+            const status = (channel.is_verified || channel.status === 'verified')
+                ? { class: 'status-verified', text: 'Верифицирован', emoji: '✅' }
+                : { class: 'status-pending', text: 'На модерации', emoji: '⏳' };
 
-    // Безопасное получение данных с учетом реальной структуры БД
-    const title = channel.title || `Канал @${channel.username}`;
-    const username = channel.username ? channel.username.replace('@', '') : 'unknown';
-    const subscribersCount = formatNumber(channel.subscribers_count || channel.subscriber_count || 0); // ✅ Два варианта поля
-    const description = channel.description || 'Описание не указано';
-    const createdAt = formatDate(channel.created_at);
-    const language = channel.language || 'ru';
+            // Безопасное получение данных с учетом реальной структуры БД
+            const title = channel.title || `Канал @${channel.username}`;
+            const username = channel.username ? channel.username.replace('@', '') : 'unknown';
+            const subscribersCount = formatNumber(channel.subscribers_count || channel.subscriber_count || 0); // ✅ Два варианта поля
+            const description = channel.description || 'Описание не указано';
+            const createdAt = formatDate(channel.created_at);
+            const language = channel.language || 'ru';
 
-    // URL фотографии канала
-    const avatarUrl = channel.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=0ea5e9&color=fff&size=64`;
+            // URL фотографии канала
+            const avatarUrl = channel.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=0ea5e9&color=fff&size=64`;
 
-    card.innerHTML = `
-        <div class="channel-header">
-            <div class="channel-avatar">
-                <img src="${avatarUrl}" alt="${title}"
-                     onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=0ea5e9&color=fff&size=64'"
-                     style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover;">
-            </div>
-            <div class="channel-info">
-                <div class="channel-title-row">
-                    <h3 class="channel-title">${title}</h3>
-                    <span class="channel-status ${status.class}">${status.emoji} ${status.text}</span>
+            card.innerHTML = `
+                <div class="channel-header">
+                        <div class="channel-avatar">
+                            <img src="${avatarUrl}" alt="${title}"
+                            onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=0ea5e9&color=fff&size=64'"
+                            style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover;">
+                        </div>
+                    <div class="channel-info">
+                        <div class="channel-title-row">
+                            <h3 class="channel-title">${title}</h3>
+                            <span class="channel-status ${status.class}">${status.emoji} ${status.text}</span>
+                        </div>
+                        <div class="channel-username">@${username}</div>
+                        <div class="channel-description">${description}</div>
+                        <div class="channel-meta">
+                            <span class="meta-item">
+                                <span class="meta-icon">📅</span>
+                                Добавлен: ${createdAt}
+                            </span>
+                            ${channel.category ? `
+                                <span class="meta-item">
+                                    <span class="meta-icon">🏷️</span>
+                                    ${getCategoryName(channel.category)}
+                                </span>
+                            ` : ''}
+                            <span class="meta-item">
+                                <span class="meta-icon">🌍</span>
+                                ${language.toUpperCase()}
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <div class="channel-username">@${username}</div>
-                <div class="channel-description">${description}</div>
-                <div class="channel-meta">
-                    <span class="meta-item">
-                        <span class="meta-icon">📅</span>
-                        Добавлен: ${createdAt}
-                    </span>
-                    ${channel.category ? `
-                        <span class="meta-item">
-                            <span class="meta-icon">🏷️</span>
-                            ${getCategoryName(channel.category)}
-                        </span>
+
+                <div class="channel-stats">
+                    <div class="stat-item">
+                        <span class="stat-value">${subscribersCount}</span>
+                        <span class="stat-label">Подписчиков</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">0%</span>
+                        <span class="stat-label">Вовлеченность</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value">Не указана</span>
+                        <span class="stat-label">Цена за пост</span>
+                    </div>
+                </div>
+
+                ${channel.invite_link ? `
+                    <div class="channel-link">
+                        <a href="${channel.invite_link}" target="_blank" class="channel-link-btn">
+                            🔗 Открыть канал
+                        </a>
+                    </div>
+                ` : ''}
+
+                <div class="channel-actions">
+                    <button class="btn btn-secondary btn-sm" onclick="editChannel(${channel.id})">
+                        ⚙️ Настройки
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="viewChannelStats(${channel.id})">
+                        📊 Статистика
+                    </button>
+                    ${(!channel.is_verified && channel.status !== 'verified') ? `
+                        <button class="btn btn-warning btn-sm" onclick="verifyChannel(${channel.id})">
+                            ✅ Верифицировать
+                        </button>
                     ` : ''}
-                    <span class="meta-item">
-                        <span class="meta-icon">🌍</span>
-                        ${language.toUpperCase()}
-                    </span>
+                    <button class="btn btn-danger btn-sm" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">
+                        🗑️ Удалить
+                    </button>
                 </div>
-            </div>
-        </div>
+            `;
 
-        <div class="channel-stats">
-            <div class="stat-item">
-                <span class="stat-value">${subscribersCount}</span>
-                <span class="stat-label">Подписчиков</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">0%</span>
-                <span class="stat-label">Вовлеченность</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-value">Не указана</span>
-                <span class="stat-label">Цена за пост</span>
-            </div>
-        </div>
-
-        ${channel.invite_link ? `
-            <div class="channel-link">
-                <a href="${channel.invite_link}" target="_blank" class="channel-link-btn">
-                    🔗 Открыть канал
-                </a>
-            </div>
-        ` : ''}
-
-        <div class="channel-actions">
-    <button class="btn btn-secondary btn-sm" onclick="editChannel(${channel.id})">
-        ⚙️ Настройки
-    </button>
-    <button class="btn btn-primary btn-sm" onclick="viewChannelStats(${channel.id})">
-        📊 Статистика
-    </button>
-    ${(!channel.is_verified && channel.status !== 'verified') ? `
-        <button class="btn btn-warning btn-sm" onclick="verifyChannel(${channel.id})">
-            ✅ Верифицировать
-        </button>
-    ` : ''}
-    <button class="btn btn-danger btn-sm" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">
-        🗑️ Удалить
-    </button>
-</div>
-    `;
-
-    return card;
-}
+            return card;
+        }
 
         function showEmptyState() {
             const channelsGrid = document.getElementById('channelsGrid');
@@ -1701,108 +1808,76 @@
             document.getElementById('emptyState').style.display = 'block';
         }
 
-        function formatNumber(num) {
-            if (num >= 1000000) {
-                return (num / 1000000).toFixed(1) + 'M';
-            } else if (num >= 1000) {
-                return (num / 1000).toFixed(1) + 'K';
-            }
-            return num.toString();
-        }
-
         function verifyChannel(channelId) {
-    console.log(`🔍 Верификация канала ${channelId}`);
+            console.log(`🔍 Верификация канала ${channelId}`);
 
-    // Показываем индикатор загрузки
-    const button = event.target;
-    const originalText = button.innerHTML;
-    button.innerHTML = '⏳ Проверяем...';
-    button.disabled = true;
+            // Показываем индикатор загрузки
+            const button = event.target;
+            const originalText = button.innerHTML;
+            button.innerHTML = '⏳ Проверяем...';
+            button.disabled = true;
 
-    const telegramUser = getTelegramUser();
-    const headers = {
-        'Content-Type': 'application/json'
-    };
+            const telegramUser = getTelegramUser();
+            const headers = {
+                'Content-Type': 'application/json'
+            };
 
-    if (telegramUser) {
-        headers['X-Telegram-User-Id'] = telegramUser.id.toString();
-        if (telegramUser.username) headers['X-Telegram-Username'] = telegramUser.username;
-        if (telegramUser.first_name) headers['X-Telegram-First-Name'] = telegramUser.first_name;
-        if (telegramUser.last_name) headers['X-Telegram-Last-Name'] = telegramUser.last_name;
-    }
+            if (telegramUser) {
+                headers['X-Telegram-User-Id'] = telegramUser.id.toString();
+                if (telegramUser.username) headers['X-Telegram-Username'] = telegramUser.username;
+                if (telegramUser.first_name) headers['X-Telegram-First-Name'] = telegramUser.first_name;
+                if (telegramUser.last_name) headers['X-Telegram-Last-Name'] = telegramUser.last_name;
+            }
 
-    fetch(`/api/channels/${channelId}/verify`, {
-        method: 'PUT',
-        headers: headers
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log('Ответ верификации:', data);
+            fetch(`/api/channels/${channelId}/verify`, {
+                method: 'PUT',
+                headers: headers
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Ответ верификации:', data);
 
-        if (data.success) {
-            // Успешная верификация
-            showVerificationSuccess(data);
+                    if (data.success) {
+                        // Успешная верификация
+                        showVerificationSuccess(data);
 
-            // Обновляем интерфейс
-            updateChannelStatus(channelId, 'verified');
+                        // Обновляем интерфейс
+                        updateChannelStatus(channelId, 'verified');
 
-            // Перезагружаем список каналов
-            setTimeout(() => {
-                loadUserChannels();
-            }, 1000);
+                        // Перезагружаем список каналов
+                        setTimeout(() => {
+                            loadUserChannels();
+                        }, 1000);
 
-        } else {
-            // Ошибка верификации
-            showVerificationError(data);
+                    } else {
+                        // Ошибка верификации
+                        showVerificationError(data);
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка верификации:', error);
+                    showVerificationError({
+                        error: 'Ошибка сети при верификации канала',
+                        instructions: ['Проверьте подключение к интернету и попробуйте снова']
+                    });
+                })
+                .finally(() => {
+                    // Восстанавливаем кнопку
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                });
         }
-    })
-    .catch(error => {
-        console.error('Ошибка верификации:', error);
-        showVerificationError({
-            error: 'Ошибка сети при верификации канала',
-            instructions: ['Проверьте подключение к интернету и попробуйте снова']
-        });
-    })
-    .finally(() => {
-        // Восстанавливаем кнопку
-        button.innerHTML = originalText;
-        button.disabled = false;
-    });
-}
 
         function requestVerification(channelId) {
             return verifyChannel(channelId);
         }
 
-
         function showChannelStats(channelId) {
             alert('Статистика канала (в разработке)');
         }
 
         function editChannel(channelId) {
             alert('Редактирование канала (в разработке)');
-        }
-
-        function showEmptyState() {
-            const channelsGrid = document.getElementById('channelsGrid');
-
-            // Проверяем, есть ли уже пустое состояние
-            if (!document.getElementById('emptyState')) {
-                const emptyState = document.createElement('div');
-                emptyState.id = 'emptyState';
-                emptyState.className = 'empty-state';
-                emptyState.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
-                        <h3>У вас пока нет каналов</h3>
-                        <p>Добавьте свой первый канал, чтобы начать зарабатывать на рекламе</p>
-                        <button class="btn btn-primary" onclick="switchTab('add-channel')">➕ Добавить канал</button>
-                    </div>
-                `;
-                channelsGrid.appendChild(emptyState);
-            }
-
-            document.getElementById('emptyState').style.display = 'block';
         }
 
         function formatNumber(num) {
@@ -1812,47 +1887,6 @@
                 return (num / 1000).toFixed(1) + 'K';
             }
             return num.toString();
-        }
-
-        function verifyChannel(channelId) {
-    const telegramUser = getTelegramUser();
-    const headers = {
-        'Content-Type': 'application/json'
-    };
-
-    if (telegramUser) {
-        headers['X-Telegram-User-Id'] = telegramUser.id.toString();
-        if (telegramUser.username) headers['X-Telegram-Username'] = telegramUser.username;
-        if (telegramUser.first_name) headers['X-Telegram-First-Name'] = telegramUser.first_name;
-        if (telegramUser.last_name) headers['X-Telegram-Last-Name'] = telegramUser.last_name;
-    }
-
-    fetch(`/api/channels/${channelId}/verify`, {
-        method: 'PUT',
-        headers: headers
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('✅ Канал успешно верифицирован!');
-            // Перезагружаем список каналов
-            loadUserChannels();
-        } else {
-            alert('❌ Ошибка верификации: ' + (data.error || 'Неизвестная ошибка'));
-        }
-    })
-    .catch(error => {
-        console.error('Error verifying channel:', error);
-        alert('❌ Ошибка сети при верификации канала');
-    });
-}
-
-        function showChannelStats(channelId) {
-            alert('Статистика канала (в разработке)');
-        }
-
-        function editChannel(channelId) {
-            alert('Редактирование канала (в разработке)');
         }
 
         function showVerificationSuccess(data) {
@@ -2620,6 +2654,54 @@ function updateChannelsCounter(count) {
     }
 }
 
+function debugChannelPreview() {
+    console.log('🔍 Проверка элементов для превью канала:');
+
+    const elements = [
+        'channelPreview',
+        'additionalFields',
+        'pricingFields',
+        'channelCategory',
+        'channelDescription',
+        'submitBtn'
+    ];
+
+    elements.forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            console.log(`✅ ${id}: найден`);
+        } else {
+            console.log(`❌ ${id}: НЕ найден`);
+        }
+    });
+}
+
+// Добавьте эту функцию для тестирования превью
+function testChannelPreview() {
+    const testData = {
+        data: {
+            title: 'Тестовый канал',
+            username: 'test_channel',
+            subscribers: '1.2K',
+            engagement_rate: '5.5',
+            description: 'Это тестовое описание канала',
+            avatar_letter: 'T',
+            category: 'technology',
+            channel_type: 'channel',
+            verified: false
+        }
+    };
+
+    if (window.channelAnalyzer && window.channelAnalyzer.showChannelPreview) {
+        window.channelAnalyzer.showChannelPreview(testData);
+    } else {
+        console.error('❌ channelAnalyzer не найден');
+    }
+}
+
+console.log('🔧 Исправленная функция showChannelPreview загружена');
+console.log('💡 Для отладки используйте: debugChannelPreview() или testChannelPreview()');
+
 // Закрытие модального окна по ESC
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
@@ -2628,21 +2710,3 @@ document.addEventListener('keydown', function(e) {
 });
 </script>
 </body>
-</html> class="form-label" for="channelCategory">
-                                    Категория канала <span class="required">*</span>
-                                </label>
-                                <select id="channelCategory" class="form-input form-select" required>
-                                    <option value="">Выберите категорию</option>
-                                    <option value="technology">Технологии и IT</option>
-                                    <option value="business">Бизнес и предпринимательство</option>
-                                    <option value="education">Образование и саморазвитие</option>
-                                    <option value="entertainment">Развлечения</option>
-                                    <option value="lifestyle">Стиль жизни</option>
-                                    <option value="news">Новости</option>
-                                    <option value="finance">Финансы и инвестиции</option>
-                                    <option value="other">Другое</option>
-                                </select>
-                            </div>
-
-                            <div class="form-group">
-                                <label

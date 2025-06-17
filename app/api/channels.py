@@ -8,6 +8,7 @@ import os
 import re
 import random
 from datetime import datetime
+from app.services.telegram_verification import verify_channel
 
 # Настройка логирования
 logger = logging.getLogger(__name__)

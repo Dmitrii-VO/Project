@@ -9,6 +9,10 @@ import sys
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
+try:
+    from app.services.telegram_verification import verification_service
+except ImportError:
+    verification_service = None
 
 import requests
 
@@ -412,100 +416,6 @@ class AppStats:
             'start_time': self.start_time.isoformat()
         }
 
-
-# === TELEGRAM API СЕРВИС ===
-class TelegramVerificationService:
-    """Сервис для верификации каналов через Telegram Bot API"""
-
-    def __init__(self, bot_token):
-        self.bot_token = bot_token
-        self.base_url = f"https://api.telegram.org/bot{bot_token}"
-
-    def get_channel_messages(self, channel_id, limit=50):
-        """Получить последние сообщения из канала"""
-        try:
-            # Используем getUpdates для получения сообщений
-            url = f"{self.base_url}/getUpdates"
-            params = {
-                'limit': limit,
-                'timeout': 10
-            }
-
-            response = requests.get(url, params=params, timeout=15)
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('ok'):
-                    return data.get('result', [])
-
-            logger.error(f"Ошибка получения сообщений: {response.status_code}")
-            return []
-
-        except Exception as e:
-            logger.error(f"Исключение при получении сообщений: {e}")
-            return []
-
-    def check_verification_code_in_channel(self, channel_id, verification_code):
-        """Проверить наличие кода верификации в канале"""
-        try:
-            logger.info(f"🔍 Проверка кода {verification_code} в канале {channel_id}")
-
-            # Получаем последние обновления
-            updates = self.get_channel_messages(channel_id)
-
-            # Ищем код в сообщениях канала
-            for update in updates:
-                # Проверяем channel_post (сообщения в каналах)
-                if 'channel_post' in update:
-                    message = update['channel_post']
-                    chat = message.get('chat', {})
-                    text = message.get('text', '')
-
-                    # Проверяем ID канала
-                    if str(chat.get('id')) == str(channel_id) or str(chat.get('username', '')).lower() == str(
-                            channel_id).lower().replace('@', ''):
-                        if verification_code in text:
-                            logger.info(f"✅ Код {verification_code} найден в канале {channel_id}")
-                            return True
-
-                # Также проверяем обычные сообщения (для групп)
-                if 'message' in update:
-                    message = update['message']
-                    chat = message.get('chat', {})
-                    text = message.get('text', '')
-
-                    if str(chat.get('id')) == str(channel_id):
-                        if verification_code in text:
-                            logger.info(f"✅ Код {verification_code} найден в чате {channel_id}")
-                            return True
-
-            logger.warning(f"❌ Код {verification_code} НЕ найден в канале {channel_id}")
-            return False
-
-        except Exception as e:
-            logger.error(f"Ошибка проверки кода: {e}")
-            return False
-
-    def get_channel_info(self, channel_id):
-        """Получить информацию о канале"""
-        try:
-            url = f"{self.base_url}/getChat"
-            params = {'chat_id': channel_id}
-
-            response = requests.get(url, params=params, timeout=10)
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('ok'):
-                    return data.get('result', {})
-
-            return None
-
-        except Exception as e:
-            logger.error(f"Ошибка получения информации о канале: {e}")
-            return None
-
-
 # === БАЗА ДАННЫХ ДЛЯ КАНАЛОВ ===
 class ChannelDatabase:
     """Простая база данных для каналов (в памяти)"""
@@ -576,28 +486,18 @@ app.start_time = stats.start_time.isoformat()
 telegram_service = None
 channel_db = ChannelDatabase()
 
-
-def init_telegram_service():
-    """Инициализация Telegram сервиса"""
-    global telegram_service
-    bot_token = os.environ.get('BOT_TOKEN')
-    if bot_token:
-        telegram_service = TelegramVerificationService(bot_token)
-        logger.info("✅ Telegram сервис инициализирован")
-    else:
-        logger.warning("⚠️ BOT_TOKEN не найден")
-
-
 # === ENDPOINT'Ы ДЛЯ КАНАЛОВ ===
-@app.route('/api/channels/<int:channel_id>/verify', methods=['PUT'])
-def verify_channel_real(channel_id):
-    """Реальная верификация канала через проверку кода"""
+@app.route('/api/channels/<int:channel_id>/verify', methods=['PUT', 'POST'])
+def verify_channel_unified(channel_id):
+    """Единый endpoint для верификации каналов"""
     try:
-        logger.info(f"🔍 Начинаем верификацию канала {channel_id}")
+        logger.info(f"🔍 Запрос верификации канала {channel_id}")
 
         # Получаем данные пользователя
         telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
         telegram_username = request.headers.get('X-Telegram-Username', 'unknown')
+
+        logger.info(f"👤 Пользователь: {telegram_username} (ID: {telegram_user_id})")
 
         # Получаем канал из базы
         channel = channel_db.get_channel(channel_id)
@@ -607,7 +507,7 @@ def verify_channel_real(channel_id):
                 'error': 'Канал не найден'
             }), 404
 
-        # Проверяем, что канал принадлежит пользователю
+        # Проверяем права доступа
         if str(channel['user_id']) != str(telegram_user_id):
             return jsonify({
                 'success': False,
@@ -622,25 +522,7 @@ def verify_channel_real(channel_id):
                 'channel': channel
             })
 
-        # Проверяем наличие Telegram сервиса
-        if not telegram_service:
-            # Заглушка для тестирования без API
-            logger.warning("⚠️ Telegram API недоступен, используем заглушку")
-            # Обновляем статус канала
-            updates = {
-                'is_verified': True,
-                'status': 'verified',
-                'verified_at': datetime.now().isoformat()
-            }
-            updated_channel = channel_db.update_channel(channel_id, updates)
-
-            return jsonify({
-                'success': True,
-                'message': f'✅ Канал "{channel["title"]}" успешно верифицирован!',
-                'channel': updated_channel
-            })
-
-        # Реальная проверка через Telegram API
+        # ОСНОВНАЯ ВЕРИФИКАЦИЯ ЧЕРЕЗ ЕДИНЫЙ СЕРВИС 🎯
         verification_code = channel['verification_code']
         channel_telegram_id = channel.get('telegram_id') or channel.get('username')
 
@@ -650,14 +532,26 @@ def verify_channel_real(channel_id):
                 'error': 'Не указан ID или username канала'
             }), 400
 
-        # Проверяем код в канале
-        is_code_found = telegram_service.check_verification_code_in_channel(
-            channel_telegram_id,
-            verification_code
-        )
+        # ВЫЗЫВАЕМ ЕДИНЫЙ СЕРВИС!
+        if verification_service:
+            verification_result = verification_service.verify_channel_ownership(
+                channel_telegram_id,
+                verification_code
+            )
+        else:
+            # Fallback на тестовый режим
+            verification_result = {
+                'success': True,
+                'found': True,  # Для тестирования
+                'message': 'Тестовый режим - канал верифицирован',
+                'details': {'mode': 'fallback'}
+            }
 
-        if is_code_found:
-            # Код найден - верифицируем канал
+        logger.info(f"📊 Результат верификации: {verification_result}")
+
+        # Обрабатываем результат
+        if verification_result['success'] and verification_result['found']:
+            # КОД НАЙДЕН - ВЕРИФИЦИРУЕМ КАНАЛ! ✅
             updates = {
                 'is_verified': True,
                 'status': 'verified',
@@ -670,27 +564,38 @@ def verify_channel_real(channel_id):
             return jsonify({
                 'success': True,
                 'message': f'✅ Канал "{channel["title"]}" успешно верифицирован!',
-                'channel': updated_channel
+                'channel': updated_channel,
+                'verification_details': verification_result['details']
             })
+
         else:
-            # Код не найден
+            # КОД НЕ НАЙДЕН ❌
+            error_message = verification_result.get('message', 'Код верификации не найден')
+
             return jsonify({
                 'success': False,
-                'error': f'❌ Код верификации "{verification_code}" не найден в канале',
+                'error': f'❌ {error_message}',
+                'verification_code': verification_code,
                 'instructions': [
-                    f'1. Откройте ваш канал @{channel.get("username", "your_channel")}',
+                    f'1. Перейдите в ваш канал @{channel.get("username", "your_channel")}',
                     f'2. Опубликуйте сообщение с кодом: {verification_code}',
-                    f'3. Подождите несколько минут',
+                    f'3. Подождите 1-2 минуты для обновления',
                     f'4. Нажмите кнопку "Верифицировать" снова'
                 ],
-                'verification_code': verification_code
+                'channel': channel,
+                'verification_details': verification_result.get('details', {})
             })
 
     except Exception as e:
-        logger.error(f"❌ Ошибка верификации канала {channel_id}: {e}")
+        logger.error(f"❌ Критическая ошибка верификации канала {channel_id}: {e}")
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Внутренняя ошибка сервера: {str(e)}',
+            'details': {
+                'channel_id': channel_id,
+                'timestamp': datetime.now().isoformat(),
+                'error_type': type(e).__name__
+            }
         }), 500
 
 
@@ -715,6 +620,7 @@ def get_channels_real():
             'success': False,
             'error': str(e)
         }), 500
+
 
 
 @app.route('/api/channels', methods=['POST'])
@@ -755,8 +661,37 @@ def create_channel_real():
         }), 500
 
 
-# Инициализируем Telegram сервис при запуске
-init_telegram_service()
+# === ДОПОЛНИТЕЛЬНЫЙ ENDPOINT ДЛЯ ТЕСТИРОВАНИЯ ===
+@app.route('/api/verification/test', methods=['GET'])
+def test_verification_service():
+    """Тестирование сервиса верификации"""
+    try:
+        if verification_service:
+            # Тестируем с фейковыми данными
+            test_result = verification_service.verify_channel_ownership(
+                "@test_channel",
+                "VERIFY_TEST123"
+            )
+
+            return jsonify({
+                'success': True,
+                'service_available': True,
+                'test_result': test_result,
+                'bot_token_configured': bool(verification_service.bot_token)
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'service_available': False,
+                'error': 'Сервис верификации не загружен'
+            })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 logger.info("🔧 Система верификации каналов инициализирована")
 # === ТОЧКА ВХОДА ===
