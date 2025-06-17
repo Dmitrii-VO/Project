@@ -180,6 +180,13 @@ def register_blueprints(app: Flask) -> None:
         logger.error(f"❌ Критическая ошибка регистрации Blueprint'ов: {e}")
         raise
 
+    try:
+        from app.api.channels import channels_bp
+        app.register_blueprint(channels_bp, url_prefix='/api/channels')
+        logger.info("✅ channels_bp зарегистрирован на /api/channels")
+    except Exception as e:
+        logger.error(f"❌ Ошибка регистрации channels_bp: {e}")
+
 
 # === MIDDLEWARE ===
 def register_middleware(app: Flask) -> None:

@@ -64,7 +64,7 @@ def add_channel():
             return jsonify({'success': False, 'error': 'Username обязателен'}), 400
 
         # Получаем или создаем пользователя
-        user_db_id = auth_service.ensure_user_exists(telegram_user_id)
+        user_db_id = db_manager.ensure_user_exists(telegram_user_id)
 
         if not user_db_id:
             return jsonify({'success': False, 'error': 'Ошибка создания пользователя'}), 500
@@ -90,23 +90,21 @@ def add_channel():
         current_time = datetime.now().isoformat()
 
         channel_id = db_manager.execute_query("""
-                                              INSERT INTO channels (telegram_channel_id, username, title, description,
-                                                                    subscribers_count, is_verified, is_active, owner_id,
-                                                                    created_at, updated_at)
-                                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                              INSERT INTO channels (telegram_id, username, title, description, owner_id,
+                                                                    category, created_at)
+                                              VALUES (?, ?, ?, ?, ?, ?, ?)
                                               """, (
                                                   f'fake_id_{cleaned_username}',
-                                                  # В реальности получаем из Telegram API
                                                   cleaned_username,
-                                                  f'Канал @{cleaned_username}',
-                                                  'Описание канала',
-                                                  1000,  # В реальности получаем из Telegram API
-                                                  False,
-                                                  True,
+                                                  data.get('title', f'Канал @{cleaned_username}'),
+                                                  data.get('description', ''),
                                                   user_db_id,
-                                                  current_time,
-                                                  current_time
+                                                  data.get('category', 'general'),
+                                                  datetime.now().isoformat()
                                               ))
+
+        if channel_id:
+            logger.info(f"Канал {cleaned_username} добавлен пользователем {telegram_user_id}")
 
         if channel_id:
             logger.info(f"✅ Channel @{cleaned_username} successfully added for user {telegram_user_id}")
@@ -141,7 +139,7 @@ def get_my_channels():
     try:
         telegram_user_id = auth_service.get_current_user_id()
 
-        user_db_id = auth_service.ensure_user_exists(telegram_user_id)
+        user_db_id = db_manager.ensure_user_exists(telegram_user_id)
         if not user_db_id:
             return jsonify({
                 'success': False,

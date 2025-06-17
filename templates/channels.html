@@ -1272,8 +1272,28 @@
                     paymentTerms: document.getElementById('paymentTerms').value
                 };
 
-                // Имитация отправки данных
-                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                // Отправляем данные на сервер
+                const response = await fetch('/api/channels', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 373086959
+                    },
+                    body: JSON.stringify({
+                        username: formData.channelUrl,
+                        category: formData.category,
+                        description: formData.description,
+                        //price_per_post: parseFloat(formData.pricePerPost),
+                        payment_terms: formData.paymentTerms
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!result.success) {
+                    throw new Error(result.error || 'Ошибка сервера');
+                }
 
                 // Показываем успешное сообщение
                 alert('✅ Канал успешно добавлен! Он будет проверен в течение 24 часов.');
