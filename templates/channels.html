@@ -614,6 +614,111 @@
                 flex-direction: column;
             }
         }
+
+        /* === CSS СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН ВЕРИФИКАЦИИ === */
+        .verification-modal {
+            background: white;
+            border-radius: 15px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 30px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+        }
+
+        .success-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .error-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .channel-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .status.verified {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .verification-code-block {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #2196f3;
+        }
+
+        .code-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .code-display code {
+            background: #333;
+            color: #00ff00;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border-left: 4px solid #ffc107;
+        }
+
+        .instructions ol {
+            margin: 10px 0 0 20px;
+            padding: 0;
+        }
+
+        .instructions li {
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+
+        .modal-footer {
+            padding: 20px 30px;
+            border-top: 1px solid #eee;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .error-message {
+            color: #dc3545;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
@@ -1562,7 +1667,7 @@
         📊 Статистика
     </button>
     ${(!channel.is_verified && channel.status !== 'verified') ? `
-        <button class="btn btn-warning btn-sm" onclick="requestVerification(${channel.id})">
+        <button class="btn btn-warning btn-sm" onclick="verifyChannel(${channel.id})">
             ✅ Верифицировать
         </button>
     ` : ''}
@@ -1578,6 +1683,110 @@
         function showEmptyState() {
             const channelsGrid = document.getElementById('channelsGrid');
 
+            if (!document.getElementById('emptyState')) {
+                const emptyState = document.createElement('div');
+                emptyState.id = 'emptyState';
+                emptyState.className = 'empty-state';
+                emptyState.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
+                        <h3>У вас пока нет каналов</h3>
+                        <p>Добавьте свой первый канал, чтобы начать зарабатывать на рекламе</p>
+                        <button class="btn btn-primary" onclick="switchTab('add-channel')">➕ Добавить канал</button>
+                    </div>
+                `;
+                channelsGrid.appendChild(emptyState);
+            }
+
+            document.getElementById('emptyState').style.display = 'block';
+        }
+
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        function verifyChannel(channelId) {
+    console.log(`🔍 Верификация канала ${channelId}`);
+
+    // Показываем индикатор загрузки
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '⏳ Проверяем...';
+    button.disabled = true;
+
+    const telegramUser = getTelegramUser();
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+
+    if (telegramUser) {
+        headers['X-Telegram-User-Id'] = telegramUser.id.toString();
+        if (telegramUser.username) headers['X-Telegram-Username'] = telegramUser.username;
+        if (telegramUser.first_name) headers['X-Telegram-First-Name'] = telegramUser.first_name;
+        if (telegramUser.last_name) headers['X-Telegram-Last-Name'] = telegramUser.last_name;
+    }
+
+    fetch(`/api/channels/${channelId}/verify`, {
+        method: 'PUT',
+        headers: headers
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Ответ верификации:', data);
+
+        if (data.success) {
+            // Успешная верификация
+            showVerificationSuccess(data);
+
+            // Обновляем интерфейс
+            updateChannelStatus(channelId, 'verified');
+
+            // Перезагружаем список каналов
+            setTimeout(() => {
+                loadUserChannels();
+            }, 1000);
+
+        } else {
+            // Ошибка верификации
+            showVerificationError(data);
+        }
+    })
+    .catch(error => {
+        console.error('Ошибка верификации:', error);
+        showVerificationError({
+            error: 'Ошибка сети при верификации канала',
+            instructions: ['Проверьте подключение к интернету и попробуйте снова']
+        });
+    })
+    .finally(() => {
+        // Восстанавливаем кнопку
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+        function requestVerification(channelId) {
+            return verifyChannel(channelId);
+        }
+
+
+        function showChannelStats(channelId) {
+            alert('Статистика канала (в разработке)');
+        }
+
+        function editChannel(channelId) {
+            alert('Редактирование канала (в разработке)');
+        }
+
+        function showEmptyState() {
+            const channelsGrid = document.getElementById('channelsGrid');
+
+            // Проверяем, есть ли уже пустое состояние
             if (!document.getElementById('emptyState')) {
                 const emptyState = document.createElement('div');
                 emptyState.id = 'emptyState';
@@ -1626,14 +1835,15 @@
     .then(data => {
         if (data.success) {
             alert('✅ Канал успешно верифицирован!');
+            // Перезагружаем список каналов
             loadUserChannels();
         } else {
-            alert('❌ ' + (data.message || 'Ошибка верификации'));
+            alert('❌ Ошибка верификации: ' + (data.error || 'Неизвестная ошибка'));
         }
     })
     .catch(error => {
-        console.error('Ошибка верификации:', error);
-        alert('❌ Ошибка при проверке верификации');
+        console.error('Error verifying channel:', error);
+        alert('❌ Ошибка сети при верификации канала');
     });
 }
 
@@ -1645,67 +1855,183 @@
             alert('Редактирование канала (в разработке)');
         }
 
-        function showEmptyState() {
-            const channelsGrid = document.getElementById('channelsGrid');
-
-            // Проверяем, есть ли уже пустое состояние
-            if (!document.getElementById('emptyState')) {
-                const emptyState = document.createElement('div');
-                emptyState.id = 'emptyState';
-                emptyState.className = 'empty-state';
-                emptyState.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
-                        <h3>У вас пока нет каналов</h3>
-                        <p>Добавьте свой первый канал, чтобы начать зарабатывать на рекламе</p>
-                        <button class="btn btn-primary" onclick="switchTab('add-channel')">➕ Добавить канал</button>
+        function showVerificationSuccess(data) {
+            const modal = createModal();
+            modal.innerHTML = `
+                <div class="verification-modal success">
+                    <div class="modal-header">
+                        <div class="success-icon">✅</div>
+                        <h3>Канал верифицирован!</h3>
                     </div>
+                    <div class="modal-body">
+                        <p><strong>${data.message}</strong></p>
+                        <div class="channel-info">
+                            <p><strong>Канал:</strong> ${data.channel?.title || 'Неизвестный канал'}</p>
+                            <p><strong>Статус:</strong> <span class="status verified">Верифицирован</span></p>
+                            <p><strong>Дата верификации:</strong> ${formatDate(data.channel?.verified_at)}</p>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-primary" onclick="closeModal()">
+                            Отлично!
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+        }
+
+        function showVerificationError(data) {
+            const modal = createModal();
+            const instructions = data.instructions || [];
+            const verificationCode = data.verification_code;
+
+            modal.innerHTML = `
+                <div class="verification-modal error">
+                    <div class="modal-header">
+                        <div class="error-icon">❌</div>
+                        <h3>Верификация не удалась</h3>
+                    </div>
+                    <div class="modal-body">
+                        <p class="error-message">${data.error || 'Неизвестная ошибка'}</p>
+
+                        ${verificationCode ? `
+                            <div class="verification-code-block">
+                                <h4>Код верификации:</h4>
+                                <div class="code-display">
+                                    <code>${verificationCode}</code>
+                                    <button class="btn btn-small" onclick="copyToClipboard('${verificationCode}')">
+                                        📋 Копировать
+                                    </button>
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${instructions.length > 0 ? `
+                            <div class="instructions">
+                                <h4>Инструкции:</h4>
+                                <ol>
+                                    ${instructions.map(instruction => `<li>${instruction}</li>`).join('')}
+                                </ol>
+                            </div>
+                        ` : ''}
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" onclick="closeModal()">
+                            Понятно
+                        </button>
+                        <button class="btn btn-primary" onclick="retryVerification(${data.channel?.id || 'null'})">
+                            Попробовать снова
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+        }
+
+        function createModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal-overlay';
+            modal.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.8);
+                z-index: 10000;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
+            `;
+            return modal;
+        }
+
+        function closeModal() {
+            const modal = document.querySelector('.modal-overlay');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        function retryVerification(channelId) {
+            closeModal();
+            if (channelId) {
+                verifyChannel(channelId);
+            }
+        }
+
+        function updateChannelStatus(channelId, status) {
+            const channelCard = document.querySelector(`[data-channel-id="${channelId}"]`);
+            if (channelCard) {
+                const statusElement = channelCard.querySelector('.channel-status');
+                if (statusElement) {
+                    statusElement.className = `channel-status ${status}`;
+                    statusElement.textContent = status === 'verified' ? 'Верифицирован' : 'На модерации';
+                }
+
+                // Скрываем кнопку верификации
+                const verifyButton = channelCard.querySelector('.btn-warning');
+                if (verifyButton && status === 'verified') {
+                    verifyButton.style.display = 'none';
+                }
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                // Показываем уведомление
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: #28a745;
+                    color: white;
+                    padding: 12px 20px;
+                    border-radius: 5px;
+                    z-index: 10001;
+                    font-weight: bold;
                 `;
-                channelsGrid.appendChild(emptyState);
-            }
+                notification.textContent = 'Код скопирован!';
+                document.body.appendChild(notification);
 
-            document.getElementById('emptyState').style.display = 'block';
-        }
+                setTimeout(() => {
+                    notification.remove();
+                }, 2000);
+            }).catch(() => {
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
 
-        function formatNumber(num) {
-            if (num >= 1000000) {
-                return (num / 1000000).toFixed(1) + 'M';
-            } else if (num >= 1000) {
-                return (num / 1000).toFixed(1) + 'K';
-            }
-            return num.toString();
-        }
-
-        function verifyChannel(channelId) {
-            // Функция для ручной проверки верификации
-            fetch(`/api/channels/${channelId}/verify`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('✅ Канал успешно верифицирован!');
-                    loadUserChannels(); // Перезагружаем список каналов
-                } else {
-                    alert('❌ ' + (data.message || 'Ошибка верификации'));
-                }
-            })
-            .catch(error => {
-                console.error('Ошибка верификации:', error);
-                alert('❌ Ошибка при проверке верификации');
+                alert('Код скопирован в буфер обмена');
             });
         }
 
-        function showChannelStats(channelId) {
-            alert('Статистика канала (в разработке)');
+        function formatDate(dateString) {
+            if (!dateString) return 'Неизвестно';
+
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch {
+                return 'Неизвестно';
+            }
         }
 
-        function editChannel(channelId) {
-            alert('Редактирование канала (в разработке)');
-        }
     </script>
 <!-- Модальное окно подтверждения удаления -->
 <div id="deleteChannelModal" class="modal" style="display: none;">
@@ -1955,6 +2281,8 @@
     gap: 12px;
     margin-bottom: 4px;
 }
+
+
 </style>
 
 <script>
