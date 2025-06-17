@@ -171,20 +171,14 @@ def register_blueprints(app: Flask) -> None:
     blueprints_registered = 0
 
     try:
-        # Используем исправленную систему из app.routers
-        from app.routers import register_blueprints as register_app_blueprints
+        # Пробуем использовать app.routers, но БЕЗ проблемного channel_router
+        print("📦 Регистрация Blueprint'ов...")
 
-        register_app_blueprints(app)
-        logger.info("✅ Blueprint'ы зарегистрированы через app.routers")
-
-    except ImportError as e:
-        logger.warning(f"⚠️ Не удалось использовать app.routers, регистрируем вручную: {e}")
-
-        # Fallback: ручная регистрация Blueprint'ов
+        # Ручная регистрация только работающих Blueprint'ов
         blueprint_modules = [
             ('app.routers.main_router', 'main_bp', ''),  # Основные страницы без префикса
             ('app.routers.api_router', 'api_bp', '/api'),
-            ('app.routers.channel_router', 'channel_bp', '/api/channels'),
+            # ('app.routers.channel_router', 'channel_bp', '/api/channels'),  # УБИРАЕМ ПРОБЛЕМНЫЙ
             ('app.routers.offer_router', 'offer_bp', '/api/offers'),
             ('app.routers.analytics_router', 'analytics_bp', '/api/analytics'),
             ('app.routers.payment_router', 'payment_bp', '/api/payments'),
@@ -202,18 +196,20 @@ def register_blueprints(app: Flask) -> None:
             except (ImportError, AttributeError) as e:
                 logger.warning(f"⚠️ Не удалось загрузить {module_name}: {e}")
 
-        logger.info(f"📦 Зарегистрировано Blueprint'ов вручную: {blueprints_registered}")
+        logger.info(f"📦 Зарегистрировано Blueprint'ов: {blueprints_registered}")
 
     except Exception as e:
         logger.error(f"❌ Критическая ошибка регистрации Blueprint'ов: {e}")
         raise
 
+    # Регистрируем исправленный channels_bp из app.api.channels
     try:
         from app.api.channels import channels_bp
         app.register_blueprint(channels_bp, url_prefix='/api/channels')
         logger.info("✅ channels_bp зарегистрирован на /api/channels")
     except Exception as e:
         logger.error(f"❌ Ошибка регистрации channels_bp: {e}")
+        # Не поднимаем исключение, просто логируем ошибку
 
 
 # === MIDDLEWARE ===
