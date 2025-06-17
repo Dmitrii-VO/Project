@@ -282,74 +282,17 @@ def delete_channel(channel_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
+@channels_bp.route('/webhook', methods=['POST'])
 def telegram_webhook():
-    """Webhook для автоматической верификации каналов"""
+    """
+    Webhook для автоматической верификации каналов
+    Обрабатывает сообщения от Telegram бота и проверяет коды верификации
+    """
     try:
-        from datetime import datetime
-        from app.models.database import db_manager
-        import logging
-        
-        logger = logging.getLogger(__name__)
         data = request.get_json()
-        
+
         if not data:
             return jsonify({'ok': True})
-        
-        logger.info(f"📨 Webhook получен: {data.get('update_id', 'N/A')}")
-        
-        # Обрабатываем сообщения в каналах
-        if 'channel_post' in data:
-            message = data['channel_post']
-            chat = message.get('chat', {})
-            chat_id = str(chat.get('id'))
-            text = message.get('text', '')
-            
-            logger.info(f"📢 Сообщение из канала {chat_id}: {text[:50]}...")
-            
-            # Ищем каналы с кодами верификации
-            channels = db_manager.execute_query("""
-                SELECT id, username, verification_code, telegram_id
-                FROM channels 
-                WHERE status = 'pending_verification' 
-                AND verification_code IS NOT NULL
-            """, fetch_all=True)
-            
-            if channels:
-                logger.info(f"🔍 Найдено {len(channels)} каналов на проверке")
-                
-                verification_found = False
-                
-                for channel in channels:
-                    verification_code = channel['verification_code']
-                    if verification_code and verification_code in text:
-                        # Подтверждаем канал
-                        success = db_manager.execute_query("""
-                            UPDATE channels 
-                            SET status = 'verified', verified_at = ?, is_verified = 1
-                            WHERE id = ?
-                        """, (datetime.now().isoformat(), channel['id']))
-                        
-                        if success:
-                            logger.info(f"✅ Канал {channel['username']} автоматически верифицирован с кодом {verification_code}!")
-                            verification_found = True
-                        else:
-                            logger.error(f"❌ Ошибка обновления канала {channel['id']}")
-                
-                if verification_found:
-                    logger.info("🎉 Верификация успешно завершена!")
-                else:
-                    logger.info("ℹ️ Код верификации не найден в сообщении")
-            else:
-                logger.info("ℹ️ Нет каналов ожидающих верификации")
-        
-        return jsonify({'ok': True})
-        
-    except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.error(f"❌ Ошибка webhook: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': True})  # Всегда возвращаем ok для Telegram
 
         logger.info(f"📨 Webhook получил данные: {data}")
 
@@ -474,135 +417,3 @@ def send_verification_notification(channel_id, channel_username):
         logger.info(f"📧 Уведомление о верификации канала @{channel_username} отправлено")
     except Exception as e:
         logger.error(f"❌ Ошибка отправки уведомления: {e}")
-
-def telegram_webhook():
-    """Webhook для автоматической верификации каналов"""
-    try:
-        from datetime import datetime
-        import logging
-
-        logger = logging.getLogger(__name__)
-        data = request.get_json()
-
-        if not data:
-            return jsonify({'ok': True})
-
-        logger.info(f"📨 Webhook получен: {data.get('update_id', 'N/A')}")
-
-        # Обрабатываем сообщения в каналах
-        if 'channel_post' in data:
-            message = data['channel_post']
-            chat = message.get('chat', {})
-            chat_id = str(chat.get('id'))
-            text = message.get('text', '')
-
-            logger.info(f"📢 Сообщение из канала {chat_id}: {text[:50]}...")
-
-            # Ищем каналы с кодами верификации
-            channels = db_manager.execute_query("""
-                SELECT id, username, verification_code, telegram_id
-                FROM channels 
-                WHERE status = 'pending_verification' 
-                AND verification_code IS NOT NULL
-            """, fetch_all=True)
-
-            if channels:
-                logger.info(f"🔍 Найдено {len(channels)} каналов на проверке")
-
-                verification_found = False
-
-                for channel in channels:
-                    verification_code = channel['verification_code']
-                    if verification_code and verification_code in text:
-                        # Подтверждаем канал
-                        db_manager.execute_query("""
-                            UPDATE channels 
-                            SET status = 'verified', verified_at = ?, is_verified = 1
-                            WHERE id = ?
-                        """, (datetime.now().isoformat(), channel['id']))
-
-                        logger.info(f"✅ Канал {channel['username']} автоматически верифицирован с кодом {verification_code}!")
-                        verification_found = True
-
-                if verification_found:
-                    logger.info("🎉 Верификация успешно завершена!")
-                else:
-                    logger.info("ℹ️ Код верификации не найден в сообщении")
-            else:
-                logger.info("ℹ️ Нет каналов ожидающих верификации")
-
-        return jsonify({'ok': True})
-
-    except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.error(f"❌ Ошибка webhook: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': True})
-
-
-@channels_bp.route('/webhook', methods=['POST'])
-def telegram_webhook():
-    """Webhook для автоматической верификации каналов"""
-    try:
-        from datetime import datetime
-        import logging
-
-        logger = logging.getLogger(__name__)
-        data = request.get_json()
-
-        if not data:
-            return jsonify({'ok': True})
-
-        logger.info(f"📨 Webhook получен: {data.get('update_id', 'N/A')}")
-
-        # Обрабатываем сообщения в каналах
-        if 'channel_post' in data:
-            message = data['channel_post']
-            chat = message.get('chat', {})
-            chat_id = str(chat.get('id'))
-            text = message.get('text', '')
-
-            logger.info(f"📢 Сообщение из канала {chat_id}: {text[:50]}...")
-
-            # Ищем каналы с кодами верификации
-            channels = db_manager.execute_query("""
-                SELECT id, username, verification_code, telegram_id
-                FROM channels 
-                WHERE status = 'pending_verification' 
-                AND verification_code IS NOT NULL
-            """, fetch_all=True)
-
-            if channels:
-                logger.info(f"🔍 Найдено {len(channels)} каналов на проверке")
-
-                verification_found = False
-
-                for channel in channels:
-                    verification_code = channel['verification_code']
-                    if verification_code and verification_code in text:
-                        # Подтверждаем канал
-                        db_manager.execute_query("""
-                            UPDATE channels 
-                            SET status = 'verified', verified_at = ?, is_verified = 1
-                            WHERE id = ?
-                        """, (datetime.now().isoformat(), channel['id']))
-
-                        logger.info(f"✅ Канал {channel['username']} автоматически верифицирован с кодом {verification_code}!")
-                        verification_found = True
-
-                if verification_found:
-                    logger.info("🎉 Верификация успешно завершена!")
-                else:
-                    logger.info("ℹ️ Код верификации не найден в сообщении")
-            else:
-                logger.info("ℹ️ Нет каналов ожидающих верификации")
-
-        return jsonify({'ok': True})
-
-    except Exception as e:
-        logger = logging.getLogger(__name__)
-        logger.error(f"❌ Ошибка webhook: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': True})

@@ -11,6 +11,8 @@
 
 import time
 import secrets
+from datetime import datetime
+
 import requests
 from flask import Blueprint, request, jsonify, current_app, g
 from sqlalchemy import and_, or_, desc
@@ -458,8 +460,9 @@ def create_channel():
                 'is_verified': channel.is_verified,
                 'verification_code': channel.verification_code,
                 'verification_instructions': (
-                    f"To verify ownership, post this code in your channel: {channel.verification_code}\n"
-                    f"Then call PUT /api/channels/{channel.id}/verify"
+                    f"Для подтверждения владения каналом отправьте этот код в ваш канал: {channel.verification_code}\n"
+                    f"Система автоматически проверит код и подтвердит канал в течение нескольких минут.\n"
+                    f"Если автоматическая проверка не сработает, используйте PUT /api/channels/{channel.id}/verify"
                 )
             }
         }), 201
@@ -1177,6 +1180,51 @@ def get_channels_stats():
             'error': 'Internal server error'
         }), 500
 
+
+@channel_bp.route('/webhook', methods=['POST'])
+def telegram_webhook():
+    """
+    Webhook для получения обновлений от Telegram бота
+    Автоматически проверяет коды верификации в каналах
+    """
+    try:
+        from ..models.channels import Channel
+        from ..models.database import db
+        from datetime import datetime
+
+        data = request.get_json()
+
+        if not data:
+            return jsonify({'ok': True})
+
+        # Обрабатываем только сообщения в каналах
+        if 'channel_post' in data:
+            message = data['channel_post']
+            chat = message.get('chat', {})
+            chat_id = str(chat.get('id'))
+            text = message.get('text', '')
+
+            current_app.logger.info(f"Получено сообщение из канала {chat_id}: {text[:50]}...")
+
+            # Ищем канал в базе данных
+            channel = Channel.query.filter_by(channel_id=chat_id).first()
+
+            if channel and not channel.is_verified and channel.verification_code:
+                # Проверяем, содержит ли сообщение код верификации
+                if channel.verification_code in text:
+                    channel.is_verified = True
+                    channel.verified_at = datetime.now().isoformat()
+                    db.session.commit()
+
+                    current_app.logger.info(
+                        f"✅ Канал {channel.id} автоматически верифицирован с кодом {channel.verification_code}"
+                    )
+
+        return jsonify({'ok': True})
+
+    except Exception as e:
+        current_app.logger.error(f"❌ Ошибка webhook: {e}")
+        return jsonify({'ok': True})  # Всегда возвращаем ok для Telegram
 
 # === ОБРАБОТЧИКИ ОШИБОК ===
 

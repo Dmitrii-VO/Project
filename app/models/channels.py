@@ -362,8 +362,15 @@ class Channel:
 
     @staticmethod
     def _generate_verification_code() -> str:
-        """Генерация кода верификации"""
-        return f"VERIFY_{secrets.token_hex(4).upper()}"
+        """Генерация уникального кода верификации в формате #add123abc"""
+        import string
+        import random
+
+        # Генерируем случайную строку из букв и цифр
+        chars = string.ascii_lowercase + string.digits
+        random_part = ''.join(random.choices(chars, k=6))
+
+        return f"#add{random_part}"
 
     def verify_ownership(self) -> bool:
         """Верификация владения каналом"""

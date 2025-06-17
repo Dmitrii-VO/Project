@@ -99,6 +99,34 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
+# === НАСТРОЙКА TELEGRAM WEBHOOK ===
+def setup_telegram_webhook():
+    """Настройка webhook для Telegram бота"""
+    import requests
+
+    bot_token = AppConfig.BOT_TOKEN
+    webhook_url = f"{AppConfig.WEBAPP_URL}/api/channels/webhook"
+
+    try:
+        # Устанавливаем webhook
+        url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
+        response = requests.post(url, json={
+            'url': webhook_url,
+            'allowed_updates': ['channel_post', 'message']
+        })
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                logger.info(f"✅ Webhook установлен: {webhook_url}")
+            else:
+                logger.error(f"❌ Ошибка установки webhook: {result.get('description')}")
+        else:
+            logger.error(f"❌ HTTP ошибка: {response.status_code}")
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка настройки webhook: {e}")
+
 # === СОЗДАНИЕ ПРИЛОЖЕНИЯ ===
 def create_app() -> Flask:
     """Фабрика приложений с улучшенной архитектурой"""
@@ -330,6 +358,8 @@ def main():
     if not AppConfig.validate():
         logger.error("❌ Критические ошибки конфигурации")
         sys.exit(1)
+
+    setup_telegram_webhook()
 
     # Настройки запуска
     host = os.environ.get('HOST', '0.0.0.0')
