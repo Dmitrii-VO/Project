@@ -9,6 +9,11 @@ import sys
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
+import os
+from dotenv import load_dotenv
+load_dotenv()
+os.environ['BOT_TOKEN'] = '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8'
+
 try:
     from app.services.telegram_verification import verification_service
 except ImportError:

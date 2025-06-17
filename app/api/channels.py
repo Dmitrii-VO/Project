@@ -401,28 +401,30 @@ def add_channel():
 
         # Генерируем код верификации
         import secrets
-        verification_code = secrets.token_hex(8)
+        verification_code = f'VERIFY_{secrets.token_hex(4).upper()}'
+        logger.info(f"📝 Сгенерирован код верификации: {verification_code}")
 
         # Добавляем канал в БД
         cursor.execute("""
                        INSERT INTO channels (telegram_id, title, username, description, category,
                                              subscriber_count, language, is_verified, is_active,
-                                             owner_id, created_at, updated_at, status)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                             owner_id, created_at, updated_at, status, verification_code)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                        """, (
-                           cleaned_username,  # telegram_id (используем username)
-                           data.get('title', f'Канал @{cleaned_username}'),  # title
-                           cleaned_username,  # username
-                           data.get('description', 'Описание канала'),  # description
-                           data.get('category', 'general'),  # category
-                           data.get('subscribers_count', 0),  # subscriber_count
-                           'ru',  # language
-                           False,  # is_verified
-                           True,  # is_active
-                           user_db_id,  # owner_id
-                           datetime.now().isoformat(),  # created_at
-                           datetime.now().isoformat(),  # updated_at
-                           'pending'  # status
+                           cleaned_username,
+                           data.get('title', f'Канал @{cleaned_username}'),
+                           cleaned_username,
+                           data.get('description', 'Описание канала'),
+                           data.get('category', 'general'),
+                           data.get('subscribers_count', 0),
+                           'ru',
+                           False,
+                           True,
+                           user_db_id,
+                           datetime.now().isoformat(),
+                           datetime.now().isoformat(),
+                           'pending',
+                           verification_code  # 14-й параметр
                        ))
 
         channel_id = cursor.lastrowid
@@ -582,46 +584,55 @@ def telegram_webhook():
             logger.warning("❌ Пустой webhook")
             return jsonify({'ok': True})
 
-        logger.info(f"📨 Webhook данные: {data.get('update_id', 'N/A')}")
-
-        # Обрабатываем сообщения в каналах для автоверификации
+        # Обрабатываем сообщения в каналах
         if 'channel_post' in data:
             message = data['channel_post']
             chat = message.get('chat', {})
             chat_id = str(chat.get('id'))
+            chat_username = chat.get('username', '').lower()
             text = message.get('text', '')
 
-            logger.info(f"📢 Сообщение из канала {chat_id}: {text[:50]}...")
+            logger.info(f"📢 Сообщение из канала @{chat_username} (ID: {chat_id}): {text[:50]}...")
 
-            # Ищем каналы с кодами верификации
             conn = get_db_connection()
             cursor = conn.cursor()
 
+            # Ищем канал по username или telegram_id
             cursor.execute("""
-                SELECT id, username, verification_code, telegram_id
-                FROM channels 
-                WHERE status = 'pending_verification' 
-                AND verification_code IS NOT NULL
-            """)
+                           SELECT id, verification_code, is_verified, title
+                           FROM channels
+                           WHERE (LOWER(username) = ? OR telegram_id = ?)
+                             AND is_verified = 0
+                             AND verification_code IS NOT NULL
+                           """, (chat_username, chat_id))
 
-            channels = cursor.fetchall()
+            channel = cursor.fetchone()
 
-            if channels:
-                logger.info(f"🔍 Найдено {len(channels)} каналов на проверке")
+            if channel and channel['verification_code'] in text:
+                # Верифицируем канал
+                cursor.execute("""
+                               UPDATE channels
+                               SET is_verified = 1,
+                                   verified_at = ?,
+                                   status      = 'verified',
+                                   telegram_id = ?
+                               WHERE id = ?
+                               """, (datetime.now().isoformat(), chat_id, channel['id']))
 
-                for channel in channels:
-                    verification_code = channel['verification_code']
-                    if verification_code and verification_code in text:
-                        # Подтверждаем канал
-                        cursor.execute("""
-                            UPDATE channels 
-                            SET status = 'verified', verified_at = ?, is_verified = 1
-                            WHERE id = ?
-                        """, (datetime.now().isoformat(), channel['id']))
+                conn.commit()
+                logger.info(f"✅ Канал '{channel['title']}' (ID: {channel['id']}) верифицирован через webhook!")
 
-                        conn.commit()
-                        logger.info(f"✅ Канал {channel['id']} верифицирован!")
-                        break
+                # Опционально: отправляем подтверждение в канал
+                try:
+                    import requests
+                    bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
+                    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    requests.post(send_url, json={
+                        'chat_id': chat_id,
+                        'text': '✅ Канал успешно верифицирован в системе!'
+                    }, timeout=5)
+                except:
+                    pass
 
             conn.close()
 
@@ -671,3 +682,121 @@ def test_channels_api():
             'success': False,
             'error': str(e)
         }), 500
+
+@channels_bp.route('/<int:channel_id>/verify', methods=['PUT', 'POST'])
+def verify_channel_endpoint(channel_id):
+    """Верификация канала"""
+    try:
+        logger.info(f"🔍 Запрос верификации канала {channel_id}")
+
+        # Получаем telegram_user_id из заголовков
+        telegram_user_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Не авторизован'}), 401
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Получаем канал
+        cursor.execute("""
+            SELECT c.*, u.telegram_id as owner_telegram_id
+            FROM channels c
+            JOIN users u ON c.owner_id = u.id
+            WHERE c.id = ? AND u.telegram_id = ?
+        """, (channel_id, telegram_user_id))
+
+        channel = cursor.fetchone()
+
+        if not channel:
+            conn.close()
+            return jsonify({'success': False, 'error': 'Канал не найден'}), 404
+
+        if channel['is_verified']:
+            conn.close()
+            return jsonify({
+                'success': True,
+                'message': 'Канал уже верифицирован',
+                'channel': dict(channel)
+            })
+
+        # Используем сервис верификации
+        channel_username = channel['username']
+        verification_code = channel['verification_code']
+
+        # Добавляем @ если нужно
+        if channel_username and not channel_username.startswith('@'):
+            channel_username = '@' + channel_username
+
+        logger.info(f"🔍 Проверяем {channel_username} с кодом {verification_code}")
+
+        # Вызываем сервис верификации
+        verification_result = verify_channel(channel_username, verification_code)
+
+        if verification_result.get('success') and verification_result.get('found'):
+            # Обновляем статус
+            cursor.execute("""
+                UPDATE channels 
+                SET is_verified = 1, 
+                    verified_at = ?,
+                    status = 'verified'
+                WHERE id = ?
+            """, (datetime.now().isoformat(), channel_id))
+
+            conn.commit()
+            conn.close()
+
+            logger.info(f"✅ Канал {channel_id} верифицирован!")
+
+            return jsonify({
+                'success': True,
+                'message': 'Канал успешно верифицирован!',
+                'channel': {
+                    'id': channel_id,
+                    'title': channel['title'],
+                    'is_verified': True,
+                    'verified_at': datetime.now().isoformat()
+                }
+            })
+        else:
+            conn.close()
+            return jsonify({
+                'success': False,
+                'error': 'Код верификации не найден в канале',
+                'verification_code': verification_code,
+                'instructions': [
+                    f'1. Перейдите в канал @{channel["username"]}',
+                    f'2. Опубликуйте сообщение с кодом: {verification_code}',
+                    '3. Подождите 1-2 минуты или нажмите "Верифицировать" снова'
+                ]
+            }), 400
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка верификации: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@channels_bp.route('/debug/<int:channel_id>', methods=['GET'])
+def debug_channel(channel_id):
+    """Отладочная информация о канале"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT * FROM channels WHERE id = ?", (channel_id,))
+        channel = cursor.fetchone()
+
+        if not channel:
+            return jsonify({'error': 'Канал не найден'}), 404
+
+        result = {
+            'channel': dict(channel),
+            'webhook_url': f"{os.environ.get('WEBAPP_URL', 'http://localhost:5000')}/api/channels/webhook",
+            'bot_token_available': bool(os.environ.get('BOT_TOKEN')),
+            'verification_service_loaded': 'verify_channel' in globals()
+        }
+
+        conn.close()
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

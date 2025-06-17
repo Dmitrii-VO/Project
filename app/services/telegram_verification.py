@@ -102,12 +102,13 @@ class TelegramVerificationService:
 
     def _get_channel_messages(self, limit: int = 100) -> Dict[str, Any]:
         """Получение сообщений через Telegram Bot API"""
-
         try:
+            # Для каналов нужно использовать getUpdates с offset
             url = f"{self.base_url}/getUpdates"
             params = {
                 'limit': limit,
-                'timeout': self.timeout
+                'timeout': 0,  # Не ждем новых сообщений
+                'allowed_updates': ['channel_post']  # Только посты из каналов
             }
 
             response = requests.get(url, params=params, timeout=self.timeout + 5)
@@ -117,7 +118,6 @@ class TelegramVerificationService:
                 if data.get('ok'):
                     updates = data.get('result', [])
                     logger.info(f"📥 Получено {len(updates)} обновлений от Telegram API")
-
                     return {
                         'success': True,
                         'messages': updates,
