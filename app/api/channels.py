@@ -116,20 +116,66 @@ def get_my_channels():
 
         # Получаем каналы пользователя
         cursor.execute("""
-            SELECT c.*, u.username as owner_username 
-            FROM channels c
-            JOIN users u ON c.owner_id = u.id
-            WHERE u.telegram_id = ?
-            ORDER BY c.created_at DESC
-        """, (telegram_user_id,))
+                       SELECT c.id,
+                              c.telegram_id,
+                              c.title,
+                              c.username,
+                              c.subscriber_count,
+                              c.description,
+                              c.category,
+                              c.language,
+                              c.is_verified,
+                              c.is_active,
+                              c.owner_id,
+                              c.created_at,
+                              c.updated_at,
+                              c.verification_code,
+                              c.status,
+                              c.verified_at,
+                              u.username as owner_username
+                       FROM channels c
+                                JOIN users u ON c.owner_id = u.id
+                       WHERE u.telegram_id = ?
+                       ORDER BY c.created_at DESC
+                       """, (telegram_user_id,))
 
         channels = cursor.fetchall()
         conn.close()
 
         # Преобразуем в список словарей
+        # Преобразуем в список словарей с ПРАВИЛЬНЫМИ полями
         channels_list = []
         for channel in channels:
-            channel_dict = dict(channel)
+            channel_dict = {
+                'id': channel['id'],
+                'telegram_id': channel['telegram_id'],
+                'title': channel['title'],
+                'username': channel['username'],
+                'subscribers_count': channel['subscriber_count'] or 0,  # ✅ Правильное поле
+                'description': channel['description'] or '',
+                'category': channel['category'] or 'general',
+                'language': channel['language'] or 'ru',
+                'is_verified': bool(channel['is_verified']),
+                'is_active': bool(channel['is_active']),
+                'created_at': channel['created_at'],
+                'updated_at': channel['updated_at'],
+                'verification_code': channel['verification_code'],
+                'status': channel['status'],
+                'verified_at': channel['verified_at'],
+                'owner_username': channel['owner_username'],
+
+                # Дополнительные поля для совместимости с фронтендом
+                'channel_name': channel['title'],
+                'channel_username': channel['username'],
+
+                # Поля которых нет в БД - добавляем значения по умолчанию
+                'is_public': True,
+                'accepts_ads': True,
+                'invite_link': f'https://t.me/{channel["username"].lstrip("@")}' if channel['username'] else None,
+                'photo_url': None,
+                'avg_engagement_rate': 0.0,
+                'price_per_post': 0
+            }
             channels_list.append(channel_dict)
 
         logger.info(f"✅ Найдено каналов: {len(channels_list)}")
@@ -178,12 +224,12 @@ def analyze_channel():
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT c.id, c.title
-            FROM channels c
-            JOIN users u ON c.owner_id = u.id
-            WHERE c.username = ?
-            AND u.telegram_id = ?
-        """, (f'@{cleaned_username}', telegram_user_id))
+                       SELECT c.id, c.title
+                       FROM channels c
+                                JOIN users u ON c.owner_id = u.id
+                       WHERE (c.username = ? OR c.telegram_id = ?)
+                         AND u.telegram_id = ?
+                       """, (cleaned_username, cleaned_username, telegram_user_id))
 
         existing_channel = cursor.fetchone()
         conn.close()
@@ -358,26 +404,25 @@ def add_channel():
 
         # Добавляем канал в БД
         cursor.execute("""
-            INSERT INTO channels (
-                telegram_id, title, username, description, category, 
-                subscriber_count, is_verified, is_active, owner_id, 
-                status, verification_code, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            f'@{cleaned_username}',
-            f'Канал @{cleaned_username}',
-            f'@{cleaned_username}',
-            data.get('description', ''),
-            data.get('category', 'other'),
-            0,  # subscriber_count
-            False,  # is_verified
-            True,  # is_active
-            user_db_id,
-            'pending_verification',
-            verification_code,
-            datetime.now().isoformat(),
-            datetime.now().isoformat()
-        ))
+                       INSERT INTO channels (telegram_id, title, username, description, category,
+                                             subscriber_count, language, is_verified, is_active,
+                                             owner_id, created_at, updated_at, status)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       """, (
+                           cleaned_username,  # telegram_id (используем username)
+                           data.get('title', f'Канал @{cleaned_username}'),  # title
+                           cleaned_username,  # username
+                           data.get('description', 'Описание канала'),  # description
+                           data.get('category', 'general'),  # category
+                           data.get('subscribers_count', 0),  # subscriber_count
+                           'ru',  # language
+                           False,  # is_verified
+                           True,  # is_active
+                           user_db_id,  # owner_id
+                           datetime.now().isoformat(),  # created_at
+                           datetime.now().isoformat(),  # updated_at
+                           'pending'  # status
+                       ))
 
         channel_id = cursor.lastrowid
         conn.commit()
