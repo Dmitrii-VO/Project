@@ -21,6 +21,26 @@ function getTelegramUser() {
             return null;
         }
 async function loadUserChannels() {
+        // ЗАЩИТА ОТ МНОЖЕСТВЕННЫХ ВЫЗОВОВ
+    if (window.channelsLoading) {
+        console.log('⚠️ Загрузка каналов уже выполняется, пропускаем...');
+        return;
+    }
+    window.channelsLoading = true;
+
+    try {
+        console.log('🔍 Начинаем загрузку каналов пользователя...');
+
+        // ... остальной код функции ...
+
+    } catch (error) {
+        console.error('💥 Ошибка загрузки каналов:', error);
+        hideLoadingState();
+        showErrorState(error.message);
+    } finally {
+        // СБРАСЫВАЕМ флаг загрузки
+        window.channelsLoading = false;
+    }
             try {
                 console.log('🔍 Начинаем загрузку каналов пользователя...');
 
@@ -87,24 +107,44 @@ async function loadUserChannels() {
         }
 
         // Очищаем существующие карточки
-        const existingCards = channelsGrid.querySelectorAll('.channel-card[data-user-channel="true"]');
+        const existingCards = channelsGrid.querySelectorAll('.stat-card[data-user-channel="true"], .channel-card[data-user-channel="true"]');
         existingCards.forEach(card => card.remove());
-
+        const errorElement = document.getElementById('channelsError');
+        if (errorElement) {
+            errorElement.style.display = 'none';
+        }
         if (data.success && data.channels && data.channels.length > 0) {
-            // Скрываем пустое состояние
-            const emptyState = document.getElementById('emptyState');
-            if (emptyState) {
-                emptyState.style.display = 'none';
-            }
+            console.log(`📊 Получено ${data.channels.length} каналов от сервера`);
 
-            // Добавляем каналы пользователя
-            data.channels.forEach((channel) => {
-                const channelCard = createChannelCard(channel);
-                channelsGrid.appendChild(channelCard);
+            // Скрываем все состояния
+            const emptyState = document.getElementById('emptyState');
+            const loadingElement = document.getElementById('channelsLoading');
+
+            if (emptyState) emptyState.style.display = 'none';
+            if (loadingElement) loadingElement.style.display = 'none';
+
+            // ДОБАВЛЯЕМ каналы БЕЗ ДУБЛИРОВАНИЯ
+            let addedCount = 0;
+            data.channels.forEach((channel, index) => {
+                // Проверяем, не существует ли уже карточка с таким ID
+                const existingCard = channelsGrid.querySelector(`[data-channel-id="${channel.id}"]`);
+                if (!existingCard) {
+                    const channelCard = createChannelCard(channel);
+                    channelsGrid.appendChild(channelCard);
+                    addedCount++;
+                    console.log(`✅ Добавлен канал ${index + 1}: ${channel.title || channel.username}`);
+                } else {
+                    console.log(`⚠️ Канал ${channel.title || channel.username} уже существует, пропускаем`);
+                }
             });
 
-            updateChannelsCounter(data.channels.length);
+            console.log(`📺 Итого добавлено карточек: ${addedCount} из ${data.channels.length}`);
+
+            if (typeof updateChannelsCounter === 'function') {
+                updateChannelsCounter(data.channels.length);
+            }
         } else {
+            console.log('ℹ️ Нет каналов для отображения');
             showEmptyState();
         }
 
@@ -115,105 +155,84 @@ async function loadUserChannels() {
     }
 }
 function createChannelCard(channel) {
-            const card = document.createElement('div');
-            card.className = 'channel-card';
-            card.setAttribute('data-user-channel', 'true');
-            card.setAttribute('data-channel-id', channel.id);
+    const card = document.createElement('div');
+    card.className = 'stat-card';  // ← ИЗМЕНЕНО: используем stat-card вместо channel-card
+    card.setAttribute('data-user-channel', 'true');
+    card.setAttribute('data-channel-id', channel.id);
 
-            // Определяем статус канала - используем правильные поля
-            const status = (channel.is_verified || channel.status === 'verified')
-                ? { class: 'status-verified', text: 'Верифицирован', emoji: '✅' }
-                : { class: 'status-pending', text: 'На модерации', emoji: '⏳' };
+    // Определяем статус канала
+    const status = (channel.is_verified || channel.status === 'verified')
+        ? { class: 'status-active', text: 'Верифицирован', emoji: '✅' }
+        : { class: 'status-pending', text: 'На модерации', emoji: '⏳' };
 
-            // Безопасное получение данных с учетом реальной структуры БД
-            const title = channel.title || `Канал @${channel.username}`;
-            const username = channel.username ? channel.username.replace('@', '') : 'unknown';
-            const subscribersCount = formatNumber(channel.subscribers_count || channel.subscriber_count || 0); // ✅ Два варианта поля
-            const description = channel.description || 'Описание не указано';
-            const createdAt = formatDate(channel.created_at);
-            const language = channel.language || 'ru';
+    // Безопасное получение данных
+    const title = channel.title || `Канал @${channel.username}`;
+    const username = channel.username ? channel.username.replace('@', '') : 'unknown';
+    const subscribersCount = formatNumber(channel.subscribers_count || channel.subscriber_count || 0);
+    const description = channel.description || 'Описание не указано';
+    const createdAt = formatDate(channel.created_at);
 
-            // URL фотографии канала
-            const avatarUrl = channel.photo_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=0ea5e9&color=fff&size=64`;
+    // НОВАЯ СТРУКТУРА В СТИЛЕ INDEX.HTML
+    card.innerHTML = `
+        <!-- Верхняя линия градиента как в index.html -->
+        
+        <!-- Заголовок канала -->
+        <div class="channel-header">
+            <div class="channel-info">
+                <div class="channel-title">${title}</div>
+                
+            </div>
+            <div class="channel-status ${status.class}">
+                ${status.text}
+            </div>
+        </div>
 
-            card.innerHTML = `
-                <div class="channel-header">
-                        <div class="channel-avatar">
-                            <img src="${avatarUrl}" alt="${title}"
-                            onerror="this.src='https://ui-avatars.com/api/?name=${encodeURIComponent(title)}&background=0ea5e9&color=fff&size=64'"
-                            style="width: 64px; height: 64px; border-radius: 50%; object-fit: cover;">
-                        </div>
-                    <div class="channel-info">
-                        <div class="channel-title-row">
-                            <h3 class="channel-title">${title}</h3>
-                            <span class="channel-status ${status.class}">${status.emoji} ${status.text}</span>
-                        </div>
-                        <div class="channel-username">@${username}</div>
-                        <div class="channel-description">${description}</div>
-                        <div class="channel-meta">
-                            <span class="meta-item">
-                                <span class="meta-icon">📅</span>
-                                Добавлен: ${createdAt}
-                            </span>
-                            ${channel.category ? `
-                                <span class="meta-item">
-                                    <span class="meta-icon">🏷️</span>
-                                    ${getCategoryName(channel.category)}
-                                </span>
-                            ` : ''}
-                            <span class="meta-item">
-                                <span class="meta-icon">🌍</span>
-                                ${language.toUpperCase()}
-                            </span>
-                        </div>
-                    </div>
-                </div>
+        <!-- Статистика в 3 колонки как в index.html -->
+        <div class="channel-stats">
+            <div class="stat-item">
+                <span class="stat-number">${subscribersCount}</span>
+                <div class="stat-label">Подписчиков</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">0</span>
+                <div class="stat-label">Постов</div>
+            </div>
+            <div class="stat-item">
+                <span class="stat-number">0</span>
+                <div class="stat-label">Офферов</div>
+            </div>
+        </div>
 
-                <div class="channel-stats">
-                    <div class="stat-item">
-                        <span class="stat-value">${subscribersCount}</span>
-                        <span class="stat-label">Подписчиков</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value">0%</span>
-                        <span class="stat-label">Вовлеченность</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value">Не указана</span>
-                        <span class="stat-label">Цена за пост</span>
-                    </div>
-                </div>
+        <!-- Блок цены (если есть) -->
+        ${channel.price_per_post ? `
+        <div class="channel-pricing">
+            <div class="pricing-title">Цена за пост</div>
+            <div class="pricing-value">${formatPrice(channel.price_per_post)} ₽</div>
+        </div>
+        ` : ''}
 
-                ${channel.invite_link ? `
-                    <div class="channel-link">
-                        <a href="${channel.invite_link}" target="_blank" class="channel-link-btn">
-                            🔗 Открыть канал
-                        </a>
-                    </div>
-                ` : ''}
+        <!-- Кнопки действий -->
+        <div class="channel-actions">
+            ${(channel.is_verified || channel.status === 'verified') ? `
+                <button class="btn btn-secondary" onclick="showChannelStats(${channel.id})">
+                    📊 Статистика
+                </button>
+                <button class="btn btn-secondary" onclick="showChannelSettings(${channel.id})">
+                    ⚙️ Настройки
+                </button>
+            ` : `
+                <button class="btn btn-primary" onclick="startChannelVerification(${channel.id}, '${channel.title?.replace(/'/g, "\\'")}', '${channel.username || ""}')">
+                    🔐 Верифицировать
+                </button>
+            `}
+            <button class="btn btn-danger" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">
+                🗑️ Удалить
+            </button>
+        </div>
+    `;
 
-                <div class="channel-actions">
-                    ${(channel.is_verified || channel.status === 'verified') ? `
-                        <button class="btn btn-outline-primary btn-sm" onclick="showChannelSettings(${channel.id})">
-                            ⚙️ Настройки
-                        </button>
-                        <button class="btn btn-outline-success btn-sm" onclick="showChannelStats(${channel.id})">
-                            📊 Статистика
-                        </button>
-                    ` : ''}
-                    ${(!channel.is_verified && channel.status !== 'verified') ? `
-                        <button class="btn btn-warning btn-sm" onclick="startChannelVerification(${channel.id}, '${channel.title?.replace(/'/g, "\\'")}', '${channel.username || ""}')">
-                            🔒 Верифицировать
-                        </button>
-                    ` : ''}
-                    <button class="btn btn-danger btn-sm" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">
-                        🗑️ Удалить
-                    </button>
-                </div>
-            `;
-
-            return card;
-        }
+    return card;
+}
 function verifyChannel(channelId) {
             console.log(`🔍 Верификация канала ${channelId}`);
 
@@ -432,11 +451,23 @@ function showLoadingState() {
     const channelsGrid = document.getElementById('channelsGrid');
     if (!channelsGrid) return;
 
+    // СНАЧАЛА СКРЫВАЕМ ВСЕ СОСТОЯНИЯ
+    const emptyState = document.getElementById('emptyState');
+    const errorElement = document.getElementById('channelsError');
+
+    if (emptyState) emptyState.style.display = 'none';
+    if (errorElement) errorElement.style.display = 'none';
+
+    // УБИРАЕМ СУЩЕСТВУЮЩИЕ КАРТОЧКИ ПЕРЕД ПОКАЗОМ ЗАГРУЗКИ
+    const existingCards = channelsGrid.querySelectorAll('.stat-card[data-user-channel="true"], .channel-card[data-user-channel="true"]');
+    existingCards.forEach(card => card.remove());
+
     let loadingElement = document.getElementById('channelsLoading');
     if (!loadingElement) {
         loadingElement = document.createElement('div');
         loadingElement.id = 'channelsLoading';
         loadingElement.className = 'loading-state';
+        loadingElement.style.gridColumn = '1 / -1';
         loadingElement.innerHTML = `
             <div style="text-align: center; padding: 40px;">
                 <div class="loading-spinner"></div>
@@ -454,25 +485,27 @@ function hideLoadingState() {
     }
 }
 function showEmptyState() {
-            const channelsGrid = document.getElementById('channelsGrid');
+    const channelsGrid = document.getElementById('channelsGrid');
+    if (!channelsGrid) return;
 
-            if (!document.getElementById('emptyState')) {
-                const emptyState = document.createElement('div');
-                emptyState.id = 'emptyState';
-                emptyState.className = 'empty-state';
-                emptyState.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
-                        <h3>У вас пока нет каналов</h3>
-                        <p>Добавьте свой первый канал, чтобы начать зарабатывать на рекламе</p>
-                        <button class="btn btn-primary" onclick="switchTab('add-channel')">➕ Добавить канал</button>
-                    </div>
-                `;
-                channelsGrid.appendChild(emptyState);
-            }
+    if (!document.getElementById('emptyState')) {
+        const emptyState = document.createElement('div');
+        emptyState.id = 'emptyState';
+        emptyState.className = 'empty-state';
+        emptyState.style.gridColumn = '1 / -1';  // ← ДОБАВЛЕНО для занятия всей ширины
+        emptyState.innerHTML = `
+            <div class="stat-icon">📺</div>
+            <h3>Нет добавленных каналов</h3>
+            <p>Добавьте свой первый канал для начала работы с рекламодателями</p>
+            <button class="btn btn-primary" onclick="switchTab('add-channel')">
+                ➕ Добавить канал
+            </button>
+        `;
+        channelsGrid.appendChild(emptyState);
+    }
 
-            document.getElementById('emptyState').style.display = 'block';
-        }
+    document.getElementById('emptyState').style.display = 'block';
+}
 function showErrorState(errorMessage) {
     const channelsGrid = document.getElementById('channelsGrid');
     if (!channelsGrid) return;
@@ -511,6 +544,8 @@ function showChannelSettings(channelId) {
 function editChannel(channelId) {
             alert('Редактирование канала (в разработке)');
         }
+
+
 
 // Делаем функции глобально доступными для onclick
 window.verifyChannel = verifyChannel;

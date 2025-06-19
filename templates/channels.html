@@ -6,16 +6,16 @@
     <title>Мои каналы - Telegram Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* Используем те же CSS переменные */
+        /* ТОЧНО ТЕ ЖЕ CSS ПЕРЕМЕННЫЕ, ЧТО В INDEX.HTML */
         :root {
             --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+            --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
 
             --primary-color: #667eea;
             --secondary-color: #764ba2;
-            --accent-color: #f093fb;
             --success-color: #4facfe;
             --warning-color: #ff9a56;
             --danger-color: #ff6b6b;
@@ -25,26 +25,15 @@
             --text-muted: #a0aec0;
             --bg-primary: #ffffff;
             --bg-secondary: #f7fafc;
-            --bg-tertiary: #edf2f7;
             --border-color: #e2e8f0;
 
-            --border-radius: 16px;
-            --border-radius-sm: 8px;
-            --border-radius-lg: 24px;
+            --border-radius: 12px;
+            --border-radius-sm: 6px;
             --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
-            --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            --font-size-xs: 0.75rem;
-            --font-size-sm: 0.875rem;
-            --font-size-base: 1rem;
-            --font-size-lg: 1.125rem;
-            --font-size-xl: 1.25rem;
-            --font-size-2xl: 1.5rem;
-            --font-size-3xl: 1.875rem;
-            --font-size-4xl: 2.25rem;
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         * {
@@ -55,52 +44,81 @@
 
         body {
             font-family: var(--font-family);
-            line-height: 1.6;
-            color: var(--text-primary);
             background: var(--bg-secondary);
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+            color: var(--text-primary);
+            line-height: 1.6;
         }
 
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 12px;
         }
 
-        /* === HEADER === */
-        .page-header {
+        /* HEADER В СТИЛЕ INDEX.HTML */
+        .hero-section {
+            text-align: center;
+            padding: 24px 16px;
             background: var(--primary-gradient);
             color: white;
-            padding: 40px 20px;
-            text-align: center;
-            margin: -20px -20px 30px -20px;
-            border-radius: 0 0 24px 24px;
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
+            position: relative;
+            overflow: hidden;
         }
 
-        .page-title {
-            font-size: 2.5rem;
-            font-weight: 700;
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+
+        .hero-icon {
+            font-size: 24px;
+            margin-bottom: 12px;
+            display: block;
+            animation: bounceIn 1s ease-out;
+        }
+
+        .hero-title {
+            font-size: 32px;
+            font-weight: 800;
             margin-bottom: 8px;
+            letter-spacing: -0.02em;
+            animation: fadeInUp 1s ease-out 0.2s both;
         }
 
-        .page-subtitle {
+        .hero-subtitle {
+            font-size: 16px;
             opacity: 0.9;
-            font-size: 1.1rem;
+            margin-bottom: 0;
+            font-weight: 400;
+            animation: fadeInUp 1s ease-out 0.4s both;
         }
 
         .back-btn {
             position: absolute;
-            left: 20px;
+            left: 16px;
             top: 50%;
             transform: translateY(-50%);
             background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
-            padding: 10px 15px;
-            border-radius: 10px;
+            padding: 8px 12px;
+            border-radius: 8px;
             text-decoration: none;
-            font-size: 1rem;
+            font-size: 14px;
+            font-weight: 600;
             transition: var(--transition);
         }
 
@@ -110,7 +128,7 @@
             text-decoration: none;
         }
 
-        /* === TABS === */
+        /* ТАБЫ В СТИЛЕ INDEX.HTML */
         .tabs-container {
             margin-bottom: 32px;
         }
@@ -118,12 +136,17 @@
         .tab-nav {
             display: flex;
             gap: 4px;
-            background: var(--bg-primary);
+            background: white;
             padding: 4px;
             border-radius: var(--border-radius);
             box-shadow: var(--shadow-sm);
             overflow-x: auto;
-            white-space: nowrap;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .tab-nav::-webkit-scrollbar {
+            display: none;
         }
 
         .tab-btn {
@@ -134,11 +157,12 @@
             background: transparent;
             color: var(--text-secondary);
             font-weight: 600;
-            font-size: var(--font-size-sm);
+            font-size: 14px;
             border-radius: var(--border-radius-sm);
             cursor: pointer;
             transition: var(--transition);
             text-align: center;
+            white-space: nowrap;
         }
 
         .tab-btn.active {
@@ -148,20 +172,69 @@
         }
 
         .tab-btn:not(.active):hover {
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
             color: var(--text-primary);
         }
 
-        .tab-content {
-            display: none;
+        .navigation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
         }
 
-        .tab-content.active {
-            display: block;
-            animation: fadeInUp 0.4s ease-out;
+        .nav-card {
+            background: white;
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            cursor: pointer;
         }
 
-        /* === ACTION BAR === */
+        .nav-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .nav-card.active {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+        }
+
+        .nav-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+        }
+
+        .nav-content h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: inherit;
+            text-align: left;
+        }
+
+        .nav-content p {
+            color: inherit;
+            opacity: 0.8;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        /* ПОИСК И ACTION BAR */
         .action-bar {
             display: flex;
             justify-content: space-between;
@@ -174,7 +247,8 @@
         .search-container {
             position: relative;
             flex: 1;
-            min-width: 250px;
+            min-width: 280px;
+            max-width: 400px;
         }
 
         .search-icon {
@@ -183,6 +257,7 @@
             top: 50%;
             transform: translateY(-50%);
             color: var(--text-muted);
+            font-size: 16px;
         }
 
         .search-input {
@@ -190,9 +265,10 @@
             padding: 12px 16px 12px 45px;
             border: 2px solid var(--border-color);
             border-radius: var(--border-radius-sm);
-            font-size: var(--font-size-base);
+            font-size: 16px;
             background: var(--bg-primary);
             transition: var(--transition);
+            box-shadow: var(--shadow-sm);
         }
 
         .search-input:focus {
@@ -201,111 +277,53 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        /* === BUTTONS === */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 12px 20px;
-            border: none;
-            border-radius: var(--border-radius-sm);
-            font-size: var(--font-size-base);
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            text-decoration: none;
-            min-height: 44px;
-        }
-
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none !important;
-        }
-
-        .btn-primary {
-            background: var(--primary-gradient);
-            color: white;
-            box-shadow: var(--shadow-sm);
-        }
-
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-        }
-
-        .btn-secondary {
-            background: var(--bg-primary);
-            color: var(--text-primary);
-            border: 2px solid var(--border-color);
-        }
-
-        .btn-secondary:hover:not(:disabled) {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        .btn-success {
-            background: var(--success-gradient);
-            color: white;
-        }
-
-        .btn-warning {
-            background: var(--warning-gradient);
-            color: var(--text-primary);
-        }
-
-        .btn-sm {
-            padding: 8px 12px;
-            font-size: var(--font-size-xs);
-            min-height: 32px;
-        }
-
-        /* === CHANNEL CARDS === */
-        .channels-grid {
+        /* КАРТОЧКИ В СТИЛЕ INDEX.HTML */
+        .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 24px;
-            margin-bottom: 40px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
         }
 
-        .channel-card {
-            background: var(--bg-primary);
+        .stat-card {
+            background: white;
+            padding: 20px;
             border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
             transition: var(--transition);
             position: relative;
+            overflow: hidden;
         }
 
-        .channel-card:hover {
+        .stat-card:hover {
             transform: translateY(-4px);
-            box-shadow: var(--shadow-lg);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
         }
 
         .channel-header {
-            padding: 20px;
-            background: linear-gradient(45deg, var(--bg-tertiary), var(--bg-secondary));
-            position: relative;
-        }
-
-        .channel-avatar {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: var(--primary-gradient);
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            font-weight: 800;
-            color: white;
-            margin-bottom: 12px;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .channel-info {
+            flex: 1;
         }
 
         .channel-title {
-            font-size: var(--font-size-lg);
+            font-size: 18px;
             font-weight: 700;
             margin-bottom: 4px;
             color: var(--text-primary);
@@ -313,17 +331,16 @@
 
         .channel-username {
             color: var(--text-secondary);
-            font-size: var(--font-size-sm);
+            font-size: 14px;
         }
 
         .channel-status {
-            position: absolute;
-            top: 16px;
-            right: 16px;
             padding: 4px 8px;
-            border-radius: var(--border-radius-sm);
-            font-size: var(--font-size-xs);
+            border-radius: 12px;
+            font-size: 11px;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         .status-active {
@@ -341,89 +358,208 @@
             color: #991b1b;
         }
 
-        .channel-body {
-            padding: 20px;
-        }
-
         .channel-stats {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 16px;
-            margin-bottom: 20px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
         }
 
         .stat-item {
             text-align: center;
         }
 
-        .stat-value {
-            display: block;
-            font-size: var(--font-size-lg);
-            font-weight: 700;
+        .stat-number {
+            font-size: 18px;
+            font-weight: 800;
             color: var(--text-primary);
+            margin-bottom: 4px;
+            display: block;
         }
 
         .stat-label {
-            font-size: var(--font-size-xs);
             color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 10px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .channel-pricing {
-            background: var(--bg-tertiary);
-            border-radius: var(--border-radius-sm);
-            padding: 16px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 12px;
             margin-bottom: 16px;
+            text-align: center;
         }
 
         .pricing-title {
-            font-size: var(--font-size-sm);
+            font-size: 12px;
+            color: var(--text-secondary);
             font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-primary);
+            margin-bottom: 4px;
         }
 
         .pricing-value {
-            font-size: var(--font-size-xl);
+            font-size: 20px;
             font-weight: 800;
             color: var(--primary-color);
         }
 
         .channel-actions {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 8px;
         }
 
-        /* === ADD CHANNEL FORM === */
-        .add-channel-container {
-            background: var(--bg-primary);
-            border-radius: var(--border-radius);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-            margin-bottom: 32px;
+        /* КНОПКИ В СТИЛЕ INDEX.HTML */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 16px;
+            border: none;
+            border-radius: var(--border-radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            text-decoration: none;
+            min-height: 36px;
         }
 
-        .add-channel-header {
+        .btn-primary {
             background: var(--primary-gradient);
             color: white;
-            padding: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+            color: white;
+            text-decoration: none;
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-secondary:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .btn-danger {
+            background: var(--danger-gradient);
+            color: white;
+        }
+
+        /* ПОИСК */
+        .search-section {
+            background: white;
+            padding: 20px;
+            border-radius: var(--border-radius);
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .search-container {
+            position: relative;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 12px 16px 12px 45px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--border-radius-sm);
+            font-size: 16px;
+            background: var(--bg-primary);
+            transition: var(--transition);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* ПУСТОЕ СОСТОЯНИЕ В СТИЛЕ INDEX.HTML */
+        .empty-state {
+            background: white;
+            padding: 40px 20px;
+            border-radius: var(--border-radius);
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .empty-state .stat-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            display: block;
+            opacity: 0.6;
+        }
+
+        .empty-state h3 {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+
+        .empty-state p {
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        /* ФОРМЫ */
+        .form-section {
+            background: white;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            margin-bottom: 24px;
+        }
+
+        .form-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 20px;
             text-align: center;
         }
 
-        .add-channel-header h3 {
-            font-size: var(--font-size-xl);
+        .form-header h3 {
+            font-size: 20px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
         }
 
-        .add-channel-form {
-            padding: 32px;
+        .form-header p {
+            opacity: 0.9;
+            margin: 0;
+            font-size: 14px;
         }
 
-        .form-grid {
-            display: grid;
-            gap: 24px;
+        .form-body {
+            padding: 24px;
         }
 
         .form-group {
@@ -435,6 +571,7 @@
             margin-bottom: 8px;
             font-weight: 600;
             color: var(--text-primary);
+            font-size: 14px;
         }
 
         .form-label .required {
@@ -446,7 +583,7 @@
             padding: 12px 16px;
             border: 2px solid var(--border-color);
             border-radius: var(--border-radius-sm);
-            font-size: var(--font-size-base);
+            font-size: 16px;
             transition: var(--transition);
             background: var(--bg-primary);
         }
@@ -489,33 +626,37 @@
             padding-left: 50px;
         }
 
-        /* === CHANNEL PREVIEW === */
+        .form-hint {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-top: 4px;
+        }
+
+        /* ПРЕВЬЮ КАНАЛА */
         .channel-preview {
-            background: var(--bg-tertiary);
-            border-radius: var(--border-radius);
+            background: #f0fff4;
+            border: 2px dashed #10b981;
+            border-radius: var(--border-radius-sm);
             padding: 20px;
-            margin-top: 20px;
-            border: 2px dashed var(--border-color);
+            margin-top: 16px;
             display: none;
         }
 
         .channel-preview.active {
             display: block;
-            animation: fadeInUp 0.4s ease-out;
-            border-color: var(--success-color);
-            background: #f0fff4;
+            animation: slideDown 0.3s ease;
         }
 
         .preview-header {
             display: flex;
             align-items: center;
-            gap: 16px;
-            margin-bottom: 16px;
+            gap: 12px;
+            margin-bottom: 12px;
         }
 
         .preview-avatar {
-            width: 50px;
-            height: 50px;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             background: var(--primary-gradient);
             display: flex;
@@ -527,28 +668,153 @@
         }
 
         .preview-info h4 {
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             color: var(--text-primary);
+            font-size: 16px;
         }
 
         .preview-info p {
             color: var(--text-secondary);
-            font-size: var(--font-size-sm);
+            font-size: 12px;
             margin: 0;
         }
 
-        .preview-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-            gap: 16px;
-            margin-top: 16px;
+        /* МОДАЛЬНЫЕ ОКНА */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
         }
 
-        /* === LOADING AND ANIMATIONS === */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            position: relative;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            max-width: 480px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            z-index: 1001;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-muted);
+            padding: 4px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .modal-close:hover {
+            color: var(--danger-color);
+            background: var(--bg-secondary);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .verification-code-display {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 16px;
+            border-radius: var(--border-radius-sm);
+            margin: 16px 0;
+            text-align: center;
+        }
+
+        .verification-code {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        .verification-instructions {
+            background: #fef3cd;
+            border: 1px solid #f59e0b;
+            border-radius: var(--border-radius-sm);
+            padding: 16px;
+            margin: 16px 0;
+        }
+
+        .verification-instructions h4 {
+            margin: 0 0 12px 0;
+            color: #92400e;
+            font-size: 16px;
+        }
+
+        .verification-instructions ol {
+            margin: 0;
+            padding-left: 20px;
+            color: #92400e;
+        }
+
+        .verification-instructions li {
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+
+        /* АНИМАЦИИ ИЗ INDEX.HTML */
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(20px);
+                transform: translateY(30px);
             }
             to {
                 opacity: 1;
@@ -556,7 +822,228 @@
             }
         }
 
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* АДАПТИВНОСТЬ КАК В INDEX.HTML */
+        @media (max-width: 768px) {
+            .container {
+                padding: 8px;
+            }
+
+            .hero-section {
+                padding: 16px 12px;
+                margin-bottom: 16px;
+                border-radius: 8px;
+            }
+
+            .hero-icon {
+                font-size: 2rem;
+                margin-bottom: 8px;
+            }
+
+            .hero-title {
+                font-size: 24px;
+                margin-bottom: 6px;
+                line-height: 1.3;
+            }
+
+            .hero-subtitle {
+                font-size: 14px;
+                line-height: 1.4;
+            }
+
+            .back-btn {
+                left: 12px;
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            .navigation-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+
+            .nav-card {
+                padding: 12px;
+                gap: 8px;
+                border-radius: 8px;
+            }
+
+            .nav-card:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            }
+
+            .nav-icon {
+                font-size: 16px;
+                width: 18px;
+            }
+
+            .nav-content h3 {
+                font-size: 14px;
+                margin-bottom: 2px;
+                line-height: 1.3;
+            }
+
+            .nav-content p {
+                font-size: 11px;
+                line-height: 1.4;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+                margin-bottom: 20px;
+            }
+
+            .stat-card {
+                padding: 16px;
+                border-radius: 8px;
+            }
+
+            .channel-title {
+                font-size: 16px;
+            }
+
+            .channel-username {
+                font-size: 12px;
+            }
+
+            .channel-stats {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 8px;
+            }
+
+            .stat-number {
+                font-size: 16px;
+            }
+
+            .stat-label {
+                font-size: 9px;
+            }
+
+            .channel-actions {
+                grid-template-columns: 1fr;
+                gap: 6px;
+            }
+
+            .btn {
+                padding: 8px 12px;
+                font-size: 12px;
+                min-height: 32px;
+            }
+
+            .search-section {
+                padding: 16px;
+            }
+
+            .form-body {
+                padding: 16px;
+            }
+
+            .form-header {
+                padding: 16px;
+            }
+
+            .modal {
+                padding: 16px;
+                align-items: flex-start;
+                padding-top: 10vh;
+            }
+
+            .modal-content {
+                max-width: none;
+                width: 100%;
+                max-height: 80vh;
+            }
+
+            .modal-header {
+                padding: 16px;
+            }
+
+            .modal-body {
+                padding: 16px;
+            }
+
+            .modal-footer {
+                padding: 12px 16px;
+                flex-direction: column;
+            }
+
+            .modal-footer .btn {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 6px;
+            }
+
+            .hero-section {
+                padding: 12px 8px;
+            }
+
+            .hero-icon {
+                font-size: 1.75rem;
+            }
+
+            .hero-title {
+                font-size: 20px;
+            }
+
+            .nav-card {
+                padding: 8px;
+                gap: 6px;
+            }
+
+            .stat-card {
+                padding: 12px;
+            }
+
+            .channel-stats {
+                gap: 6px;
+            }
+
+            .stat-number {
+                font-size: 14px;
+            }
+
+            .pricing-value {
+                font-size: 16px;
+            }
+        }
+
+        /* СКРЫТИЕ КОНТЕНТА */
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeInUp 0.4s ease-out;
+        }
+
+        /* ЗАГРУЗКА */
+        .loading {
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+
         .loading-spinner {
+            width: 32px;
+            height: 32px;
+            margin: 0 auto 16px;
             border: 3px solid var(--border-color);
             border-top: 3px solid var(--primary-color);
             border-radius: 50%;
@@ -567,209 +1054,24 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-
-        .loading-text {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        /* === RESPONSIVE === */
-        @media (max-width: 768px) {
-    .page-header {
-        padding: 1rem 0.75rem !important;
-        margin-bottom: 1rem !important;
-    }
-
-    .page-title {
-        font-size: 1.25rem !important; /* 20px */
-        margin-bottom: 0.5rem !important;
-    }
-
-    .page-subtitle {
-        font-size: 0.875rem !important; /* 14px */
-    }
-
-    .channels-header {
-        flex-direction: column !important;
-        gap: 0.75rem !important;
-        margin-bottom: 1rem !important;
-    }
-
-    .channels-stats {
-        grid-template-columns: repeat(2, 1fr) !important;
-        gap: 0.5rem !important;
-    }
-
-    .channels-grid {
-        grid-template-columns: 1fr !important;
-        gap: 0.75rem !important;
-    }
-
-    .channel-card {
-        padding: 0.75rem !important;
-        border-radius: 8px !important;
-    }
-
-    .channel-header {
-        flex-direction: column !important;
-        align-items: flex-start !important;
-        gap: 0.5rem !important;
-        margin-bottom: 0.75rem !important;
-    }
-
-    .channel-title {
-        font-size: 1rem !important; /* 16px */
-        margin-bottom: 0.25rem !important;
-    }
-
-    .channel-username {
-        font-size: 0.75rem !important; /* 12px */
-    }
-
-    .channel-meta {
-        gap: 0.75rem !important;
-        margin-top: 0.5rem !important;
-        flex-wrap: wrap !important;
-    }
-
-    .meta-item {
-        font-size: 0.75rem !important; /* 12px */
-        gap: 0.25rem !important;
-    }
-
-    .channel-actions {
-        flex-direction: column !important;
-        gap: 0.5rem !important;
-        margin-top: 0.75rem !important;
-    }
-
-    .channel-actions .btn {
-        width: 100% !important;
-        padding: 0.5rem 0.75rem !important;
-        font-size: 0.875rem !important; /* 14px */
-    }
-}
-
-        /* === CSS СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН ВЕРИФИКАЦИИ === */
-        .verification-modal {
-            background: white;
-            border-radius: 15px;
-            max-width: 500px;
-            width: 100%;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-            overflow: hidden;
-        }
-
-        .modal-header {
-            padding: 30px;
-            text-align: center;
-            border-bottom: 1px solid #eee;
-        }
-
-        .success-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-
-        .error-icon {
-            font-size: 48px;
-            margin-bottom: 15px;
-        }
-
-        .modal-body {
-            padding: 30px;
-        }
-
-        .channel-info {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-        }
-
-        .status.verified {
-            color: #28a745;
-            font-weight: bold;
-        }
-
-        .verification-code-block {
-            background: #e3f2fd;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid #2196f3;
-        }
-
-        .code-display {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .code-display code {
-            background: #333;
-            color: #00ff00;
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            font-weight: bold;
-            letter-spacing: 1px;
-        }
-
-        .instructions {
-            background: #fff3cd;
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border-left: 4px solid #ffc107;
-        }
-
-        .instructions ol {
-            margin: 10px 0 0 20px;
-            padding: 0;
-        }
-
-        .instructions li {
-            margin: 8px 0;
-            line-height: 1.4;
-        }
-
-        .modal-footer {
-            padding: 20px 30px;
-            border-top: 1px solid #eee;
-            display: flex;
-            gap: 10px;
-            justify-content: flex-end;
-        }
-
-        .error-message {
-            color: #dc3545;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-
-        .btn-small {
-            padding: 4px 8px;
-            font-size: 12px;
-        }
     </style>
 </head>
 <body>
 <div class="container">
-        <!-- Header -->
-        <div class="page-header">
+        <!-- Hero Section как в index.html -->
+        <div class="hero-section">
             <a href="/" class="back-btn">← Назад</a>
-            <div>
-                <h1 class="page-title">Мои каналы</h1>
-                <p class="page-subtitle">Управление вашими Telegram каналами</p>
+            <div class="hero-content">
+                <span class="hero-icon">📺</span>
+                <h1 class="hero-title">Мои каналы</h1>
+                <p class="hero-subtitle">Управление вашими Telegram каналами</p>
             </div>
         </div>
 
-        <!-- Tabs -->
-        <div class="tabs-container">
-            <div class="tab-nav">
+        <!-- Навигация по табам в стиле index.html -->
+        <div class="tabs-container" style="margin-bottom: 32px;">
+            <div class="tab-nav" style="display: none;">
+                <!-- Скрытые табы для совместимости с JS -->
                 <button class="tab-btn active" data-tab="channels">Мои каналы</button>
                 <button class="tab-btn" data-tab="offers">Входящие предложения</button>
                 <button class="tab-btn" data-tab="add-channel">Добавить канал</button>
@@ -777,43 +1079,71 @@
             </div>
         </div>
 
-        <!-- Tab: Мои каналы -->
-        <div class="tab-content active" id="channels">
-            <div class="action-bar">
-                <div class="search-container">
-                    <div class="search-icon">🔍</div>
-                    <input type="text" class="search-input" placeholder="Поиск по каналам...">
+        <div class="navigation-grid">
+            <div class="nav-card active" data-tab="channels" onclick="switchTab('channels')">
+                <div class="nav-icon">📺</div>
+                <div class="nav-content">
+                    <h3>Мои каналы</h3>
+                    <p>Список ваших подключенных каналов</p>
                 </div>
-                <button class="btn btn-primary" onclick="switchTab('add-channel')">
-                    ➕ Добавить канал
-                </button>
             </div>
 
-            <div class="channels-grid" id="channelsGrid">
-                <!-- Пустое состояние - ОСТАВИТЬ, НО НЕМНОГО ИЗМЕНИТЬ -->
-                <div class="channel-card" style="display: none;" id="emptyState">
-                    <div style="text-align: center; padding: 40px;">
-                        <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
-                        <h3>Нет добавленных каналов</h3>
-                        <p style="color: var(--text-secondary); margin: 16px 0;">
-                        Добавьте свой первый канал для начала работы с рекламодателями
-                        </p>
-                        <button class="btn btn-primary" onclick="switchTab('add-channel')">
-                        Добавить канал
-                        </button>
-                    </div>
+            <div class="nav-card" data-tab="offers" onclick="switchTab('offers')">
+                <div class="nav-icon">📬</div>
+                <div class="nav-content">
+                    <h3>Входящие предложения</h3>
+                    <p>Предложения от рекламодателей</p>
+                </div>
+            </div>
+
+            <div class="nav-card" data-tab="add-channel" onclick="switchTab('add-channel')">
+                <div class="nav-icon">➕</div>
+                <div class="nav-content">
+                    <h3>Добавить канал</h3>
+                    <p>Подключить новый Telegram канал</p>
+                </div>
+            </div>
+
+            <div class="nav-card" data-tab="analytics" onclick="switchTab('analytics')">
+                <div class="nav-icon">📊</div>
+                <div class="nav-content">
+                    <h3>Аналитика</h3>
+                    <p>Статистика и доходы</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab: Мои каналы -->
+        <div class="tab-content active" id="channels">
+            <!-- Action Bar для совместимости с JS -->
+            <div class="action-bar" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+                <div class="search-container" style="position: relative; flex: 1; min-width: 280px; max-width: 400px;">
+                    <div class="search-icon" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 16px;">🔍</div>
+                    <input type="text" class="search-input" placeholder="Поиск по каналам..." id="channelSearch">
+                </div>
+            </div>
+
+            <!-- Список каналов в виде карточек как в index.html -->
+            <div class="stats-grid" id="channelsGrid">
+                <!-- Пустое состояние -->
+                <div class="empty-state" style="grid-column: 1 / -1; display: none;" id="emptyState">
+                    <div class="stat-icon">📺</div>
+                    <h3>Нет добавленных каналов</h3>
+                    <p>Добавьте свой первый канал для начала работы с рекламодателями</p>
+                    <button class="btn btn-primary" onclick="switchTab('add-channel')">
+                        ➕ Добавить канал
+                    </button>
                 </div>
             </div>
         </div>
 
         <!-- Tab: Входящие предложения -->
         <div class="tab-content" id="offers">
-            <div style="text-align: center; padding: 40px; background: var(--bg-primary); border-radius: var(--border-radius);">
-                <h3 style="margin-bottom: 16px;">📬 Входящие предложения</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 24px;">
-                    Здесь будут отображаться предложения от рекламодателей для ваших каналов.
-                </p>
-                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: var(--border-radius-sm);">
+            <div class="empty-state">
+                <div class="stat-icon">📬</div>
+                <h3>Входящие предложения</h3>
+                <p>Здесь будут отображаться предложения от рекламодателей для ваших каналов.</p>
+                <div style="background: var(--bg-secondary); padding: 16px; border-radius: var(--border-radius-sm); margin-top: 16px;">
                     <strong>Пока предложений нет</strong><br>
                     После добавления и верификации каналов здесь появятся предложения от рекламодателей.
                 </div>
@@ -822,90 +1152,89 @@
 
         <!-- Tab: Добавить канал -->
         <div class="tab-content" id="add-channel">
-            <div class="add-channel-container">
-                <div class="add-channel-header">
+            <div class="form-section">
+                <div class="form-header">
                     <h3>➕ Добавить новый канал</h3>
                     <p>Подключите ваш Telegram канал к платформе</p>
                 </div>
 
-                <form class="add-channel-form" id="addChannelForm">
-                    <div class="form-grid">
+                <form class="form-body" id="addChannelForm">
+                    <div class="form-group">
+                        <label class="form-label" for="channelUrl">
+                            Ссылка на канал <span class="required">*</span>
+                        </label>
+                        <div class="input-group">
+                            <span class="input-prefix">@</span>
+                            <input type="text" id="channelUrl" class="form-input"
+                                   placeholder="username_канала или t.me/username" required>
+                        </div>
+                        <div class="form-hint">
+                            Введите username канала без символа @
+                        </div>
+                    </div>
+
+                    <!-- Превью канала -->
+                    <div class="channel-preview" id="channelPreview">
+                        <!-- Контент добавляется динамически -->
+                    </div>
+
+                    <!-- Дополнительные поля -->
+                    <div id="additionalFields" style="display: none;">
                         <div class="form-group">
-                            <label class="form-label" for="channelUrl">
-                                Ссылка на канал <span class="required">*</span>
+                            <label class="form-label" for="channelCategory">
+                                Категория канала <span class="required">*</span>
                             </label>
-                            <div class="input-group">
-                                <span class="input-prefix">@</span>
-                                <input type="text" id="channelUrl" class="form-input"
-                                       placeholder="username_канала или t.me/username" required>
-                            </div>
-                            <small style="color: var(--text-muted); font-size: var(--font-size-xs);">
-                                Введите username канала без символа @
-                            </small>
+                            <select id="channelCategory" class="form-input form-select" required>
+                                <option value="">Выберите категорию</option>
+                                <option value="technology">Технологии и IT</option>
+                                <option value="business">Бизнес и предпринимательство</option>
+                                <option value="education">Образование и саморазвитие</option>
+                                <option value="entertainment">Развлечения</option>
+                                <option value="lifestyle">Стиль жизни</option>
+                                <option value="news">Новости</option>
+                                <option value="finance">Финансы и инвестиции</option>
+                                <option value="other">Другое</option>
+                            </select>
                         </div>
 
-                        <!-- Превью канала (появляется после ввода ссылки) -->
-                        <div class="channel-preview" id="channelPreview">
-                            <!-- Контент добавляется динамически -->
+                        <div class="form-group">
+                            <label class="form-label" for="channelDescription">
+                                Описание канала
+                            </label>
+                            <textarea id="channelDescription" class="form-input form-textarea"
+                                      placeholder="Краткое описание тематики и аудитории канала"></textarea>
                         </div>
+                    </div>
 
-                        <!-- Дополнительные поля (показываются после успешной проверки канала) -->
-                        <div id="additionalFields" style="display: none;">
-                            <div class="form-group">
-                                    <label class="form-label" for="channelCategory">
-                                        Категория канала <span class="required">*</span>
-                                    </label>
-                                    <select id="channelCategory" class="form-input form-select" required>
-                                        <option value="">Выберите категорию</option>
-                                        <option value="technology">Технологии и IT</option>
-                                        <option value="business">Бизнес и предпринимательство</option>
-                                        <option value="education">Образование и саморазвитие</option>
-                                        <option value="entertainment">Развлечения</option>
-                                        <option value="lifestyle">Стиль жизни</option>
-                                        <option value="news">Новости</option>
-                                        <option value="finance">Финансы и инвестиции</option>
-                                        <option value="other">Другое</option>
-                                    </select>
-                            </div>
-                            <div class="form-group">
-                                <label class="form-label" for="channelDescription">
-                                    Описание канала
-                                </label>
-                                <textarea id="channelDescription" class="form-input form-textarea"
-                                          placeholder="Краткое описание тематики и аудитории канала"></textarea>
-                            </div>
-                        </div>
-
-                        <!-- Настройки цен (показываются после заполнения основных полей) -->
-                        <div id="pricingFields" style="display: none;">
-                            <div class="form-group">
-                                <label class="form-label" for="pricePerPost">
-                                    Цена за размещение (₽) <span class="required">*</span>
-                                </label>
-                                <input type="number" id="pricePerPost" class="form-input"
-                                       placeholder="Укажите стоимость размещения поста" min="100" required>
-                                <small style="color: var(--text-muted); font-size: var(--font-size-xs);">
-                                    Минимальная цена: 100₽
-                                </small>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label" for="paymentTerms">
-                                    Условия оплаты
-                                </label>
-                                <select id="paymentTerms" class="form-input form-select">
-                                    <option value="prepayment">Предоплата 100%</option>
-                                    <option value="after_posting">После размещения</option>
-                                    <option value="50_50">50% предоплата + 50% после</option>
-                                </select>
+                    <!-- Настройки цен -->
+                    <div id="pricingFields" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label" for="pricePerPost">
+                                Цена за размещение (₽) <span class="required">*</span>
+                            </label>
+                            <input type="number" id="pricePerPost" class="form-input"
+                                   placeholder="Укажите стоимость размещения поста" min="100" required>
+                            <div class="form-hint">
+                                Минимальная цена: 100₽
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
-                                💾 Добавить канал
-                            </button>
+                            <label class="form-label" for="paymentTerms">
+                                Условия оплаты
+                            </label>
+                            <select id="paymentTerms" class="form-input form-select">
+                                <option value="prepayment">Предоплата 100%</option>
+                                <option value="after_posting">После размещения</option>
+                                <option value="50_50">50% предоплата + 50% после</option>
+                            </select>
                         </div>
+                    </div>
+
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
+                            💾 Добавить канал
+                        </button>
                     </div>
                 </form>
             </div>
@@ -913,12 +1242,11 @@
 
         <!-- Tab: Аналитика -->
         <div class="tab-content" id="analytics">
-            <div style="text-align: center; padding: 40px; background: var(--bg-primary); border-radius: var(--border-radius);">
-                <h3 style="margin-bottom: 16px;">📊 Аналитика каналов</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 24px;">
-                    Здесь будет отображаться детальная аналитика по вашим каналам.
-                </p>
-                <div style="background: var(--bg-tertiary); padding: 20px; border-radius: var(--border-radius-sm);">
+            <div class="empty-state">
+                <div class="stat-icon">📊</div>
+                <h3>Аналитика каналов</h3>
+                <p>Здесь будет отображаться детальная аналитика по вашим каналам.</p>
+                <div style="background: var(--bg-secondary); padding: 16px; border-radius: var(--border-radius-sm); margin-top: 16px;">
                     <strong>В разработке</strong><br>
                     Скоро здесь появится подробная статистика по доходам, охватам и эффективности ваших каналов.
                 </div>
@@ -927,61 +1255,61 @@
     </div>
 
     <!-- Модальное окно подтверждения удаления -->
-<div id="deleteChannelModal" class="modal" style="display: none;">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>🗑️ Удалить канал</h3>
-            <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="confirmation-content">
-                <div class="channel-info" id="deleteChannelInfo">
-                    <!-- Информация о канале для удаления -->
-                </div>
-                <div class="warning-message">
-                    <strong>⚠️ Внимание!</strong><br>
-                    Это действие нельзя отменить. Канал будет удален из системы.
-                </div>
-                <div class="confirmation-question">
-                    Вы действительно хотите удалить этот канал?
+    <div id="deleteChannelModal" class="modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeDeleteModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🗑️ Удалить канал</h3>
+                <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="confirmation-content">
+                    <div class="channel-info" id="deleteChannelInfo">
+                        <!-- Информация о канале для удаления -->
+                    </div>
+                    <div style="background: #fef3cd; border: 1px solid #f59e0b; border-radius: var(--border-radius-sm); padding: 16px; margin: 16px 0; color: #92400e;">
+                        <strong>⚠️ Внимание!</strong><br>
+                        Это действие нельзя отменить. Канал будет удален из системы.
+                    </div>
+                    <div style="text-align: center; font-weight: 600; color: var(--text-primary); margin: 16px 0;">
+                        Вы действительно хотите удалить этот канал?
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeDeleteModal()">
-                Отмена
-            </button>
-            <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmChannelDeletion()">
-                🗑️ Удалить канал
-            </button>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">
+                    Отмена
+                </button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmChannelDeletion()">
+                    🗑️ Удалить канал
+                </button>
+            </div>
         </div>
     </div>
-</div>
 
-<!-- Модальное окно верификации -->
-<div id="verificationModal" class="modal" style="display: none;">
-    <div class="modal-overlay" onclick="closeVerificationModal()"></div>
-    <div class="modal-content">
-        <div class="modal-header">
-            <h3>🔐 Подтвердите владение каналом</h3>
-            <button class="modal-close" onclick="closeVerificationModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div id="verificationContent">
-                <!-- Содержимое будет заполнено JavaScript -->
+    <!-- Модальное окно верификации -->
+    <div id="verificationModal" class="modal" style="display: none;">
+        <div class="modal-overlay" onclick="closeVerificationModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔐 Подтвердите владение каналом</h3>
+                <button class="modal-close" onclick="closeVerificationModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="verificationContent">
+                    <!-- Содержимое будет заполнено JavaScript -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeVerificationModal()">
+                    Отмена
+                </button>
+                <button class="btn btn-primary" id="startVerificationBtn" onclick="startVerification()">
+                    🚀 Начать верификацию
+                </button>
             </div>
         </div>
-        <div class="modal-footer">
-            <button class="btn btn-secondary" onclick="closeVerificationModal()">
-                Отмена
-            </button>
-            <button class="btn btn-primary" id="startVerificationBtn" onclick="startVerification()">
-                🚀 Начать верификацию
-            </button>
-        </div>
     </div>
-</div>
 
 <style>
 
