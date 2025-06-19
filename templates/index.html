@@ -27,8 +27,8 @@
             --bg-secondary: #f7fafc;
             --border-color: #e2e8f0;
 
-            --border-radius: 16px;
-            --border-radius-sm: 8px;
+            --border-radius: 12px;
+            --border-radius-sm: 6px;
             --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -52,16 +52,16 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 12px;
         }
 
         .hero-section {
             text-align: center;
-            padding: 60px 20px;
+            padding: 24px 16px;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            border-radius: 24px;
-            margin-bottom: 40px;
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
             position: relative;
             overflow: hidden;
         }
@@ -83,39 +83,39 @@
         }
 
         .hero-icon {
-            font-size: 80px;
-            margin-bottom: 20px;
+            font-size: 24px;
+            margin-bottom: 12px;
             display: block;
             animation: bounceIn 1s ease-out;
         }
 
         .hero-title {
-            font-size: 48px;
+            font-size: 32px;
             font-weight: 800;
-            margin-bottom: 16px;
+            margin-bottom: 8px;
             letter-spacing: -0.02em;
             animation: fadeInUp 1s ease-out 0.2s both;
         }
 
         .hero-subtitle {
-            font-size: 20px;
+            font-size: 16px;
             opacity: 0.9;
-            margin-bottom: 30px;
+            margin-bottom: 0;
             font-weight: 400;
             animation: fadeInUp 1s ease-out 0.4s both;
         }
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 24px;
-            margin-bottom: 50px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
         }
 
         .stat-card {
             background: white;
-            padding: 32px 24px;
-            border-radius: 20px;
+            padding: 16px;
+            border-radius: var(--border-radius);
             box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
             text-align: center;
             border: 1px solid rgba(0, 0, 0, 0.05);
@@ -125,7 +125,7 @@
         }
 
         .stat-card:hover {
-            transform: translateY(-8px);
+            transform: translateY(-4px);
             box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
         }
 
@@ -135,22 +135,22 @@
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
+            height: 3px;
             background: linear-gradient(90deg, #667eea, #764ba2);
         }
 
         .stat-icon {
-            font-size: 36px;
-            margin-bottom: 16px;
+            font-size: 18px;
+            margin-bottom: 8px;
             display: block;
         }
 
         .stat-number {
-            font-size: 32px;
+            font-size: 24px;
             font-weight: 800;
             color: #2d3748;
-            margin-bottom: 8px;
-            min-height: 40px;
+            margin-bottom: 6px;
+            min-height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -159,127 +159,64 @@
         .stat-label {
             color: #718096;
             font-weight: 600;
-            font-size: 14px;
+            font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
 
         .navigation-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
-            margin-bottom: 50px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
         }
 
         .nav-card {
             background: white;
-            padding: 32px;
-            border-radius: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 16px;
+            border-radius: var(--border-radius);
             text-decoration: none;
             color: inherit;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: var(--transition);
             border: 1px solid rgba(0, 0, 0, 0.05);
-            position: relative;
-            overflow: hidden;
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
 
         .nav-card:hover {
-            transform: translateY(-8px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
             text-decoration: none;
             color: inherit;
         }
 
-        .nav-card.offers::before { background: linear-gradient(135deg, #667eea, #764ba2); }
-        .nav-card.channels::before { background: linear-gradient(135deg, #4facfe, #00f2fe); }
-        .nav-card.analytics::before { background: linear-gradient(135deg, #43e97b, #38f9d7); }
-        .nav-card.payments::before { background: linear-gradient(135deg, #fa709a, #fee140); }
-
-        .nav-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-        }
-
         .nav-icon {
-            font-size: 48px;
+            font-size: 20px;
             flex-shrink: 0;
+            width: 24px;
+            text-align: center;
         }
 
         .nav-content h3 {
-            font-size: 24px;
+            font-size: 16px;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             color: #2d3748;
+            text-align: center;
         }
 
         .nav-content p {
             color: #718096;
             margin: 0;
-            font-size: 16px;
-            line-height: 1.5;
+            font-size: 12px;
+            line-height: 1.4;
         }
-
-        .quick-actions {
-            background: white;
-            padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
-
-        .quick-actions h2 {
-            font-size: 28px;
-            font-weight: 700;
-            margin-bottom: 32px;
-            color: #2d3748;
-            text-align: center;
-        }
-
-        .action-buttons {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-        }
-
-        .action-btn {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 12px;
-            padding: 16px 24px;
-            border: none;
-            border-radius: 16px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            text-decoration: none;
-            color: white;
-        }
-
-        .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-md);
-            text-decoration: none;
-            color: white;
-        }
-
-        .action-btn.primary { background: var(--primary-gradient); }
-        .action-btn.secondary { background: var(--secondary-gradient); }
-        .action-btn.success { background: var(--success-gradient); }
-        .action-btn.warning { background: var(--warning-gradient); color: var(--text-primary); }
 
         .loading {
             color: var(--text-muted);
-            font-size: 14px;
+            font-size: 12px;
         }
 
         /* Анимации */
@@ -301,32 +238,226 @@
             }
         }
 
-        /* Адаптивность */
+        /* === МОБИЛЬНАЯ АДАПТИВНОСТЬ === */
         @media (max-width: 768px) {
             .container {
-                padding: 16px;
+                padding: 8px;
+            }
+
+            .hero-section {
+                padding: 16px 12px;
+                margin-bottom: 16px;
+                border-radius: 8px;
+            }
+
+            .hero-icon {
+                font-size: 2rem;
+                margin-bottom: 8px;
             }
 
             .hero-title {
-                font-size: 36px;
+                font-size: 24px;
+                margin-bottom: 6px;
+                line-height: 1.3;
             }
 
             .hero-subtitle {
+                font-size: 14px;
+                line-height: 1.4;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                margin-bottom: 20px;
+            }
+
+            .stat-card {
+                padding: 12px;
+                border-radius: 8px;
+            }
+
+            .stat-icon {
+                font-size: 1.25rem;
+                margin-bottom: 6px;
+            }
+
+            .stat-number {
                 font-size: 18px;
+                margin-bottom: 4px;
+                min-height: 24px;
+            }
+
+            .stat-label {
+                font-size: 10px;
+                font-weight: 500;
+            }
+
+            .navigation-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-bottom: 16px;
             }
 
             .nav-card {
-                flex-direction: column;
-                text-align: center;
-                gap: 16px;
+                padding: 12px;
+                gap: 8px;
+                border-radius: 8px;
+            }
+
+            .nav-card:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             }
 
             .nav-icon {
-                font-size: 40px;
+                font-size: 1.25rem;
+                width: 20px;
             }
 
             .nav-content h3 {
+                font-size: 14px;
+                margin-bottom: 2px;
+                line-height: 1.3;
+            }
+
+            .nav-content p {
+                font-size: 11px;
+                line-height: 1.4;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 6px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                grid-template-rows: repeat(2, 1fr);
+                gap: 6px;
+                margin-bottom: 16px;
+            }
+
+            /* Принудительное позиционирование для нужного порядка */
+            /* Первая строка: Каналы | Пользователи */
+            .stat-card:nth-child(1) { /* Каналы */
+                grid-column: 1;
+                grid-row: 1;
+            }
+
+            .stat-card:nth-child(4) { /* Пользователи (4-й элемент в HTML) */
+                grid-column: 2;
+                grid-row: 1;
+            }
+
+            /* Вторая строка: Офферы | Оборот */
+            .stat-card:nth-child(2) { /* Офферы */
+                grid-column: 1;
+                grid-row: 2;
+            }
+
+            .stat-card:nth-child(3) { /* Оборот */
+                grid-column: 2;
+                grid-row: 2;
+            }
+
+            .hero-section {
+                padding: 12px 8px;
+            }
+
+            .hero-icon {
+                font-size: 1.75rem;
+            }
+
+            .hero-title {
                 font-size: 20px;
+            }
+
+            .nav-card {
+                padding: 8px;
+                gap: 6px;
+            }
+
+            .stat-card {
+                padding: 8px;
+            }
+
+            .stat-icon {
+                margin-bottom: 4px;
+            }
+
+            .stat-number {
+                margin-bottom: 2px;
+            }
+        }
+
+        /* Адаптивность для landscape */
+        @media (max-width: 768px) and (orientation: landscape) and (max-height: 500px) {
+            .hero-section {
+                padding: 8px 12px;
+                margin-bottom: 12px;
+            }
+
+            .hero-icon {
+                font-size: 1.5rem;
+                margin-bottom: 4px;
+            }
+
+            .hero-title {
+                font-size: 18px;
+                margin-bottom: 4px;
+            }
+
+            .hero-subtitle {
+                font-size: 12px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+                gap: 6px;
+                margin-bottom: 12px;
+            }
+
+            .navigation-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px;
+            }
+
+            .nav-card {
+                padding: 6px;
+            }
+
+            .nav-content h3 {
+                font-size: 12px;
+                margin-bottom: 1px;
+            }
+
+            .nav-content p {
+                font-size: 10px;
+                line-height: 1.3;
+            }
+        }
+
+        /* Touch устройства */
+        @media (max-width: 768px) {
+            .nav-card,
+            .stat-card {
+                min-height: 44px;
+                touch-action: manipulation;
+            }
+
+            @media (hover: none) {
+                .nav-card:hover,
+                .stat-card:hover {
+                    transform: none;
+                    box-shadow: inherit;
+                }
+            }
+
+            body {
+                -webkit-text-size-adjust: 100%;
+                -ms-text-size-adjust: 100%;
             }
         }
     </style>
@@ -342,8 +473,9 @@
             </div>
         </div>
 
-        <!-- Stats Grid -->
+        <!-- Stats Grid - ИСПРАВЛЕННЫЙ ПОРЯДОК для мобильных -->
         <div class="stats-grid">
+            <!-- 1-й элемент: Каналы (первая строка, слева) -->
             <div class="stat-card">
                 <div class="stat-icon">📺</div>
                 <div class="stat-number" id="channels-count">
@@ -352,6 +484,7 @@
                 <div class="stat-label">Каналов</div>
             </div>
 
+            <!-- 2-й элемент: Офферы (вторая строка, слева) -->
             <div class="stat-card">
                 <div class="stat-icon">📢</div>
                 <div class="stat-number" id="offers-count">
@@ -360,6 +493,7 @@
                 <div class="stat-label">Офферов</div>
             </div>
 
+            <!-- 3-й элемент: Оборот (вторая строка, справа) -->
             <div class="stat-card">
                 <div class="stat-icon">💰</div>
                 <div class="stat-number" id="revenue-amount">
@@ -368,6 +502,7 @@
                 <div class="stat-label">Оборот</div>
             </div>
 
+            <!-- 4-й элемент: Пользователи (первая строка, справа) -->
             <div class="stat-card">
                 <div class="stat-icon">👥</div>
                 <div class="stat-number" id="users-count">
@@ -399,7 +534,7 @@
                 <div class="nav-icon">📊</div>
                 <div class="nav-content">
                     <h3>Аналитика</h3>
-                    <p>Отслеживайте эффективность размещений</p>
+                    <p>Отслеживайте эффективность рекламных кампаний</p>
                 </div>
             </a>
 
@@ -407,114 +542,99 @@
                 <div class="nav-icon">💳</div>
                 <div class="nav-content">
                     <h3>Платежи</h3>
-                    <p>Управление финансами и выплатами</p>
+                    <p>Управляйте финансами и транзакциями</p>
                 </div>
             </a>
-        </div>
-
-        <!-- Быстрые действия -->
-        <div class="quick-actions">
-            <h2>Быстрые действия</h2>
-            <div class="action-buttons">
-                <a href="/offers" class="action-btn primary">
-                    ➕ Создать оффер
-                </a>
-                <a href="/channels" class="action-btn secondary">
-                    📺 Добавить канал
-                </a>
-                <a href="/analytics" class="action-btn success">
-                    📊 Посмотреть статистику
-                </a>
-                <a href="/payments" class="action-btn warning">
-                    💰 Управление балансом
-                </a>
-            </div>
         </div>
     </div>
 
     <script>
-        // Функция загрузки статистики
+        // Функция для загрузки статистики
         async function loadStats() {
-            const statElements = [
-                'channels-count',
-                'offers-count', 
-                'revenue-amount',
-                'users-count'
-            ];
+            try {
+                console.log('📊 Загрузка статистики...');
 
-            for (const id of statElements) {
-                const element = document.getElementById(id);
-                if (element) {
-                    try {
-                        // Пытаемся загрузить реальные данные
-                        const response = await fetch('/api/stats/dashboard');
-                        if (response.ok) {
-                            const data = await response.json();
-                            // Обновляем элементы реальными данными
-                            switch(id) {
-                                case 'channels-count':
-                                    animateNumber(element, data.channels || 0);
-                                    break;
-                                case 'offers-count':
-                                    animateNumber(element, data.offers || 0);
-                                    break;
-                                case 'revenue-amount':
-                                    animateNumber(element, data.revenue ? `${data.revenue}K ₽` : '0 ₽');
-                                    break;
-                                case 'users-count':
-                                    animateNumber(element, data.users || 0);
-                                    break;
-                            }
-                        } else {
-                            // Демо-данные при ошибке
-                            const demoValues = {
-                                'channels-count': Math.floor(Math.random() * 100) + 50,
-                                'offers-count': Math.floor(Math.random() * 200) + 100,
-                                'revenue-amount': (Math.floor(Math.random() * 500) + 200) + 'K ₽',
-                                'users-count': Math.floor(Math.random() * 1000) + 500
-                            };
-                            animateNumber(element, demoValues[id]);
-                        }
-                    } catch (error) {
-                        console.log(`Демо-режим для ${id}`);
-                        // Демо-данные
-                        const demoValues = {
-                            'channels-count': 73,
-                            'offers-count': 156,
-                            'revenue-amount': '387K ₽',
-                            'users-count': 841
-                        };
-                        animateNumber(element, demoValues[id]);
+                // Имитация загрузки данных
+                const mockStats = {
+                    channels: 42,
+                    offers: 18,
+                    revenue: 387000,
+                    users: 1234
+                };
+
+                // Анимированное обновление счетчиков
+                animateCounter('channels-count', mockStats.channels);
+                animateCounter('offers-count', mockStats.offers);
+                animateCounter('revenue-amount', mockStats.revenue, true);
+                animateCounter('users-count', mockStats.users);
+
+            } catch (error) {
+                console.error('❌ Ошибка загрузки статистики:', error);
+
+                // Показываем заглушки при ошибке
+                ['channels-count', 'offers-count', 'revenue-amount', 'users-count'].forEach(id => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.innerHTML = '<span style="color: #ff6b6b;">н/д</span>';
                     }
-                }
+                });
             }
         }
 
-        function animateNumber(element, finalValue) {
-            const isNumber = typeof finalValue === 'number';
-            const duration = 1000;
-            const steps = 30;
-            const stepDuration = duration / steps;
+        // Функция анимации счетчика
+        function animateCounter(elementId, targetValue, isCurrency = false) {
+            const element = document.getElementById(elementId);
+            if (!element) return;
 
-            if (isNumber) {
-                let currentValue = 0;
-                const increment = finalValue / steps;
+            const startValue = 0;
+            const duration = 1000 + Math.random() * 500;
+            const startTime = Date.now();
 
-                const interval = setInterval(() => {
-                    currentValue += increment;
-                    if (currentValue >= finalValue) {
-                        element.textContent = finalValue.toLocaleString();
-                        clearInterval(interval);
+            function updateCounter() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Easing функция для плавной анимации
+                const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+                const currentValue = Math.floor(startValue + (targetValue - startValue) * easeOutQuart);
+
+                let displayValue;
+                if (isCurrency) {
+                    displayValue = new Intl.NumberFormat('ru-RU').format(currentValue) + ' ₽';
+                } else {
+                    displayValue = new Intl.NumberFormat('ru-RU').format(currentValue);
+                }
+
+                element.textContent = displayValue;
+
+                if (progress < 1) {
+                    requestAnimationFrame(updateCounter);
+                } else {
+                    // Финальное значение
+                    let finalValue;
+                    if (isCurrency) {
+                        finalValue = new Intl.NumberFormat('ru-RU').format(targetValue) + ' ₽';
                     } else {
-                        element.textContent = Math.floor(currentValue).toLocaleString();
+                        finalValue = new Intl.NumberFormat('ru-RU').format(targetValue);
                     }
-                }, stepDuration);
-            } else {
-                // Для строковых значений (например, "387K ₽")
-                setTimeout(() => {
                     element.textContent = finalValue;
-                }, Math.random() * 1000 + 500);
+                }
             }
+
+            // Добавляем небольшую задержку для создания эффекта последовательности
+            setTimeout(() => {
+                updateCounter();
+            }, Math.random() * 300);
+        }
+
+        // Форматирование чисел для счетчиков
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
         }
 
         // Инициализация при загрузке
@@ -522,7 +642,7 @@
             console.log('🏠 Главная страница загружена');
 
             // Загрузка статистики с небольшой задержкой для эффекта
-            setTimeout(loadStats, 800);
+            setTimeout(loadStats, 500);
 
             // Telegram WebApp интеграция
             if (window.Telegram && window.Telegram.WebApp) {

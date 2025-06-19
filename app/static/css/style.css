@@ -1,4 +1,4 @@
-/* app/static/css/style.css - Минимальные стили для корректного отображения */
+/* app/static/css/style.css - Оптимизированные стили для мобильных устройств */
 
 /* === БАЗОВЫЕ СТИЛИ === */
 * {
@@ -26,7 +26,7 @@ html, body {
     --tg-theme-button-text-color: #ffffff;
     --tg-theme-secondary-bg-color: #f7fafc;
 
-    /* Дополнительные переменные */
+    /* Основные переменные */
     --primary-color: #667eea;
     --success-color: #4facfe;
     --warning-color: #ff9a56;
@@ -34,6 +34,13 @@ html, body {
     --border-radius: 16px;
     --shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* Размеры для десктопа */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
 }
 
 /* === КОНТЕЙНЕРЫ === */
@@ -131,6 +138,34 @@ a:hover {
     box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
 
+/* === HERO СЕКЦИЯ === */
+.hero-section {
+    text-align: center;
+    padding: 40px 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: var(--border-radius);
+    margin-bottom: 30px;
+}
+
+.hero-icon {
+    font-size: 24px; /* Уменьшено с 60px */
+    margin-bottom: 16px;
+    display: block;
+}
+
+.hero-title {
+    font-size: 36px;
+    font-weight: 800;
+    margin-bottom: 12px;
+}
+
+.hero-subtitle {
+    font-size: 18px;
+    opacity: 0.9;
+    margin-bottom: 0;
+}
+
 /* === НАВИГАЦИЯ === */
 .navigation {
     display: grid;
@@ -161,7 +196,7 @@ a:hover {
 }
 
 .nav-icon {
-    font-size: 36px;
+    font-size: 20px; /* Уменьшено с 36px */
     flex-shrink: 0;
 }
 
@@ -201,7 +236,7 @@ a:hover {
 }
 
 .stat-icon {
-    font-size: 32px;
+    font-size: 18px; /* Уменьшено с 32px */
     margin-bottom: 12px;
     display: block;
 }
@@ -223,109 +258,6 @@ a:hover {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-}
-
-/* === СОСТОЯНИЯ === */
-.loading {
-    color: var(--tg-theme-hint-color);
-    font-style: italic;
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-}
-
-/* === АДАПТИВНОСТЬ === */
-@media (max-width: 768px) {
-    .container {
-        padding: 16px;
-    }
-
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-        gap: 16px;
-    }
-
-    .navigation {
-        grid-template-columns: 1fr;
-    }
-
-    .nav-card {
-        padding: 20px;
-    }
-
-    h1 { font-size: 2rem; }
-    h2 { font-size: 1.5rem; }
-    h3 { font-size: 1.25rem; }
-}
-
-@media (max-width: 480px) {
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .nav-card {
-        flex-direction: column;
-        text-align: center;
-        padding: 16px;
-    }
-
-    .stat-number {
-        font-size: 24px;
-    }
-
-    h1 { font-size: 1.75rem; }
-}
-
-/* === СПЕЦИФИЧНЫЕ СТИЛИ ДЛЯ TELEGRAM === */
-body.telegram-webapp {
-    overflow: hidden;
-    position: fixed;
-    width: 100%;
-}
-
-#app-container.telegram-webapp {
-    overflow-y: auto;
-    height: 100vh;
-}
-
-/* Скрытие элементов во время загрузки */
-.hidden {
-    display: none !important;
-}
-
-.visible {
-    display: block !important;
-}
-
-/* === HERO СЕКЦИЯ === */
-.hero-section {
-    text-align: center;
-    padding: 40px 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: var(--border-radius);
-    margin-bottom: 30px;
-}
-
-.hero-icon {
-    font-size: 60px;
-    margin-bottom: 16px;
-    display: block;
-}
-
-.hero-title {
-    font-size: 36px;
-    font-weight: 800;
-    margin-bottom: 12px;
-}
-
-.hero-subtitle {
-    font-size: 18px;
-    opacity: 0.9;
-    margin-bottom: 0;
 }
 
 /* === БЫСТРЫЕ ДЕЙСТВИЯ === */
@@ -387,4 +319,339 @@ body.telegram-webapp {
 
 .btn-icon {
     font-size: 18px;
+}
+
+/* === СОСТОЯНИЯ === */
+.loading {
+    color: var(--tg-theme-hint-color);
+    font-style: italic;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.hidden {
+    display: none !important;
+}
+
+.visible {
+    display: block !important;
+}
+
+/* === МОБИЛЬНАЯ АДАПТИВНОСТЬ === */
+@media (max-width: 768px) {
+    :root {
+        --spacing-xs: 0.25rem;
+        --spacing-sm: 0.5rem;
+        --spacing-md: 0.75rem;
+        --spacing-lg: 1rem;
+        --spacing-xl: 1.25rem;
+        --border-radius: 12px;
+    }
+
+    .container {
+        padding: var(--spacing-sm);
+        margin: 0;
+        max-width: 100%;
+    }
+
+    /* Hero секция */
+    .hero-section {
+        padding: var(--spacing-lg) var(--spacing-md);
+        margin-bottom: var(--spacing-lg);
+        border-radius: var(--border-radius);
+    }
+
+    .hero-icon {
+        font-size: 2rem; /* 32px */
+        margin-bottom: var(--spacing-sm);
+    }
+
+    .hero-title {
+        font-size: 1.5rem; /* 24px */
+        margin-bottom: var(--spacing-sm);
+        line-height: 1.3;
+    }
+
+    .hero-subtitle {
+        font-size: 0.9rem; /* 14.4px */
+        margin-bottom: 0;
+        line-height: 1.4;
+    }
+
+    /* Статистика */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: var(--spacing-sm);
+        margin-bottom: var(--spacing-lg);
+    }
+
+    .stat-card {
+        padding: var(--spacing-md);
+        border-radius: 8px;
+    }
+
+    .stat-icon {
+        font-size: 1.25rem; /* 20px */
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .stat-number {
+        font-size: 1.125rem; /* 18px */
+        margin-bottom: var(--spacing-xs);
+        min-height: 24px;
+    }
+
+    .stat-label {
+        font-size: 0.75rem; /* 12px */
+        font-weight: 500;
+    }
+
+    /* Навигация */
+    .navigation {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+        margin: var(--spacing-md) 0;
+    }
+
+    .nav-card {
+        padding: var(--spacing-md);
+        gap: var(--spacing-sm);
+        border-radius: 8px;
+    }
+
+    .nav-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .nav-icon {
+        font-size: 1.25rem; /* 20px */
+        width: 24px;
+        text-align: center;
+    }
+
+    .nav-content h3 {
+        font-size: 1rem; /* 16px */
+        margin-bottom: var(--spacing-xs);
+        line-height: 1.3;
+    }
+
+    .nav-content p {
+        font-size: 0.75rem; /* 12px */
+        margin: 0;
+        line-height: 1.4;
+    }
+
+    /* Кнопки */
+    .btn,
+    .action-btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 0.875rem; /* 14px */
+        min-height: 44px;
+        border-radius: 8px;
+        gap: var(--spacing-xs);
+    }
+
+    .btn-icon {
+        font-size: 0.9rem; /* 14.4px */
+    }
+
+    .action-buttons {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-sm);
+    }
+
+    /* Карточки */
+    .card {
+        padding: var(--spacing-md);
+        margin-bottom: var(--spacing-md);
+        border-radius: 8px;
+    }
+
+    .card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Типография */
+    h1 {
+        font-size: 1.5rem; /* 24px */
+        margin-bottom: var(--spacing-sm);
+        line-height: 1.2;
+    }
+
+    h2 {
+        font-size: 1.25rem; /* 20px */
+        margin-bottom: var(--spacing-sm);
+    }
+
+    h3 {
+        font-size: 1.125rem; /* 18px */
+        margin-bottom: var(--spacing-xs);
+    }
+
+    p {
+        margin-bottom: var(--spacing-sm);
+        line-height: 1.5;
+    }
+
+    /* Быстрые действия */
+    .quick-actions {
+        padding: var(--spacing-md);
+        border-radius: 8px;
+    }
+
+    .quick-actions h2 {
+        margin-bottom: var(--spacing-md);
+        font-size: 1.125rem; /* 18px */
+    }
+}
+
+/* === ОЧЕНЬ МАЛЕНЬКИЕ ЭКРАНЫ === */
+@media (max-width: 480px) {
+    :root {
+        --spacing-xs: 0.25rem;
+        --spacing-sm: 0.375rem;
+        --spacing-md: 0.625rem;
+        --spacing-lg: 0.875rem;
+        --spacing-xl: 1rem;
+    }
+
+    .container {
+        padding: var(--spacing-xs);
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-xs);
+    }
+
+    .hero-section {
+        padding: var(--spacing-md);
+    }
+
+    .hero-icon {
+        font-size: 1.75rem; /* 28px */
+    }
+
+    .hero-title {
+        font-size: 1.25rem; /* 20px */
+    }
+
+    .nav-card {
+        padding: var(--spacing-sm);
+    }
+
+    .card {
+        padding: var(--spacing-sm);
+    }
+}
+
+/* === СПЕЦИФИЧНЫЕ СТИЛИ ДЛЯ TELEGRAM === */
+body.telegram-webapp {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+}
+
+#app-container.telegram-webapp {
+    overflow-y: auto;
+    height: 100vh;
+}
+
+/* Мобильная версия Telegram */
+@media (max-width: 768px) {
+    body.telegram-webapp {
+        overflow-y: auto;
+        position: relative;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    #app-container.telegram-webapp {
+        height: 100vh;
+        overflow-y: auto;
+        padding: var(--spacing-sm);
+    }
+}
+
+/* === УЛУЧШЕНИЯ ЮЗАБИЛИТИ ДЛЯ МОБИЛЬНЫХ === */
+@media (max-width: 768px) {
+    /* Увеличенная область нажатия */
+    .btn,
+    .action-btn,
+    .nav-card {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+
+    /* Убираем hover эффекты на touch устройствах */
+    @media (hover: none) {
+        .btn:hover,
+        .action-btn:hover,
+        .nav-card:hover,
+        .card:hover {
+            transform: none;
+            box-shadow: inherit;
+        }
+    }
+
+    /* Улучшенная читаемость */
+    body {
+        -webkit-text-size-adjust: 100%;
+        -ms-text-size-adjust: 100%;
+    }
+
+    /* Скрытие лишних элементов */
+    .desktop-only {
+        display: none !important;
+    }
+
+    /* Оптимизация для landscape */
+    @media (orientation: landscape) and (max-height: 500px) {
+        .hero-section {
+            padding: var(--spacing-sm) var(--spacing-md);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .navigation {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+}
+
+/* === АНИМАЦИИ ДЛЯ МОБИЛЬНЫХ === */
+@media (max-width: 768px) {
+    @keyframes mobileSlideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .fade-in {
+        animation: mobileSlideUp 0.3s ease-out;
+    }
+
+    /* Уменьшенные анимации для экономии батареи */
+    @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+        }
+    }
 }

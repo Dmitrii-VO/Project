@@ -575,45 +575,80 @@
 
         /* === RESPONSIVE === */
         @media (max-width: 768px) {
-            .container {
-                padding: 16px;
-            }
+    .page-header {
+        padding: 1rem 0.75rem !important;
+        margin-bottom: 1rem !important;
+    }
 
-            .page-header {
-                margin: -16px -16px 24px -16px;
-                padding: 32px 16px;
-            }
+    .page-title {
+        font-size: 1.25rem !important; /* 20px */
+        margin-bottom: 0.5rem !important;
+    }
 
-            .page-title {
-                font-size: 2rem;
-            }
+    .page-subtitle {
+        font-size: 0.875rem !important; /* 14px */
+    }
 
-            .tab-nav {
-                overflow-x: auto;
-            }
+    .channels-header {
+        flex-direction: column !important;
+        gap: 0.75rem !important;
+        margin-bottom: 1rem !important;
+    }
 
-            .action-bar {
-                flex-direction: column;
-                align-items: stretch;
-            }
+    .channels-stats {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 0.5rem !important;
+    }
 
-            .search-container {
-                order: 2;
-            }
+    .channels-grid {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
 
-            .channels-grid {
-                grid-template-columns: 1fr;
-            }
+    .channel-card {
+        padding: 0.75rem !important;
+        border-radius: 8px !important;
+    }
 
-            .channel-stats {
-                grid-template-columns: 1fr 1fr;
-                gap: 12px;
-            }
+    .channel-header {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 0.5rem !important;
+        margin-bottom: 0.75rem !important;
+    }
 
-            .channel-actions {
-                flex-direction: column;
-            }
-        }
+    .channel-title {
+        font-size: 1rem !important; /* 16px */
+        margin-bottom: 0.25rem !important;
+    }
+
+    .channel-username {
+        font-size: 0.75rem !important; /* 12px */
+    }
+
+    .channel-meta {
+        gap: 0.75rem !important;
+        margin-top: 0.5rem !important;
+        flex-wrap: wrap !important;
+    }
+
+    .meta-item {
+        font-size: 0.75rem !important; /* 12px */
+        gap: 0.25rem !important;
+    }
+
+    .channel-actions {
+        flex-direction: column !important;
+        gap: 0.5rem !important;
+        margin-top: 0.75rem !important;
+    }
+
+    .channel-actions .btn {
+        width: 100% !important;
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important; /* 14px */
+    }
+}
 
         /* === CSS СТИЛИ ДЛЯ МОДАЛЬНЫХ ОКОН ВЕРИФИКАЦИИ === */
         .verification-modal {
