@@ -532,19 +532,33 @@ function showErrorState(errorMessage) {
     `;
     errorElement.style.display = 'block';
 }
-
 function showChannelStats(channelId) {
     showInfoNotification('Статистика канала (в разработке)');
 }
-
 function showChannelSettings(channelId) {
     showInfoNotification('⚙️ Настройки канала скоро будут доступны');
 }
-
 function editChannel(channelId) {
             alert('Редактирование канала (в разработке)');
         }
+function goBack() {
+    try {
+        console.log('🔙 Переход на главную страницу');
 
+        // ВСЕГДА переходим на главную страницу, даже в Telegram WebApp
+        window.location.href = '/';
+
+    } catch (error) {
+        console.error('Ошибка при переходе на главную:', error);
+        // Дополнительная попытка
+        try {
+            window.location.replace('/');
+        } catch (e) {
+            // Крайний случай - перезагрузка с главной
+            window.location = '/';
+        }
+    }
+}
 
 
 // Делаем функции глобально доступными для onclick

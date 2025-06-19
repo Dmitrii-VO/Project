@@ -120,12 +120,29 @@
             font-size: 14px;
             font-weight: 600;
             transition: var(--transition);
+            cursor: pointer;
+            z-index: 10;                    /* ← ДОБАВЛЕНО */
+            pointer-events: auto;           /* ← ДОБАВЛЕНО */
+            display: flex;                  /* ← ДОБАВЛЕНО */
+            align-items: center;            /* ← ДОБАВЛЕНО */
+            justify-content: center;        /* ← ДОБАВЛЕНО */
+            min-width: 60px;               /* ← ДОБАВЛЕНО */
+            min-height: 32px;              /* ← ДОБАВЛЕНО */
+            font-family: inherit;           /* ← ДОБАВЛЕНО */
+            backdrop-filter: blur(10px);    /* ← ДОБАВЛЕНО */
         }
+
 
         .back-btn:hover {
             background: rgba(255, 255, 255, 0.3);
             color: white;
             text-decoration: none;
+            transform: translateY(-50%) translateX(-2px);
+        }
+
+        .back-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: translateY(-50%) scale(0.95);
         }
 
         /* ТАБЫ В СТИЛЕ INDEX.HTML */
@@ -1054,13 +1071,15 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+
     </style>
 </head>
 <body>
 <div class="container">
         <!-- Hero Section как в index.html -->
         <div class="hero-section">
-            <a href="/" class="back-btn">← Назад</a>
+            <button class="back-btn" onclick="goBack()">← Назад</button>
             <div class="hero-content">
                 <span class="hero-icon">📺</span>
                 <h1 class="hero-title">Мои каналы</h1>
