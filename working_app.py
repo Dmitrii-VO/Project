@@ -141,7 +141,7 @@ def setup_telegram_webhook():
 def create_app() -> Flask:
     """Фабрика приложений с улучшенной архитектурой"""
 
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='app/static', template_folder='templates')
     app.config.from_object(AppConfig)
 
     # Настройка JSON сериализации
@@ -846,6 +846,22 @@ def main():
         logger.error(f"❌ Критическая ошибка: {e}")
         sys.exit(1)
 
+
+@app.route('/test-static')
+def test_static():
+    """Тестовый маршрут для проверки статических файлов"""
+    import os
+    static_path = app.static_folder
+    js_path = os.path.join(static_path, 'js')
+
+    return jsonify({
+        'static_folder': static_path,
+        'static_exists': os.path.exists(static_path),
+        'js_folder_exists': os.path.exists(js_path),
+        'js_files': os.listdir(js_path) if os.path.exists(js_path) else [],
+        'working_dir': os.getcwd(),
+        'project_root': PROJECT_ROOT
+    })
 
 if __name__ == '__main__':
     main()
