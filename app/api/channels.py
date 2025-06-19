@@ -383,16 +383,17 @@ def add_channel():
 
         # Проверяем, не добавлен ли уже канал
         cursor.execute("""
-            SELECT c.id, c.title
-            FROM channels c
-            JOIN users u ON c.owner_id = u.id
-            WHERE c.username = ?
-            AND u.telegram_id = ?
-        """, (f'@{cleaned_username}', telegram_user_id))
+                       SELECT c.id, c.title
+                       FROM channels c
+                                JOIN users u ON c.owner_id = u.id
+                       WHERE (c.username = ? OR c.username = ? OR c.telegram_id = ?)
+                         AND u.telegram_id = ?
+                       """, (cleaned_username, f'@{cleaned_username}', cleaned_username, telegram_user_id))
 
         existing_channel = cursor.fetchone()
 
         if existing_channel:
+            logger.warning(f"❌ Канал @{cleaned_username} уже добавлен (ID: {existing_channel['id']})")
             conn.close()
             return jsonify({
                 'success': False,
