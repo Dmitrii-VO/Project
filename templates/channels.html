@@ -1826,7 +1826,7 @@
                         </button>
                     ` : ''}
                     ${(!channel.is_verified && channel.status !== 'verified') ? `
-                        <button class="btn btn-warning btn-sm" onclick="showVerificationModal(${channel.id}, '${channel.title?.replace(/'/g, "\\'")}', '${channel.username || ""}')">
+                        <button class="btn btn-warning btn-sm" onclick="startChannelVerification(${channel.id}, '${channel.title?.replace(/'/g, "\\'")}', '${channel.username || ""}')">
                             🔒 Верифицировать
                         </button>
                     ` : ''}
@@ -2184,66 +2184,167 @@
          * Начать процесс верификации
          */
         async function startVerification() {
-            if (!verificationChannelData) {
-                console.error('❌ Нет данных канала для верификации');
-                return;
-            }
+    if (!verificationChannelData) {
+        console.error('❌ Нет данных канала для верификации');
+        return;
+    }
 
-            const startBtn = document.getElementById('startVerificationBtn');
-            const originalText = startBtn.textContent;
+    const startBtn = document.getElementById('startVerificationBtn');
+    const originalText = startBtn.textContent;
 
-            try {
-                startBtn.disabled = true;
-                startBtn.textContent = '⏳ Запуск верификации...';
+    try {
+        startBtn.disabled = true;
+        startBtn.textContent = '⏳ Запуск верификации...';
 
-                const telegramUser = getTelegramUser();
-                if (!telegramUser) {
-                    throw new Error('Данные пользователя Telegram недоступны');
-                }
-
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'X-Telegram-User-Id': telegramUser.id.toString()
-                };
-
-                if (telegramUser.username) {
-                    headers['X-Telegram-Username'] = telegramUser.username;
-                }
-
-                // Запускаем верификацию
-                const response = await fetch(`/api/channels/${verificationChannelData.id}/verify`, {
-                    method: 'PUT',
-                    headers: headers
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    if (data.success) {
-                        // Верификация успешна
-                        showSuccessNotification(data.message || 'Канал успешно верифицирован!');
-                        closeVerificationModal();
-
-                        // Обновляем список каналов
-                        setTimeout(() => {
-                            loadUserChannels();
-                        }, 1000);
-                    } else {
-                        // Показываем код верификации
-                        showVerificationCode(data);
-                    }
-                } else {
-                    throw new Error(data.error || 'Ошибка верификации');
-                }
-
-            } catch (error) {
-                console.error('💥 Ошибка верификации:', error);
-                showErrorNotification(error.message);
-            } finally {
-                startBtn.disabled = false;
-                startBtn.textContent = originalText;
-            }
+        const telegramUser = getTelegramUser();
+        if (!telegramUser) {
+            throw new Error('Данные пользователя Telegram недоступны');
         }
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Telegram-User-Id': telegramUser.id.toString()
+        };
+
+        if (telegramUser.username) {
+            headers['X-Telegram-Username'] = telegramUser.username;
+        }
+
+        // ИСПРАВЛЕНИЕ: Используем тот же endpoint, что и для добавления канала
+        const response = await fetch('/api/channels', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                username: verificationChannelData.username?.replace('@', '') || 'unknown',
+                category: 'other',
+                description: 'Повторная верификация канала',
+                payment_terms: 'prepayment',
+                action: 'reverify', // Флаг для определения повторной верификации
+                channel_id: verificationChannelData.id
+            })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Ошибка сервера');
+        }
+
+        // Закрываем модальное окно верификации
+        closeVerificationModal();
+
+        // Показываем инструкции как при добавлении канала
+        const verificationCode = result.verification_code || result.channel?.verification_code;
+        const channelUsername = result.channel?.username || verificationChannelData.username;
+
+        if (verificationCode) {
+            // Создаем модальное окно с инструкциями (такое же как при добавлении)
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 10000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+
+            modal.innerHTML = `
+                <div style="
+                    background: white; padding: 20px; border-radius: 15px;
+                    max-width: min(500px, 95vw); margin: 10px; text-align: center;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    max-height: 95vh; overflow-y: auto;
+                ">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📝</div>
+                    <h3 style="color: #333; margin-bottom: 20px;">Подтвердите владение каналом</h3>
+
+                    <div style="
+                        background: #e3f2fd; padding: 20px; border-radius: 10px;
+                        margin: 20px 0; border-left: 4px solid #2196f3;
+                    ">
+                        <h4 style="color: #1976d2; margin-bottom: 15px;">🔐 Код верификации:</h4>
+
+                        <div style="
+                            background: #333; color: #00ff00; padding: 15px;
+                            border-radius: 8px; font-family: 'Courier New', monospace;
+                            font-size: 20px; font-weight: bold; letter-spacing: 2px;
+                            margin: 15px 0; cursor: pointer; user-select: all;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        " onclick="
+                            navigator.clipboard.writeText('${verificationCode}');
+                            this.style.background='#1b5e20';
+                            this.innerHTML='${verificationCode} ✅';
+                            setTimeout(() => {
+                                this.style.background='#333';
+                                this.innerHTML='${verificationCode}';
+                            }, 2000);
+                        ">${verificationCode}</div>
+
+                        <small style="color: #666;">Нажмите на код, чтобы скопировать</small>
+                    </div>
+
+                    <div style="
+                        background: #f5f5f5; padding: 20px; border-radius: 10px;
+                        margin: 20px 0; text-align: left;
+                    ">
+                        <h4 style="color: #333; margin-bottom: 15px;">📋 Инструкция:</h4>
+
+                        <ol style="margin: 0; padding-left: 20px; color: #555;">
+                            <li style="margin-bottom: 10px;">
+                                Откройте ваш канал <strong>${channelUsername}</strong>
+                            </li>
+                            <li style="margin-bottom: 10px;">
+                                Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
+                            </li>
+                            <li style="margin-bottom: 10px;">
+                                Переслать это сообщение нашему боту <strong>@YOUR_BOT_USERNAME</strong>
+                            </li>
+                            <li style="margin-bottom: 10px;">
+                                Получите уведомление об успешной верификации в боте
+                            </li>
+                        </ol>
+                    </div>
+
+                    <div style="
+                        background: #fff3cd; padding: 15px; border-radius: 8px;
+                        margin: 15px 0; border-left: 4px solid #ffc107;
+                    ">
+                        <small style="color: #856404;">
+                            💡 <strong>Совет:</strong> После публикации кода вы можете сразу удалить сообщение из канала.
+                            Главное успеть переслать его боту!
+                        </small>
+                    </div>
+
+                    <button onclick="
+                        document.body.removeChild(this.closest('div').parentElement);
+                        loadUserChannels();
+                    " style="
+                        background: #2196f3; color: white; border: none;
+                        padding: 12px 30px; border-radius: 8px; font-size: 16px;
+                        cursor: pointer; margin-top: 15px; font-weight: 600;
+                    ">Понятно, перейти к каналам</button>
+
+                    <div style="margin-top: 15px;">
+                        <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" style="
+                            color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
+                        ">🤖 Открыть бота для верификации</a>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+        } else {
+            // Fallback для случаев без кода верификации
+            showSuccessNotification('✅ Верификация запущена!');
+        }
+
+    } catch (error) {
+        console.error('💥 Ошибка верификации:', error);
+        showErrorNotification(error.message);
+    } finally {
+        startBtn.disabled = false;
+        startBtn.textContent = originalText;
+    }
+}
 
         /**
          * Показать код верификации
@@ -2384,6 +2485,160 @@
         function showInfoNotification(message) {
             showNotification('info', message);
         }
+
+        /**
+ * Новая функция для верификации канала (работает как добавление канала)
+ */
+        async function startChannelVerification(channelId, channelName, channelUsername) {
+    console.log(`🔐 Запуск верификации канала ${channelId}`);
+
+    try {
+        const telegramUser = getTelegramUser();
+        if (!telegramUser) {
+            throw new Error('Данные пользователя Telegram недоступны');
+        }
+
+        // Показываем индикатор загрузки
+        showNotification('info', '⏳ Запускаем верификацию...');
+
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Telegram-User-Id': telegramUser.id.toString()
+        };
+
+        if (telegramUser.username) {
+            headers['X-Telegram-Username'] = telegramUser.username;
+        }
+
+        // Используем тот же endpoint, что и для добавления канала
+        const response = await fetch('/api/channels', {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                username: channelUsername?.replace('@', '') || 'unknown',
+                category: 'other',
+                description: 'Повторная верификация канала',
+                payment_terms: 'prepayment',
+                action: 'reverify', // Флаг для определения повторной верификации
+                channel_id: channelId
+            })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Ошибка сервера');
+        }
+
+        // Показываем инструкции точно как при добавлении канала
+        const verificationCode = result.verification_code || result.channel?.verification_code;
+        const usernameForDisplay = result.channel?.username || channelUsername;
+
+        if (verificationCode) {
+            // Создаем модальное окно с инструкциями (ТОЧНО такое же как при добавлении)
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+                background: rgba(0,0,0,0.8); z-index: 10000;
+                display: flex; align-items: center; justify-content: center;
+            `;
+
+            modal.innerHTML = `
+                <div style="
+                    background: white; padding: 20px; border-radius: 15px;
+                    max-width: min(500px, 95vw); margin: 10px; text-align: center;
+                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+                    max-height: 95vh; overflow-y: auto;
+                ">
+                    <div style="font-size: 48px; margin-bottom: 20px;">📝</div>
+                    <h3 style="color: #333; margin-bottom: 20px;">Подтвердите владение каналом</h3>
+
+                    <div style="
+                        background: #e3f2fd; padding: 20px; border-radius: 10px;
+                        margin: 20px 0; border-left: 4px solid #2196f3;
+                    ">
+                        <h4 style="color: #1976d2; margin-bottom: 15px;">🔐 Код верификации:</h4>
+
+                        <div style="
+                            background: #333; color: #00ff00; padding: 15px;
+                            border-radius: 8px; font-family: 'Courier New', monospace;
+                            font-size: 20px; font-weight: bold; letter-spacing: 2px;
+                            margin: 15px 0; cursor: pointer; user-select: all;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                        " onclick="
+                            navigator.clipboard.writeText('${verificationCode}');
+                            this.style.background='#1b5e20';
+                            this.innerHTML='${verificationCode} ✅';
+                            setTimeout(() => {
+                                this.style.background='#333';
+                                this.innerHTML='${verificationCode}';
+                            }, 2000);
+                        ">${verificationCode}</div>
+
+                        <small style="color: #666;">Нажмите на код, чтобы скопировать</small>
+                    </div>
+
+                    <div style="
+                        background: #f5f5f5; padding: 20px; border-radius: 10px;
+                        margin: 20px 0; text-align: left;
+                    ">
+                        <h4 style="color: #333; margin-bottom: 15px;">📋 Инструкция:</h4>
+
+                        <ol style="margin: 0; padding-left: 20px; color: #555;">
+                            <li style="margin-bottom: 10px;">
+                                Откройте ваш канал <strong>@${usernameForDisplay}</strong>
+                            </li>
+                            <li style="margin-bottom: 10px;">
+                                Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
+                            </li>
+                            <li style="margin-bottom: 10px;">
+                                Переслать это сообщение нашему боту <strong>@YOUR_BOT_USERNAME</strong>
+                            </li>
+                            <li style="margin-bottom: 10px;">
+                                Получите уведомление об успешной верификации в боте
+                            </li>
+                        </ol>
+                    </div>
+
+                    <div style="
+                        background: #fff3cd; padding: 15px; border-radius: 8px;
+                        margin: 15px 0; border-left: 4px solid #ffc107;
+                    ">
+                        <small style="color: #856404;">
+                            💡 <strong>Совет:</strong> После публикации кода вы можете сразу удалить сообщение из канала.
+                            Главное успеть переслать его боту!
+                        </small>
+                    </div>
+
+                    <button onclick="
+                        document.body.removeChild(this.closest('div').parentElement);
+                        loadUserChannels();
+                    " style="
+                        background: #2196f3; color: white; border: none;
+                        padding: 12px 30px; border-radius: 8px; font-size: 16px;
+                        cursor: pointer; margin-top: 15px; font-weight: 600;
+                    ">Понятно, перейти к каналам</button>
+
+                    <div style="margin-top: 15px;">
+                        <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" style="
+                            color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
+                        ">🤖 Открыть бота для верификации</a>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+
+        } else {
+            // Fallback для случаев без кода верификации
+            showSuccessNotification('✅ Верификация запущена!');
+        }
+
+    } catch (error) {
+        console.error('💥 Ошибка верификации:', error);
+        showErrorNotification(`❌ Ошибка: ${error.message}`);
+    }
+}
 
 
     </script>

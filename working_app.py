@@ -321,40 +321,6 @@ def register_system_routes(app: Flask) -> None:
             }), 400
 
     # Дополнительные endpoints для каналов
-    @app.route('/api/channels', methods=['GET'])
-    def get_channels_endpoint():
-        """Получить список каналов"""
-        from flask import jsonify, request
-
-        try:
-            telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
-            logger.info(f"📋 Запрос каналов от {telegram_user_id}")
-
-            # Возвращаем тестовые данные
-            channels = [
-                {
-                    'id': 10,
-                    'title': 'Мой канал',
-                    'username': 'my_channel',
-                    'subscriber_count': 1200,
-                    'is_verified': False,
-                    'category': 'technology',
-                    'status': 'pending'
-                }
-            ]
-
-            return jsonify({
-                'success': True,
-                'channels': channels
-            })
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка получения каналов: {e}")
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 400
-
     @app.route('/api/channels', methods=['POST'])
     def create_channel_endpoint():
         """Создать новый канал"""
@@ -363,30 +329,33 @@ def register_system_routes(app: Flask) -> None:
         import string
 
         try:
-            data = request.get_json() or {}
+            data = request.get_json()
             telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
+            logger.info(f"➕ Создание канала от {telegram_user_id}")
 
-            # Генерируем код верификации
+            # ДОБАВЛЕНО: Проверка флага повторной верификации
+            is_reverify = data.get('action') == 'reverify'
+            channel_id = data.get('channel_id') if is_reverify else None
+
+            # Генерируем новый код верификации
             verification_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
-            channel = {
-                'id': random.randint(100, 999),
-                'title': data.get('title', 'Новый канал'),
-                'username': data.get('channel_url', '').replace('@', '').replace('https://t.me/', ''),
-                'subscriber_count': data.get('subscriber_count', 0),
-                'is_verified': False,
+            # Возвращаем результат с кодом верификации
+            result = {
+                'success': True,
+                'message': 'Канал добавлен и ожидает верификации' if not is_reverify else 'Новый код верификации сгенерирован',
                 'verification_code': verification_code,
-                'status': 'pending'
+                'channel': {
+                    'id': channel_id or random.randint(1000, 9999),
+                    'username': data.get('username', 'unknown'),
+                    'title': f"Канал @{data.get('username', 'unknown')}",
+                    'verification_code': verification_code,
+                    'status': 'pending'
+                }
             }
 
-            logger.info(f"📺 Создан канал {channel['id']} для {telegram_user_id}")
-
-            return jsonify({
-                'success': True,
-                'message': 'Канал добавлен успешно',
-                'channel': channel,
-                'verification_code': verification_code
-            }), 201
+            logger.info(f"✅ Канал создан с кодом верификации: {verification_code}")
+            return jsonify(result)
 
         except Exception as e:
             logger.error(f"❌ Ошибка создания канала: {e}")
@@ -710,7 +679,6 @@ def get_channels_real():
         }), 500
 
 
-
 @app.route('/api/channels', methods=['POST'])
 def create_channel_real():
     """Создать новый канал"""
@@ -718,27 +686,84 @@ def create_channel_real():
         data = request.get_json() or {}
         telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
 
-        # Создаем канал
+        # Получаем username канала
+        username = data.get('username', '').replace('@', '').replace('https://t.me/', '')
+        if not username:
+            username = data.get('channel_url', '').replace('@', '').replace('https://t.me/', '')
+
+        logger.info(f"➕ Запрос создания/верификации канала @{username} от {telegram_user_id}")
+
+        # НОВОЕ: Проверка флага повторной верификации
+        is_reverify = data.get('action') == 'reverify'
+        requested_channel_id = data.get('channel_id')
+
+        # Проверяем, существует ли уже канал
+        existing_channel = None
+        for channel in channel_db.channels.values():
+            if (channel['user_id'] == telegram_user_id and
+                    (channel['username'] == username or channel['username'] == f'@{username}')):
+                existing_channel = channel
+                break
+
+        # Если канал существует и это НЕ повторная верификация - ошибка
+        if existing_channel and not is_reverify:
+            logger.warning(f"❌ Канал @{username} уже добавлен пользователем {telegram_user_id}")
+            return jsonify({
+                'success': False,
+                'error': f'Канал @{username} уже добавлен'
+            }), 409
+
+        # Если это повторная верификация существующего канала
+        if existing_channel and is_reverify:
+            logger.info(f"🔄 Повторная верификация канала @{username}")
+
+            # Генерируем новый код верификации
+            import random
+            import string
+            new_verification_code = 'VERIFY_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+            # Обновляем код верификации
+            existing_channel['verification_code'] = new_verification_code
+            existing_channel['status'] = 'pending'
+            existing_channel['is_verified'] = False  # Сбрасываем верификацию
+
+            logger.info(f"✅ Новый код верификации для канала {existing_channel['id']}: {new_verification_code}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Новый код верификации сгенерирован',
+                'verification_code': new_verification_code,
+                'channel': {
+                    'id': existing_channel['id'],
+                    'username': username,
+                    'title': existing_channel['title'],
+                    'verification_code': new_verification_code,
+                    'status': 'pending'
+                }
+            })
+
+        # Создаем новый канал (только если это не повторная верификация)
         channel = channel_db.create_channel(telegram_user_id, {
-            'title': data.get('title', 'Новый канал'),
-            'username': data.get('channel_url', '').replace('@', '').replace('https://t.me/', ''),
+            'title': data.get('title', f'Канал @{username}'),
+            'username': username,
             'telegram_id': data.get('telegram_id', ''),
             'category': data.get('category', 'other'),
             'subscriber_count': data.get('subscriber_count', 0)
         })
 
-        logger.info(f"📺 Создан канал {channel['id']} для пользователя {telegram_user_id}")
+        logger.info(f"📺 Создан новый канал {channel['id']} для пользователя {telegram_user_id}")
 
         return jsonify({
             'success': True,
-            'message': 'Канал успешно добавлен',
-            'channel': channel,
-            'verification_instructions': [
-                f'Для верификации канала выполните следующие шаги:',
-                f'1. Перейдите в ваш канал @{channel["username"]}',
-                f'2. Опубликуйте сообщение с кодом: {channel["verification_code"]}',
-                f'3. Нажмите кнопку "Верифицировать" в интерфейсе'
-            ]
+            'message': 'Канал добавлен и ожидает верификации',
+            'verification_code': channel['verification_code'],
+            'channel': {
+                'id': channel['id'],
+                'username': channel['username'],
+                'title': channel['title'],
+                'verification_code': channel['verification_code'],
+                'status': 'pending'
+            }
         }), 201
 
     except Exception as e:

@@ -382,8 +382,12 @@ def add_channel():
             logger.info(f"✅ Найден пользователь с ID: {user_db_id}")
 
         # Проверяем, не добавлен ли уже канал
+        is_reverify = data.get('action') == 'reverify'
+        requested_channel_id = data.get('channel_id')
+
+        # Проверяем, не добавлен ли уже канал
         cursor.execute("""
-                       SELECT c.id, c.title
+                       SELECT c.id, c.title, c.verification_code, c.is_verified, c.status
                        FROM channels c
                                 JOIN users u ON c.owner_id = u.id
                        WHERE (c.username = ? OR c.username = ? OR c.telegram_id = ?)
@@ -392,13 +396,50 @@ def add_channel():
 
         existing_channel = cursor.fetchone()
 
-        if existing_channel:
+        # Если канал существует и это НЕ повторная верификация - ошибка
+        if existing_channel and not is_reverify:
             logger.warning(f"❌ Канал @{cleaned_username} уже добавлен (ID: {existing_channel['id']})")
             conn.close()
             return jsonify({
                 'success': False,
                 'error': f'Канал @{cleaned_username} уже добавлен'
             }), 409
+
+        # Если это повторная верификация существующего канала
+        if existing_channel and is_reverify:
+            logger.info(f"🔄 Повторная верификация канала @{cleaned_username}")
+
+            # Генерируем новый код верификации
+            import secrets
+            new_verification_code = f'VERIFY_{secrets.token_hex(4).upper()}'
+
+            # Обновляем код верификации в существующем канале
+            cursor.execute("""
+                           UPDATE channels
+                           SET verification_code = ?,
+                               status            = 'pending',
+                               is_verified       = FALSE,
+                               updated_at        = ?
+                           WHERE id = ?
+                           """, (new_verification_code, datetime.now().isoformat(), existing_channel['id']))
+
+            conn.commit()
+            conn.close()
+
+            logger.info(f"✅ Новый код верификации для канала {existing_channel['id']}: {new_verification_code}")
+
+            return jsonify({
+                'success': True,
+                'message': 'Новый код верификации сгенерирован',
+                'verification_code': new_verification_code,
+                'channel': {
+                    'id': existing_channel['id'],
+                    'username': cleaned_username,
+                    'title': existing_channel['title'],
+                    'verification_code': new_verification_code,
+                    'status': 'pending'
+                }
+            })
 
         # Генерируем код верификации
         import secrets
