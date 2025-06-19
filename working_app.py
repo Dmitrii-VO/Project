@@ -5,6 +5,7 @@
 """
 
 import os
+import sqlite3
 import sys
 import logging
 from typing import Optional, Dict, Any
@@ -493,7 +494,7 @@ channel_db = ChannelDatabase()
 
 # === ENDPOINT'Ы ДЛЯ КАНАЛОВ ===
 @app.route('/api/channels/<int:channel_id>/verify', methods=['PUT', 'POST'])
-def verify_channel_unified(channel_id):
+def verify_channel_unified(channel_id, datetime=None):
     """Единый endpoint для верификации каналов"""
     try:
         logger.info(f"🔍 Запрос верификации канала {channel_id}")
@@ -563,6 +564,88 @@ def verify_channel_unified(channel_id):
                 'verified_at': datetime.now().isoformat()
             }
             updated_channel = channel_db.update_channel(channel_id, updates)
+
+            # ДОБАВИТЬ отправку уведомления пользователю:
+            try:
+                import requests
+                from datetime import datetime
+
+                bot_token = AppConfig.BOT_TOKEN
+                send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+                # Получаем данные пользователя
+                conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+                cursor = conn.cursor()
+
+                cursor.execute("""
+                               SELECT u.first_name, u.last_name, u.username, c.created_at
+                               FROM users u
+                                        JOIN channels c ON c.owner_id = u.id
+                               WHERE c.id = ?
+                                 AND u.telegram_id = ?
+                               """, (channel_id, telegram_user_id))
+
+                user_channel_data = cursor.fetchone()
+                conn.close()
+
+                if user_channel_data:
+                    # Форматируем имя пользователя
+                    user_name_parts = []
+                    if user_channel_data[0]:  # first_name
+                        user_name_parts.append(user_channel_data[0])
+                    if user_channel_data[1]:  # last_name
+                        user_name_parts.append(user_channel_data[1])
+                    full_name = ' '.join(user_name_parts) if user_name_parts else user_channel_data[2] or 'Пользователь'
+
+                    # Форматируем дату добавления
+                    try:
+                        created_at = datetime.fromisoformat(user_channel_data[3])
+                        formatted_date = created_at.strftime('%d.%m.%Y в %H:%M')
+                    except:
+                        formatted_date = 'Недавно'
+
+                    success_message = f"""🎉 <b>Отличная новость!</b>
+
+            ✅ <b>Канал успешно верифицирован!</b>
+
+            👤 <b>Владелец:</b> {full_name}
+            📺 <b>Канал:</b> {channel['title']}
+            📅 <b>Добавлен:</b> {formatted_date}
+            🎉 <b>Поздравляем!</b> Ваш канал верифицирован!
+
+            🚀 <b>Что дальше?</b>
+            - Настройте цены за размещение
+            - Начните получать предложения от рекламодателей
+            - Отслеживайте статистику канала
+            - Управляйте настройками"""
+
+                    # Создаем клавиатуру с кнопкой Mini App
+                    keyboard = {
+                        "inline_keyboard": [
+                            [
+                                {
+                                    "text": "🚀 Перейти в Mini App",
+                                    "web_app": {
+                                        "url": f"{AppConfig.WEBAPP_URL}/channels"
+                                    }
+                                }
+                            ]
+                        ]
+                    }
+
+                    # Отправляем уведомление с кнопкой
+                    requests.post(send_url, json={
+                        'chat_id': telegram_user_id,
+                        'text': success_message,
+                        'parse_mode': 'HTML',
+                        'reply_markup': keyboard
+                    }, timeout=10)
+
+                    logger.info(f"📨 Уведомление о верификации отправлено пользователю {telegram_user_id}")
+
+            except Exception as notification_error:
+                logger.error(f"❌ Ошибка отправки уведомления: {notification_error}")
+
 
             logger.info(f"✅ Канал {channel_id} успешно верифицирован")
 

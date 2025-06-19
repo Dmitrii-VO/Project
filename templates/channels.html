@@ -1617,45 +1617,45 @@
                                 }
                             });
 
-                                // Поиск по каналам
-                                document.querySelector('.search-input').addEventListener('input', function() {
-                                    const searchTerm = this.value.toLowerCase();
-                                    const channelCards = document.querySelectorAll('.channel-card');
+            // Поиск по каналам
+            document.querySelector('.search-input').addEventListener('input', function() {
+                const searchTerm = this.value.toLowerCase();
+                const channelCards = document.querySelectorAll('.channel-card');
 
-                                    channelCards.forEach(card => {
-                                        const title = card.querySelector('.channel-title')?.textContent.toLowerCase() || '';
-                                        const username = card.querySelector('.channel-username')?.textContent.toLowerCase() || '';
+                channelCards.forEach(card => {
+                    const title = card.querySelector('.channel-title')?.textContent.toLowerCase() || '';
+                    const username = card.querySelector('.channel-username')?.textContent.toLowerCase() || '';
 
-                                        if (title.includes(searchTerm) || username.includes(searchTerm)) {
-                                            card.style.display = 'block';
-                                        } else {
-                                            card.style.display = 'none';
-                                        }
-                                    });
-                                                            });
+                    if (title.includes(searchTerm) || username.includes(searchTerm)) {
+                        card.style.display = 'block';
+                    } else {
+                        card.style.display = 'none';
+                    }
+                });
+                                        });
 
-                                    // Инициализация при загрузке страницы
-                                    document.addEventListener('DOMContentLoaded', function() {
-                                        console.log('📺 Страница каналов загружена');
+                // Инициализация при загрузке страницы
+                document.addEventListener('DOMContentLoaded', function() {
+                    console.log('📺 Страница каналов загружена');
 
-                                        // Загружаем список каналов пользователя
-                                        loadUserChannels();
-                                    });
+                    // Загружаем список каналов пользователя
+                    loadUserChannels();
+                });
 
-                                    async function loadUserChannels() {
-                                try {
-                                    console.log('🔍 Начинаем загрузку каналов пользователя...');
+        async function loadUserChannels() {
+            try {
+                console.log('🔍 Начинаем загрузку каналов пользователя...');
 
-                                    // Показываем индикатор загрузки
-                                    showLoadingState();
+                // Показываем индикатор загрузки
+                showLoadingState();
 
-                                    // Получаем данные Telegram пользователя
-                                    const telegramUser = getTelegramUser();
-                                    console.log('👤 Telegram пользователь:', telegramUser);
+                // Получаем данные Telegram пользователя
+                const telegramUser = getTelegramUser();
+                console.log('👤 Telegram пользователь:', telegramUser);
 
-                                    const headers = {
-                                        'Content-Type': 'application/json'
-                                    };
+                const headers = {
+                    'Content-Type': 'application/json'
+                };
 
         // Добавляем Telegram данные в заголовки если доступны
         if (telegramUser) {
@@ -1816,15 +1816,17 @@
                 ` : ''}
 
                 <div class="channel-actions">
-                    <button class="btn btn-secondary btn-sm" onclick="editChannel(${channel.id})">
-                        ⚙️ Настройки
-                    </button>
-                    <button class="btn btn-primary btn-sm" onclick="viewChannelStats(${channel.id})">
-                        📊 Статистика
-                    </button>
+                    ${(channel.is_verified || channel.status === 'verified') ? `
+                        <button class="btn btn-outline-primary btn-sm" onclick="showChannelSettings(${channel.id})">
+                            ⚙️ Настройки
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" onclick="showChannelStats(${channel.id})">
+                            📊 Статистика
+                        </button>
+                    ` : ''}
                     ${(!channel.is_verified && channel.status !== 'verified') ? `
-                        <button class="btn btn-warning btn-sm" onclick="verifyChannel(${channel.id})">
-                            ✅ Верифицировать
+                        <button class="btn btn-warning btn-sm" onclick="showVerificationModal(${channel.id}, '${channel.title?.replace(/'/g, "\\'")}', '${channel.username || ""}')">
+                            🔒 Верифицировать
                         </button>
                     ` : ''}
                     <button class="btn btn-danger btn-sm" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">
@@ -1924,6 +1926,10 @@
         function showChannelStats(channelId) {
             alert('Статистика канала (в разработке)');
         }
+
+        function showChannelSettings(channelId) {
+    showInfoNotification('⚙️ Настройки канала скоро будут доступны');
+}
 
         function editChannel(channelId) {
             alert('Редактирование канала (в разработке)');
@@ -2115,6 +2121,270 @@
             }
         }
 
+        // Переменная для хранения данных верификации
+        let verificationChannelData = null;
+
+        /**
+         * Показать окно верификации
+         */
+        function showVerificationModal(channelId, channelName, channelUsername) {
+            console.log(`🔐 Показываем верификацию для канала ${channelId}`);
+
+            verificationChannelData = { id: channelId, name: channelName, username: channelUsername };
+
+            const content = document.getElementById('verificationContent');
+            content.innerHTML = `
+                <div class="verification-info">
+                    <div class="channel-info" style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                        <div class="channel-avatar" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; background: #e5e7eb; border-radius: 50%; font-weight: bold; font-size: 1.2rem;">
+                            ${channelName.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: #111827; font-size: 1.1rem;">${channelName}</div>
+                            <div style="color: #6b7280;">${channelUsername || 'Без username'}</div>
+                        </div>
+                    </div>
+
+                    <div class="instruction-block" style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+                        <h4 style="color: #0369a1; margin-bottom: 12px;">📋 Инструкция по верификации:</h4>
+                        <ol style="margin: 0; padding-left: 20px; color: #374151;">
+                            <li style="margin-bottom: 8px;">Нажмите кнопку "Начать верификацию"</li>
+                            <li style="margin-bottom: 8px;">Получите уникальный код верификации</li>
+                            <li style="margin-bottom: 8px;">Опубликуйте код в вашем канале <strong>${channelUsername}</strong></li>
+                            <li style="margin-bottom: 8px;">Переслать сообщение с кодом нашему боту</li>
+                            <li style="margin-bottom: 8px;">Дождитесь подтверждения верификации</li>
+                        </ol>
+                    </div>
+
+                    <div class="warning-block" style="background: #fef3cd; border: 1px solid #f59e0b; border-radius: 8px; padding: 12px;">
+                        <small style="color: #92400e;">
+                            💡 <strong>Совет:</strong> После публикации кода вы можете удалить сообщение из канала.
+                            Главное — успеть переслать его боту!
+                        </small>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('verificationModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        /**
+         * Закрыть окно верификации
+         */
+        function closeVerificationModal() {
+            console.log('❌ Закрываем окно верификации');
+            document.getElementById('verificationModal').style.display = 'none';
+            document.body.style.overflow = 'auto';
+            verificationChannelData = null;
+        }
+
+        /**
+         * Начать процесс верификации
+         */
+        async function startVerification() {
+            if (!verificationChannelData) {
+                console.error('❌ Нет данных канала для верификации');
+                return;
+            }
+
+            const startBtn = document.getElementById('startVerificationBtn');
+            const originalText = startBtn.textContent;
+
+            try {
+                startBtn.disabled = true;
+                startBtn.textContent = '⏳ Запуск верификации...';
+
+                const telegramUser = getTelegramUser();
+                if (!telegramUser) {
+                    throw new Error('Данные пользователя Telegram недоступны');
+                }
+
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': telegramUser.id.toString()
+                };
+
+                if (telegramUser.username) {
+                    headers['X-Telegram-Username'] = telegramUser.username;
+                }
+
+                // Запускаем верификацию
+                const response = await fetch(`/api/channels/${verificationChannelData.id}/verify`, {
+                    method: 'PUT',
+                    headers: headers
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    if (data.success) {
+                        // Верификация успешна
+                        showSuccessNotification(data.message || 'Канал успешно верифицирован!');
+                        closeVerificationModal();
+
+                        // Обновляем список каналов
+                        setTimeout(() => {
+                            loadUserChannels();
+                        }, 1000);
+                    } else {
+                        // Показываем код верификации
+                        showVerificationCode(data);
+                    }
+                } else {
+                    throw new Error(data.error || 'Ошибка верификации');
+                }
+
+            } catch (error) {
+                console.error('💥 Ошибка верификации:', error);
+                showErrorNotification(error.message);
+            } finally {
+                startBtn.disabled = false;
+                startBtn.textContent = originalText;
+            }
+        }
+
+        /**
+         * Показать код верификации
+         */
+        function showVerificationCode(data) {
+            const content = document.getElementById('verificationContent');
+            content.innerHTML = `
+                <div class="verification-code-display">
+                    <div class="channel-info" style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                        <div class="channel-avatar" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; background: #e5e7eb; border-radius: 50%; font-weight: bold; font-size: 1.2rem;">
+                            ${verificationChannelData.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                            <div style="font-weight: 600; color: #111827; font-size: 1.1rem;">${verificationChannelData.name}</div>
+                            <div style="color: #6b7280;">${verificationChannelData.username || 'Без username'}</div>
+                        </div>
+                    </div>
+
+                    <div class="code-block" style="background: #1f2937; color: #10b981; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: center;">
+                        <h4 style="color: #10b981; margin-bottom: 15px;">🔐 Ваш код верификации:</h4>
+                        <div class="verification-code" style="
+                            font-family: 'Courier New', monospace;
+                            font-size: 24px;
+                            font-weight: bold;
+                            letter-spacing: 2px;
+                            cursor: pointer;
+                            user-select: all;
+                            padding: 10px;
+                            border: 2px dashed #10b981;
+                            border-radius: 4px;
+                            transition: all 0.2s ease;
+                        " onclick="copyVerificationCode(this, '${data.verification_code}')">
+                            ${data.verification_code}
+                        </div>
+                        <small style="color: #9ca3af; margin-top: 10px; display: block;">
+                            Нажмите на код, чтобы скопировать
+                        </small>
+                    </div>
+
+                    <div class="instruction-steps" style="background: #f9fafb; border-radius: 8px; padding: 16px;">
+                        <h4 style="color: #374151; margin-bottom: 12px;">📋 Следующие шаги:</h4>
+                        <ol style="margin: 0; padding-left: 20px; color: #4b5563;">
+                            <li style="margin-bottom: 8px;">Скопируйте код выше</li>
+                            <li style="margin-bottom: 8px;">Откройте ваш канал <strong>${verificationChannelData.username}</strong></li>
+                            <li style="margin-bottom: 8px;">Опубликуйте сообщение с этим кодом</li>
+                            <li style="margin-bottom: 8px;">Переслать сообщение нашему боту</li>
+                            <li>Дождитесь автоматического подтверждения</li>
+                        </ol>
+                    </div>
+                </div>
+            `;
+
+            // Изменяем кнопку
+            const startBtn = document.getElementById('startVerificationBtn');
+            startBtn.textContent = '🔄 Проверить статус';
+            startBtn.onclick = () => checkVerificationStatus();
+        }
+
+        /**
+         * Копировать код верификации
+         */
+        function copyVerificationCode(element, code) {
+            navigator.clipboard.writeText(code).then(() => {
+                element.style.background = '#065f46';
+                element.innerHTML = code + ' ✅';
+
+                setTimeout(() => {
+                    element.style.background = 'transparent';
+                    element.innerHTML = code;
+                }, 2000);
+            }).catch(() => {
+                // Fallback для старых браузеров
+                const textArea = document.createElement('textarea');
+                textArea.value = code;
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+
+                element.style.background = '#065f46';
+                element.innerHTML = code + ' ✅';
+
+                setTimeout(() => {
+                    element.style.background = 'transparent';
+                    element.innerHTML = code;
+                }, 2000);
+            });
+        }
+
+        /**
+         * Проверить статус верификации
+         */
+        async function checkVerificationStatus() {
+            if (!verificationChannelData) return;
+
+            try {
+                const telegramUser = getTelegramUser();
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': telegramUser.id.toString()
+                };
+
+                const response = await fetch(`/api/channels/${verificationChannelData.id}`, {
+                    method: 'GET',
+                    headers: headers
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.channel && (data.channel.is_verified || data.channel.status === 'verified')) {
+                    // Канал верифицирован!
+                    showSuccessNotification('🎉 Канал успешно верифицирован!');
+                    closeVerificationModal();
+
+                    // Обновляем список каналов
+                    setTimeout(() => {
+                        loadUserChannels();
+                    }, 1000);
+                } else {
+                    showInfoNotification('⏳ Верификация еще не завершена. Убедитесь, что код опубликован и переслан боту.');
+                }
+
+            } catch (error) {
+                console.error('Ошибка проверки статуса:', error);
+                showErrorNotification('Ошибка проверки статуса верификации');
+            }
+        }
+
+        // Функции уведомлений
+        function showSuccessNotification(message) {
+            showNotification('success', message);
+        }
+
+        function showErrorNotification(message) {
+            showNotification('error', message);
+        }
+
+        function showInfoNotification(message) {
+            showNotification('info', message);
+        }
+
+
     </script>
 <!-- Модальное окно подтверждения удаления -->
 <div id="deleteChannelModal" class="modal" style="display: none;">
@@ -2149,7 +2419,55 @@
     </div>
 </div>
 
+<!-- Модальное окно верификации -->
+<div id="verificationModal" class="modal" style="display: none;">
+    <div class="modal-overlay" onclick="closeVerificationModal()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>🔐 Подтвердите владение каналом</h3>
+            <button class="modal-close" onclick="closeVerificationModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="verificationContent">
+                <!-- Содержимое будет заполнено JavaScript -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeVerificationModal()">
+                Отмена
+            </button>
+            <button class="btn btn-primary" id="startVerificationBtn" onclick="startVerification()">
+                🚀 Начать верификацию
+            </button>
+        </div>
+    </div>
+</div>
+
 <style>
+
+/* Стили для модального окна верификации */
+#verificationModal .modal-content {
+    max-width: 600px;
+}
+
+.verification-code:hover {
+    background: #374151 !important;
+    transform: scale(1.02);
+}
+
+.instruction-block {
+    border-left: 4px solid #0ea5e9;
+}
+
+.code-block {
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.verification-info {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
 /* Стили для модального окна удаления */
 .modal {
     position: fixed;
@@ -2466,13 +2784,16 @@ async function confirmChannelDeletion() {
         const data = await response.json();
 
         if (response.ok && data.success) {
-            console.log('✅ Канал успешно удален');
+            console.log('✅ Канал удален:', data.message);
+            closeDeleteModal();
 
             // Показываем уведомление об успехе
-            showNotification('success', '✅ Канал успешно удален');
+            showSuccessNotification(data.message || 'Канал успешно удален!');
 
-            // Закрываем модальное окно
-            closeDeleteModal();
+            // НОВОЕ: Обновляем список каналов
+            setTimeout(() => {
+                loadUserChannels();
+            }, 1000);
 
             // Удаляем карточку из DOM
             const channelCard = document.querySelector(`[data-channel-id="${channelToDelete}"]`);
