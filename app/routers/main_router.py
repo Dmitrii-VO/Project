@@ -92,5 +92,167 @@ def test_endpoint():
         }
     })
 
+
+# === API СТАТИСТИКИ ===
+# тут считаю количество на главной странице
+@main_bp.route('/api/stats/global')
+def global_stats():
+    """API для получения общей статистики системы"""
+    try:
+        from ..models.database import db_manager
+
+        # Инициализируем статистику нулями
+        stats = {
+            'channels': 0,
+            'users': 0,
+            'offers': 0,
+            'revenue': 0
+        }
+
+        # Безопасный подсчет каналов
+        try:
+            result = db_manager.execute_query(
+                "SELECT COUNT(*) as count FROM channels WHERE is_active = 1",
+                fetch_one=True
+            )
+            if result:
+                stats['channels'] = int(result['count'])
+        except Exception as e:
+            current_app.logger.warning(f"Channels count error: {e}")
+            # Пробуем без фильтра
+            try:
+                result = db_manager.execute_query(
+                    "SELECT COUNT(*) as count FROM channels",
+                    fetch_one=True
+                )
+                if result:
+                    stats['channels'] = int(result['count'])
+            except:
+                pass
+
+        # Безопасный подсчет пользователей
+        try:
+            result = db_manager.execute_query(
+                "SELECT COUNT(*) as count FROM users",
+                fetch_one=True
+            )
+            if result:
+                stats['users'] = int(result['count'])
+        except Exception as e:
+            current_app.logger.warning(f"Users count error: {e}")
+
+        # Безопасный подсчет офферов - пробуем разные варианты
+        try:
+            # Сначала пробуем основную таблицу offers
+            result = db_manager.execute_query(
+                "SELECT COUNT(*) as count FROM offers",
+                fetch_one=True
+            )
+            if result:
+                stats['offers'] = int(result['count'])
+        except Exception as e:
+            current_app.logger.warning(f"Offers count error: {e}")
+            # Пробуем offers_extended
+            try:
+                result = db_manager.execute_query(
+                    "SELECT COUNT(*) as count FROM offers_extended",
+                    fetch_one=True
+                )
+                if result:
+                    stats['offers'] = int(result['count'])
+            except:
+                pass
+
+        # Безопасный подсчет оборота
+        try:
+            # Пробуем через completed offers
+            result = db_manager.execute_query(
+                "SELECT COALESCE(SUM(price), 0) as total FROM offers WHERE status = 'completed'",
+                fetch_one=True
+            )
+            if result and result['total']:
+                stats['revenue'] = int(result['total'])
+        except Exception as e:
+            current_app.logger.warning(f"Revenue calculation error: {e}")
+            # Пробуем offers_extended
+            try:
+                result = db_manager.execute_query(
+                    "SELECT COALESCE(SUM(price), 0) as total FROM offers_extended WHERE status = 'completed'",
+                    fetch_one=True
+                )
+                if result and result['total']:
+                    stats['revenue'] = int(result['total'])
+            except:
+                pass
+
+        current_app.logger.info(f"Global stats calculated: {stats}")
+
+        return jsonify({
+            'success': True,
+            'stats': stats
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Critical error getting global stats: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load statistics',
+            'stats': {
+                'channels': 0,
+                'users': 0,
+                'offers': 0,
+                'revenue': 0
+            }
+        }), 500
+
+# Для диагностики, потом можно удалить
+@main_bp.route('/api/debug/tables')
+def debug_tables():
+    """Диагностический эндпоинт для проверки таблиц"""
+    try:
+        from ..models.database import db_manager
+
+        # Получаем список таблиц
+        tables_result = db_manager.execute_query(
+            "SELECT name FROM sqlite_master WHERE type='table'",
+            fetch_all=True
+        )
+
+        tables_info = {}
+        if tables_result:
+            for table_row in tables_result:
+                table_name = table_row['name']
+                try:
+                    count_result = db_manager.execute_query(
+                        f"SELECT COUNT(*) as count FROM {table_name}",
+                        fetch_one=True
+                    )
+                    tables_info[table_name] = count_result['count'] if count_result else 0
+
+                    # Для основных таблиц показываем структуру
+                    if table_name in ['users', 'channels', 'offers', 'offers_extended']:
+                        schema_result = db_manager.execute_query(
+                            f"PRAGMA table_info({table_name})",
+                            fetch_all=True
+                        )
+                        if schema_result:
+                            columns = [col['name'] for col in schema_result]
+                            tables_info[f"{table_name}_columns"] = columns
+
+                except Exception as e:
+                    tables_info[table_name] = f"Error: {e}"
+
+        return jsonify({
+            'success': True,
+            'tables': tables_info
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Debug tables error: {e}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # Экспорт
 __all__ = ['main_bp']

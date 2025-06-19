@@ -554,19 +554,19 @@
             try {
                 console.log('📊 Загрузка статистики...');
 
-                // Имитация загрузки данных
-                const mockStats = {
-                    channels: 42,
-                    offers: 18,
-                    revenue: 387000,
-                    users: 1234
-                };
+                // Загружаем реальные данные из API
+                const response = await fetch('/api/stats/global');
+                const data = await response.json();
 
-                // Анимированное обновление счетчиков
-                animateCounter('channels-count', mockStats.channels);
-                animateCounter('offers-count', mockStats.offers);
-                animateCounter('revenue-amount', mockStats.revenue, true);
-                animateCounter('users-count', mockStats.users);
+                if (data.success && data.stats) {
+                    // Анимированное обновление счетчиков с реальными данными
+                    animateCounter('channels-count', data.stats.channels);
+                    animateCounter('offers-count', data.stats.offers);
+                    animateCounter('revenue-amount', data.stats.revenue, true);
+                    animateCounter('users-count', data.stats.users);
+                } else {
+                    throw new Error('API returned error or invalid data');
+                }
 
             } catch (error) {
                 console.error('❌ Ошибка загрузки статистики:', error);

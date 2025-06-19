@@ -15,12 +15,6 @@ def get_available_blueprints():
     blueprints = []
 
     try:
-        from .main_routes import main_bp
-        blueprints.append(('main_routes', main_bp, None))
-    except ImportError:
-        pass
-
-    try:
         from .auth import auth_bp
         blueprints.append(('auth', auth_bp, '/api/auth'))
     except ImportError:

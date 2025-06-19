@@ -120,43 +120,6 @@ def register_routes(app: Flask):
     """Регистрация всех маршрутов"""
     logger = logging.getLogger(__name__)
 
-    # Основные маршруты
-    try:
-        from app.api.main_routes import main_bp
-        # ИЗМЕНИТЬ ЭТУ СТРОКУ:
-        # app.register_blueprint(main_bp)
-        # НА:
-        app.register_blueprint(main_bp, name='main_routes')
-        logger.info("✅ Основные маршруты зарегистрированы")
-    except ImportError as e:
-        logger.warning(f"⚠️ Основные маршруты недоступны: {e}")
-
-        # Создаем базовые маршруты как fallback ТОЛЬКО если main_bp не загружен
-        @app.route('/')
-        def fallback_index():
-            return '''
-            <!DOCTYPE html>
-            <html>
-            <head><title>Telegram Mini App</title></head>
-            <body>
-                <h1>🚀 Telegram Mini App</h1>
-                <p>Модульная архитектура запущена!</p>
-                <ul>
-                    <li><a href="/test">Test API</a></li>
-                    <li><a href="/health">Health Check</a></li>
-                </ul>
-            </body>
-            </html>
-            '''
-
-        @app.route('/test')
-        def fallback_test():
-            from flask import jsonify
-            return jsonify({
-                'status': 'OK',
-                'message': 'Модульная архитектура работает!',
-                'architecture': 'modular'
-            })
 
 
 def register_error_handlers(app: Flask):
