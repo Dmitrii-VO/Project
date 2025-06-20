@@ -93,80 +93,130 @@ class TelegramChannelAnalyzer:
             logger.warning(f"Ошибка получения данных через Bot API: {e}")
             
         return None
-    
+
     def get_channel_info_via_scraping(self, username: str) -> Optional[Dict]:
         """
-        Получение базовой информации о канале через веб-скрапинг (осторожно с rate limits)
+        Получение базовой информации о канале через веб-скрапинг (улучшенная версия)
         """
         try:
-            # Простой запрос к публичной странице канала
-            url = f"https://t.me/{username}"
-            
+            url = f"https://t.me/s/{username}"  # ✅ Используем /s/ для лучшего доступа к данным
+
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
             }
-            
+
             response = self.session.get(url, headers=headers, timeout=15)
-            
+
             if response.status_code == 200:
                 content = response.text
-                
-                # Простой парсинг метаданных (очень базовый)
-                title_match = re.search(r'<title>([^<]+)</title>', content)
-                desc_match = re.search(r'<meta property="og:description" content="([^"]+)"', content)
-                
                 result = {}
-                
-                if title_match:
-                    result['title'] = title_match.group(1).strip()
-                    
-                if desc_match:
-                    result['description'] = desc_match.group(1).strip()
-                    
-                # Попытка найти количество подписчиков (очень приблизительно)
-                subscribers_patterns = [
-                    r'(\d+(?:\.\d+)?[KМ]?)\s*(?:subscribers|подписчиков)',
-                    r'(\d+(?:\s\d+)*)\s*(?:members|участников)'
+
+                # Улучшенный парсинг заголовка
+                title_patterns = [
+                    r'<title>([^<]+)</title>',
+                    r'property="og:title" content="([^"]+)"',
+                    r'class="tgme_page_title"[^>]*>([^<]+)</div>'
                 ]
-                
-                for pattern in subscribers_patterns:
-                    match = re.search(pattern, content, re.IGNORECASE)
+
+                for pattern in title_patterns:
+                    match = re.search(pattern, content)
                     if match:
-                        result['subscribers_text'] = match.group(1)
+                        result['title'] = match.group(1).strip()
                         break
-                
+
+                # Улучшенный парсинг описания
+                desc_patterns = [
+                    r'<meta property="og:description" content="([^"]+)"',
+                    r'class="tgme_page_description"[^>]*>([^<]+)</div>'
+                ]
+
+                for pattern in desc_patterns:
+                    match = re.search(pattern, content)
+                    if match:
+                        result['description'] = match.group(1).strip()
+                        break
+
+                # ИСПРАВЛЕННЫЙ парсинг подписчиков - ищем в разных местах
+                subscribers_patterns = [
+                    r'(\d+(?:\s*\d+)*)\s*(?:subscribers|подписчиков|members|участников)',  # Стандартный формат
+                    r'(\d+(?:\.\d+)?[KММKk])\s*(?:subscribers|подписчиков|members|участников)',  # С K/M
+                    r'"subscribers_count":(\d+)',  # JSON в коде страницы
+                    r'data-num="(\d+)"',  # Атрибуты данных
+                    r'class="counter_value"[^>]*>(\d+(?:\s*\d+)*)',  # Счетчик
+                ]
+
+                max_subscribers = 0  # Берем максимальное найденное значение
+
+                for pattern in subscribers_patterns:
+                    matches = re.finditer(pattern, content, re.IGNORECASE)
+                    for match in matches:
+                        subs_text = match.group(1)
+                        parsed_count = self.parse_subscriber_count(subs_text)
+                        if parsed_count > max_subscribers:
+                            max_subscribers = parsed_count
+                            result['subscribers_text'] = subs_text
+
+                # Логирование для отладки
+                logger.info(f"Скрапинг канала {username}: найдено {max_subscribers} подписчиков")
+
                 return result if result else None
-                
+
         except Exception as e:
             logger.warning(f"Ошибка скрапинга канала {username}: {e}")
-            
+
         return None
-    
+
     def parse_subscriber_count(self, text: str) -> int:
         """
-        Парсинг количества подписчиков из текста
+        Улучшенный парсинг количества подписчиков из текста
         """
         if not text:
             return 0
-            
-        text = text.lower().replace(' ', '').replace(',', '')
-        
-        # Обработка K, M, К, М
-        multipliers = {'k': 1000, 'м': 1000, 'm': 1000000, 'к': 1000}
-        
+
+        # Убираем лишние символы но сохраняем структуру
+        text = text.replace(',', '').replace(' ', '').lower()
+
+        # Обработка сокращений K, M, К, М
+        multipliers = {
+            'k': 1000, 'к': 1000,
+            'm': 1000000, 'м': 1000000,
+            'млн': 1000000, 'mln': 1000000,
+            'тыс': 1000, 'th': 1000
+        }
+
         for suffix, multiplier in multipliers.items():
             if text.endswith(suffix):
                 try:
-                    number = float(text[:-1])
-                    return int(number * multiplier)
+                    number_part = text[:-len(suffix)]
+                    number = float(number_part)
+                    result = int(number * multiplier)
+                    logger.debug(f"Parsed '{text}' as {result} subscribers")
+                    return result
                 except ValueError:
                     continue
-        
-        # Обычное число
-        try:
-            return int(re.sub(r'[^\d]', '', text))
-        except ValueError:
-            return 0
+
+        # Извлекаем все числа и берем самое большое (часто правильное)
+        numbers = re.findall(r'\d+', text)
+        if numbers:
+            # Если несколько чисел - объединяем их или берем самое длинное
+            if len(numbers) == 1:
+                try:
+                    return int(numbers[0])
+                except ValueError:
+                    return 0
+            else:
+                # Пробуем объединить (для случаев типа "397 812")
+                combined = ''.join(numbers)
+                try:
+                    return int(combined)
+                except ValueError:
+                    # Если не получается - берем самое большое число
+                    try:
+                        return max(int(num) for num in numbers)
+                    except ValueError:
+                        return 0
+
+        return 0
     
     def generate_realistic_stats(self, username: str, base_subscribers: int = None) -> Dict:
         """
@@ -254,7 +304,7 @@ class TelegramChannelAnalyzer:
         
         # Корректировка на основе вовлеченности
         if engagement_rate > 10:
-            base_cmp *= 1.4
+            base_cpm *= 1.4
         elif engagement_rate > 7:
             base_cpm *= 1.2
         elif engagement_rate < 3:

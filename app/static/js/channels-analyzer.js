@@ -1,92 +1,113 @@
 class ChannelAnalyzer {
             constructor() {
-                this.apiUrl = '/api/channels';
+                this.apiUrl = '/api/analyzer';
                 this.telegramBotToken = '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8';
             }
 
             async analyzeChannel(url) {
-                // Извлекаем username из различных форматов URL
-                const username = this.extractUsername(url);
-                if (!username) {
-                    throw new Error('Неверный формат ссылки на канал');
+    const username = this.extractUsername(url);
+    if (!username) {
+        throw new Error('Неверный формат ссылки на канал');
+    }
+
+    this.showLoading();
+
+    try {
+        // ✅ ПЕРВЫМ ДЕЛОМ пробуем Telegram Bot API
+        console.log('🤖 Пробуем получить данные через Telegram Bot API...');
+        return await this.getTelegramChannelInfo(username);
+
+    } catch (telegramError) {
+        console.log('❌ Telegram Bot API не сработал:', telegramError.message);
+
+        try {
+            // 🔄 Fallback к серверу
+            console.log('🔄 Пробуем серверный анализатор...');
+            const response = await fetch(`${this.apiUrl}/analyze`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    channel_url: url
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    console.log('✅ Получены данные от сервера');
+                    return data;
+                } else {
+                    throw new Error(data.error || 'Сервер вернул ошибку');
                 }
-
-                this.showLoading();
-
-                try {
-                    // Запрос к серверу для получения данных канала
-                    const response = await fetch(`${this.apiUrl}/analyze`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            channel_username: username,
-                            action: 'analyze'
-                        })
-                    });
-
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.success) {
-                            return data;
-                        } else {
-                            throw new Error(data.error || 'Канал не найден');
-                        }
-                    } else {
-                        // Если API недоступен, пробуем прямой запрос к Telegram
-                        return await this.getTelegramChannelInfo(username);
-                    }
-                } catch (error) {
-                    console.error('Ошибка API:', error);
-                    // Fallback к прямому запросу
-                    return await this.getTelegramChannelInfo(username);
-                }
+            } else {
+                throw new Error('Сервер недоступен');
             }
+        } catch (serverError) {
+            console.error('❌ Ошибка сервера:', serverError);
+            throw new Error('Не удалось получить данные канала ни одним способом');
+        }
+    }
+}
 
             async getTelegramChannelInfo(username) {
-                try {
-                    // Прямой запрос к Telegram Bot API
-                    const telegramUrl = `https://api.telegram.org/bot${this.telegramBotToken}/getChat?chat_id=@${username}`;
+    try {
+        console.log('🤖 Пробуем Telegram Bot API для:', username);
 
-                    const response = await fetch(telegramUrl);
-                    const data = await response.json();
+        // Прямой запрос к Telegram Bot API
+        const telegramUrl = `https://api.telegram.org/bot${this.telegramBotToken}/getChat?chat_id=@${username}`;
 
-                    if (data.ok && data.result) {
-                        const channelInfo = data.result;
+        const response = await fetch(telegramUrl);
+        const data = await response.json();
 
-                        // Получаем количество участников
-                        const membersResponse = await fetch(
-                            `https://api.telegram.org/bot${this.telegramBotToken}/getChatMemberCount?chat_id=@${username}`
-                        );
-                        const membersData = await membersResponse.json();
-                        const memberCount = membersData.ok ? membersData.result : 0;
+        console.log('📥 Ответ getChat:', data);
 
-                        return {
-                            success: true,
-                            data: {
-                                username: channelInfo.username ? `@${channelInfo.username}` : `@${username}`,
-                                title: channelInfo.title || this.generateChannelTitle(username),
-                                avatar_letter: (channelInfo.title || username).charAt(0).toUpperCase(),
-                                subscribers: this.formatSubscriberCount(memberCount),
-                                verified: channelInfo.is_verified || false,
-                                category: this.suggestCategory(channelInfo.title || username),
-                                description: channelInfo.description || this.generateDescription(channelInfo.title || username),
-                                engagement_rate: this.calculateEngagementRate(memberCount),
-                                channel_type: channelInfo.type,
-                                invite_link: channelInfo.invite_link,
-                                photo: channelInfo.photo ? channelInfo.photo.big_file_id : null,
-                                raw_data: channelInfo
-                            }
-                        };
-                    } else {
-                        throw new Error(data.description || 'Канал не найден или недоступен');
-                    }
-                } catch (error) {
-                    console.error('Ошибка Telegram API:', error);
-                    throw new Error(`Не удалось получить данные канала: ${error.message}`);
+        if (data.ok && data.result) {
+            const channelInfo = data.result;
+
+            // Получаем количество участников
+            const membersResponse = await fetch(
+                `https://api.telegram.org/bot${this.telegramBotToken}/getChatMemberCount?chat_id=@${username}`
+            );
+            const membersData = await membersResponse.json();
+
+            console.log('👥 Ответ getChatMemberCount:', membersData);
+
+            const memberCount = membersData.ok ? membersData.result : 0;
+
+            console.log('🔢 Финальное количество участников:', memberCount);
+            console.log('📊 Отформатированное:', this.formatSubscriberCount(memberCount));
+
+            const result = {
+                success: true,
+                data: {
+                    username: channelInfo.username ? `@${channelInfo.username}` : `@${username}`,
+                    title: channelInfo.title || this.generateChannelTitle(username),
+                    avatar_letter: (channelInfo.title || username).charAt(0).toUpperCase(),
+                    subscribers: this.formatSubscriberCount(memberCount),
+                    raw_subscriber_count: memberCount, // ✅ Добавляем сырое число
+                    verified: channelInfo.is_verified || false,
+                    category: this.suggestCategory(channelInfo.title || username),
+                    description: channelInfo.description || this.generateDescription(channelInfo.title || username),
+                    engagement_rate: this.calculateEngagementRate(memberCount),
+                    channel_type: channelInfo.type,
+                    invite_link: channelInfo.invite_link,
+                    photo: channelInfo.photo ? channelInfo.photo.big_file_id : null,
+                    raw_data: channelInfo
                 }
-            }
+            };
+
+            console.log('✅ Финальный результат:', result);
+            return result;
+        } else {
+            throw new Error(data.description || 'Канал не найден или недоступен');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка Telegram API:', error);
+        throw new Error(`Не удалось получить данные канала: ${error.message}`);
+    }
+}
 
             formatSubscriberCount(count) {
                 if (count >= 1000000) {
@@ -208,7 +229,10 @@ class ChannelAnalyzer {
             // Замените существующую функцию на эту:
 
             showChannelPreview(channelData) {
-                console.log('📊 Показываем превью канала:', channelData);
+                    console.log('🖼️ Показываем превью с данными:', channelData);
+                    const data = channelData?.data || channelData; // Поддерживаем оба формата
+                    console.log('📊 Данные о подписчиках в превью:', data.subscribers);
+                    console.log('📈 Сырое количество подписчиков:', data.raw_subscriber_count);
 
                 const preview = document.getElementById('channelPreview');
                 if (!preview) {
@@ -217,7 +241,7 @@ class ChannelAnalyzer {
                 }
 
                 // ИСПРАВЛЕНИЕ 1: Безопасное извлечение данных
-                const data = channelData?.data || channelData; // Поддерживаем оба формата
+
 
                 if (!data) {
                     console.error('❌ Данные канала отсутствуют');
@@ -260,10 +284,7 @@ class ChannelAnalyzer {
                                 <span class="stat-value">${engagement_rate}%</span>
                                 <span class="stat-label">Вовлеченность</span>
                             </div>
-                            <div class="stat-item">
-                                <span class="stat-value">${data.channel_type || 'channel'}</span>
-                                <span class="stat-label">Тип</span>
-                            </div>
+
                         </div>
                         <div style="margin-top: 16px; padding: 12px; background: var(--bg-primary); border-radius: var(--border-radius-sm);">
                             <strong>✅ Канал найден в Telegram</strong><br>

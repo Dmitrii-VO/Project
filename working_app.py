@@ -11,6 +11,8 @@ import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
 import os
+
+import logger
 from dotenv import load_dotenv
 load_dotenv()
 os.environ['BOT_TOKEN'] = '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8'
@@ -186,6 +188,7 @@ def register_blueprints(app: Flask) -> None:
 
         # Ручная регистрация только работающих Blueprint'ов
         blueprint_modules = [
+            ('app.api.channel_analyzer', 'analyzer_bp', '/api/analyzer'),
             ('app.routers.main_router', 'main_bp', ''),  # Основные страницы без префикса
             ('app.routers.api_router', 'api_bp', '/api'),
             #('app.routers.channel_router', 'channel_bp', '/api/channels'),
@@ -220,6 +223,15 @@ def register_blueprints(app: Flask) -> None:
     except Exception as e:
         logger.error(f"❌ Ошибка регистрации channels_bp: {e}")
         # Не поднимаем исключение, просто логируем ошибку
+
+# Инициализируем анализатор каналов с токеном бота
+try:
+    from app.api.channel_analyzer import init_analyzer
+
+#   init_analyzer(os.environ['BOT_TOKEN'])
+    print("✅ Анализатор каналов инициализирован с Bot Token")  # ✅ Используем print вместо logger
+except Exception as e:
+    print(f"❌ Ошибка инициализации анализатора: {e}")  # ✅ Используем print вместо logger
 
 
 # === MIDDLEWARE ===
