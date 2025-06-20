@@ -5,39 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Аналитика - Telegram Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/date-fns/1.30.1/date_fns.min.js"></script>
     <style>
+        /* ТОЧНО ТЕ ЖЕ CSS ПЕРЕМЕННЫЕ, ЧТО В INDEX.HTML */
         :root {
             --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
             --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
             --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-            
+            --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+
             --primary-color: #667eea;
             --secondary-color: #764ba2;
-            --accent-color: #f093fb;
             --success-color: #4facfe;
             --warning-color: #ff9a56;
             --danger-color: #ff6b6b;
-            
+
             --text-primary: #2d3748;
             --text-secondary: #718096;
             --text-muted: #a0aec0;
             --bg-primary: #ffffff;
             --bg-secondary: #f7fafc;
-            --bg-tertiary: #edf2f7;
             --border-color: #e2e8f0;
-            
-            --border-radius: 16px;
-            --border-radius-sm: 8px;
-            --border-radius-lg: 24px;
+
+            --border-radius: 12px;
+            --border-radius-sm: 6px;
             --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
             --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
-            --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
             --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
 
         * {
@@ -56,876 +52,633 @@
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 12px;
         }
 
-        /* Header */
-        .analytics-header {
+        /* HERO SECTION В СТИЛЕ INDEX.HTML */
+        .hero-section {
+            text-align: center;
+            padding: 24px 16px;
             background: var(--primary-gradient);
             color: white;
-            padding: 32px 24px;
-            border-radius: var(--border-radius-lg);
-            margin-bottom: 32px;
-            box-shadow: var(--shadow-lg);
-        }
-
-        .analytics-header h1 {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .analytics-header p {
-            font-size: 1.1rem;
-            opacity: 0.9;
-        }
-
-        /* Time Range Selector */
-        .time-range-selector {
-            background: white;
-            padding: 20px;
             border-radius: var(--border-radius);
-            margin-bottom: 24px;
-            box-shadow: var(--shadow-md);
-            display: flex;
-            gap: 16px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        .time-range-btn {
-            padding: 8px 16px;
-            border: 2px solid var(--border-color);
-            background: white;
-            border-radius: var(--border-radius-sm);
-            cursor: pointer;
-            transition: var(--transition);
-            font-weight: 500;
-        }
-
-        .time-range-btn.active {
-            background: var(--primary-gradient);
-            color: white;
-            border-color: transparent;
-        }
-
-        .time-range-btn:hover {
-            border-color: var(--primary-color);
-        }
-
-        /* KPI Cards Grid */
-        .kpi-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 24px;
-            margin-bottom: 32px;
-        }
-
-        .kpi-card {
-            background: white;
-            padding: 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
-            transition: var(--transition);
+            margin-bottom: 20px;
             position: relative;
             overflow: hidden;
         }
 
-        .kpi-card::before {
+        .hero-section::before {
             content: '';
             position: absolute;
             top: 0;
             left: 0;
             right: 0;
-            height: 4px;
-            background: var(--primary-gradient);
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+            opacity: 0.3;
         }
 
-        .kpi-card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-lg);
+        .hero-content {
+            position: relative;
+            z-index: 2;
         }
 
-        .kpi-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 16px;
+        .hero-icon {
+            font-size: 24px;
+            margin-bottom: 12px;
+            display: block;
+            animation: bounceIn 1s ease-out;
         }
 
-        .kpi-icon {
-            width: 48px;
-            height: 48px;
+        .hero-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 8px;
+            letter-spacing: -0.02em;
+            animation: fadeInUp 1s ease-out 0.2s both;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-bottom: 0;
+            font-weight: 400;
+            animation: fadeInUp 1s ease-out 0.4s both;
+        }
+
+        /* BACK BUTTON */
+        .back-btn {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 8px 12px;
             border-radius: var(--border-radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            z-index: 3;
+        }
+
+        .back-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        /* STATS GRID В СТИЛЕ INDEX.HTML */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 16px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+        }
+
+        .stat-icon {
+            font-size: 18px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: 800;
+            color: #2d3748;
+            margin-bottom: 6px;
+            min-height: 30px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 24px;
-            background: var(--bg-tertiary);
         }
 
-        .kpi-trend {
+        .stat-label {
+            color: #718096;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* NAVIGATION GRID В СТИЛЕ INDEX.HTML */
+        .navigation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .nav-card {
+            background: white;
+            padding: 16px;
+            border-radius: var(--border-radius);
+            text-decoration: none;
+            color: inherit;
+            transition: var(--transition);
+            border: 1px solid rgba(0, 0, 0, 0.05);
             display: flex;
             align-items: center;
-            gap: 4px;
-            font-size: 0.875rem;
-            font-weight: 600;
+            gap: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            cursor: pointer;
         }
 
-        .kpi-trend.positive {
-            color: var(--success-color);
+        .nav-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            text-decoration: none;
+            color: inherit;
         }
 
-        .kpi-trend.negative {
-            color: var(--danger-color);
+        .nav-card.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
 
-        .kpi-value {
-            font-size: 2.5rem;
+        .nav-icon {
+            font-size: 20px;
+            flex-shrink: 0;
+            width: 24px;
+            text-align: center;
+        }
+
+        .nav-content h3 {
+            font-size: 16px;
             font-weight: 700;
             margin-bottom: 4px;
-            color: var(--text-primary);
+            color: inherit;
         }
 
-        .kpi-label {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-            font-weight: 500;
+        .nav-content p {
+            color: inherit;
+            opacity: 0.8;
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.4;
         }
 
-        .kpi-description {
-            color: var(--text-muted);
-            font-size: 0.75rem;
-            margin-top: 8px;
-        }
-
-        /* Charts Grid */
-        .charts-grid {
+        /* CHARTS CONTAINER */
+        .charts-container {
             display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 24px;
-            margin-bottom: 32px;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
         }
 
         .chart-card {
             background: white;
-            padding: 24px;
+            padding: 20px;
             border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(0, 0, 0, 0.05);
         }
 
         .chart-header {
-            margin-bottom: 20px;
+            margin-bottom: 16px;
+            text-align: center;
         }
 
         .chart-title {
-            font-size: 1.25rem;
-            font-weight: 600;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
 
         .chart-subtitle {
             color: var(--text-secondary);
-            font-size: 0.875rem;
+            font-size: 14px;
         }
 
-        .chart-container {
-            position: relative;
-            height: 300px;
-        }
-
-        /* Performance Table */
-        .performance-section {
-            background: white;
-            padding: 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
-            margin-bottom: 32px;
-        }
-
-        .performance-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 16px;
-        }
-
-        .performance-table th,
-        .performance-table td {
-            text-align: left;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .performance-table th {
-            background: var(--bg-tertiary);
-            font-weight: 600;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
-
-        .performance-table tr:hover {
-            background: var(--bg-secondary);
-        }
-
-        /* AI Recommendations */
-        .recommendations-section {
-            background: white;
-            padding: 24px;
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow-md);
-            margin-bottom: 32px;
-        }
-
-        .recommendation-item {
-            padding: 16px;
-            background: var(--bg-secondary);
+        .chart-placeholder {
+            height: 200px;
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
             border-radius: var(--border-radius-sm);
-            margin-bottom: 12px;
-            border-left: 4px solid var(--primary-color);
-        }
-
-        .recommendation-type {
-            font-size: 0.75rem;
-            color: var(--primary-color);
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 4px;
-        }
-
-        .recommendation-text {
-            color: var(--text-primary);
-            font-weight: 500;
-            margin-bottom: 4px;
-        }
-
-        .recommendation-impact {
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
-
-        /* Loading States */
-        .loading {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 40px;
             color: var(--text-muted);
+            font-size: 14px;
+            border: 2px dashed var(--border-color);
         }
 
-        .loading::before {
-            content: '';
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--border-color);
-            border-top: 2px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 12px;
+        /* LOADING */
+        .loading {
+            color: var(--text-muted);
+            font-size: 12px;
+            animation: pulse 1.5s infinite;
         }
 
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
-        /* Mobile Responsiveness */
+        /* ANIMATIONS */
+        @keyframes bounceIn {
+            0% { transform: scale(0.3); opacity: 0; }
+            50% { transform: scale(1.05); }
+            70% { transform: scale(0.9); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* МОБИЛЬНАЯ АДАПТИВНОСТЬ КАК В INDEX.HTML */
         @media (max-width: 768px) {
             .container {
+                padding: 8px;
+            }
+
+            .hero-section {
+                padding: 16px 12px;
+                margin-bottom: 16px;
+                border-radius: 8px;
+            }
+
+            .hero-icon {
+                font-size: 2rem;
+                margin-bottom: 8px;
+            }
+
+            .hero-title {
+                font-size: 24px;
+                margin-bottom: 6px;
+                line-height: 1.3;
+            }
+
+            .hero-subtitle {
+                font-size: 14px;
+                line-height: 1.4;
+            }
+
+            .back-btn {
+                left: 12px;
+                padding: 6px 10px;
+                font-size: 12px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                margin-bottom: 20px;
+            }
+
+            .stat-card {
+                padding: 12px;
+                border-radius: 8px;
+            }
+
+            .stat-icon {
+                font-size: 1.25rem;
+                margin-bottom: 6px;
+            }
+
+            .stat-number {
+                font-size: 18px;
+                margin-bottom: 4px;
+                min-height: 24px;
+            }
+
+            .stat-label {
+                font-size: 10px;
+                font-weight: 500;
+            }
+
+            .navigation-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+
+            .nav-card {
+                padding: 12px;
+                gap: 8px;
+                border-radius: 8px;
+            }
+
+            .nav-card:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            }
+
+            .nav-icon {
+                font-size: 1.25rem;
+                width: 20px;
+            }
+
+            .nav-content h3 {
+                font-size: 14px;
+                margin-bottom: 2px;
+                line-height: 1.3;
+            }
+
+            .nav-content p {
+                font-size: 11px;
+                line-height: 1.4;
+            }
+
+            .charts-container {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .chart-card {
                 padding: 16px;
             }
 
-            .analytics-header {
-                padding: 24px 20px;
-            }
-
-            .analytics-header h1 {
-                font-size: 2rem;
-            }
-
-            .charts-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .kpi-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .time-range-selector {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .performance-table {
-                font-size: 0.875rem;
-            }
-
-            .performance-table th,
-            .performance-table td {
-                padding: 8px 12px;
+            .chart-placeholder {
+                height: 150px;
             }
         }
 
-        /* Animation Classes */
-        .fade-in {
-            animation: fadeIn 0.6s ease-out;
+        @media (max-width: 480px) {
+            .container {
+                padding: 6px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 6px;
+                margin-bottom: 16px;
+            }
+
+            .hero-section {
+                padding: 12px 8px;
+            }
+
+            .hero-icon {
+                font-size: 1.75rem;
+            }
+
+            .hero-title {
+                font-size: 20px;
+            }
+
+            .nav-card {
+                padding: 8px;
+                gap: 6px;
+            }
+
+            .stat-card {
+                padding: 8px;
+            }
+
+            .stat-icon {
+                margin-bottom: 4px;
+            }
+
+            .stat-number {
+                margin-bottom: 2px;
+            }
         }
 
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
+        /* Touch устройства */
+        @media (max-width: 768px) {
+            .nav-card,
+            .stat-card {
+                min-height: 44px;
+                touch-action: manipulation;
             }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
 
-        .slide-up {
-            animation: slideUp 0.4s ease-out;
-        }
-
-        @keyframes slideUp {
-            from {
-                transform: translateY(30px);
-                opacity: 0;
+            @media (hover: none) {
+                .nav-card:hover,
+                .stat-card:hover {
+                    transform: none;
+                    box-shadow: inherit;
+                }
             }
-            to {
-                transform: translateY(0);
-                opacity: 1;
+
+            body {
+                -webkit-text-size-adjust: 100%;
+                -ms-text-size-adjust: 100%;
             }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <div class="analytics-header fade-in">
-            <h1>📊 Аналитика</h1>
-            <p>Детальная статистика по вашим каналам и рекламным размещениям</p>
-        </div>
-
-        <!-- Time Range Selector -->
-        <div class="time-range-selector slide-up">
-            <span style="font-weight: 600; color: var(--text-secondary);">Период:</span>
-            <button class="time-range-btn" data-range="7d">7 дней</button>
-            <button class="time-range-btn active" data-range="30d">30 дней</button>
-            <button class="time-range-btn" data-range="90d">3 месяца</button>
-            <button class="time-range-btn" data-range="1y">Год</button>
-            <button class="time-range-btn" data-range="all">Все время</button>
-        </div>
-
-        <!-- KPI Cards -->
-        <div class="kpi-grid">
-            <div class="kpi-card slide-up" style="animation-delay: 0.1s;">
-                <div class="kpi-header">
-                    <div class="kpi-icon" style="background: rgba(102, 126, 234, 0.1); color: var(--primary-color);">
-                        📈
-                    </div>
-                    <div class="kpi-trend positive">
-                        <span>↗</span>
-                        <span id="revenue-trend">+12.5%</span>
-                    </div>
-                </div>
-                <div class="kpi-value" id="total-revenue">₽ 0</div>
-                <div class="kpi-label">Общий доход</div>
-                <div class="kpi-description">От всех размещений</div>
-            </div>
-
-            <div class="kpi-card slide-up" style="animation-delay: 0.2s;">
-                <div class="kpi-header">
-                    <div class="kpi-icon" style="background: rgba(79, 172, 254, 0.1); color: var(--success-color);">
-                        👥
-                    </div>
-                    <div class="kpi-trend positive">
-                        <span>↗</span>
-                        <span id="audience-trend">+8.3%</span>
-                    </div>
-                </div>
-                <div class="kpi-value" id="total-audience">0</div>
-                <div class="kpi-label">Общая аудитория</div>
-                <div class="kpi-description">Подписчики всех каналов</div>
-            </div>
-
-            <div class="kpi-card slide-up" style="animation-delay: 0.3s;">
-                <div class="kpi-header">
-                    <div class="kpi-icon" style="background: rgba(240, 147, 251, 0.1); color: var(--accent-color);">
-                        🎯
-                    </div>
-                    <div class="kpi-trend positive">
-                        <span>↗</span>
-                        <span id="conversion-trend">+15.2%</span>
-                    </div>
-                </div>
-                <div class="kpi-value" id="conversion-rate">0%</div>
-                <div class="kpi-label">Конверсия</div>
-                <div class="kpi-description">Принятые отклики / Всего офферов</div>
-            </div>
-
-            <div class="kpi-card slide-up" style="animation-delay: 0.4s;">
-                <div class="kpi-header">
-                    <div class="kpi-icon" style="background: rgba(255, 154, 86, 0.1); color: var(--warning-color);">
-                        ⚡
-                    </div>
-                    <div class="kpi-trend negative">
-                        <span>↘</span>
-                        <span id="response-trend">-2.1%</span>
-                    </div>
-                </div>
-                <div class="kpi-value" id="avg-response-time">0ч</div>
-                <div class="kpi-label">Среднее время отклика</div>
-                <div class="kpi-description">На новые офферы</div>
+        <!-- Hero Section -->
+        <div class="hero-section">
+            <button class="back-btn" onclick="goBack()">← Назад</button>
+            <div class="hero-content">
+                <span class="hero-icon">📊</span>
+                <h1 class="hero-title">Аналитика</h1>
+                <p class="hero-subtitle">Детальная статистика ваших каналов и офферов</p>
             </div>
         </div>
 
-        <!-- Charts -->
-        <div class="charts-grid">
-            <div class="chart-card slide-up" style="animation-delay: 0.5s;">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">👁️</div>
+                <div class="stat-number" id="total-views">
+                    <span class="loading">Загрузка...</span>
+                </div>
+                <div class="stat-label">Всего просмотров</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">👆</div>
+                <div class="stat-number" id="click-rate">
+                    <span class="loading">Загрузка...</span>
+                </div>
+                <div class="stat-label">CTR</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-number" id="total-revenue">
+                    <span class="loading">Загрузка...</span>
+                </div>
+                <div class="stat-label">Доход</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-number" id="conversion-rate">
+                    <span class="loading">Загрузка...</span>
+                </div>
+                <div class="stat-label">Конверсия</div>
+            </div>
+        </div>
+
+        <!-- Navigation Grid -->
+        <div class="navigation-grid">
+            <div class="nav-card active" onclick="showSection('overview')">
+                <div class="nav-icon">📋</div>
+                <div class="nav-content">
+                    <h3>Обзор</h3>
+                    <p>Общая статистика по всем каналам</p>
+                </div>
+            </div>
+
+            <div class="nav-card" onclick="showSection('channels')">
+                <div class="nav-icon">📺</div>
+                <div class="nav-content">
+                    <h3>По каналам</h3>
+                    <p>Детальная аналитика каждого канала</p>
+                </div>
+            </div>
+
+            <div class="nav-card" onclick="showSection('offers')">
+                <div class="nav-icon">📢</div>
+                <div class="nav-content">
+                    <h3>По офферам</h3>
+                    <p>Эффективность рекламных кампаний</p>
+                </div>
+            </div>
+
+            <div class="nav-card" onclick="showSection('revenue')">
+                <div class="nav-icon">💸</div>
+                <div class="nav-content">
+                    <h3>Доходы</h3>
+                    <p>Финансовая аналитика и прогнозы</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts Container -->
+        <div class="charts-container">
+            <div class="chart-card">
                 <div class="chart-header">
-                    <div class="chart-title">Динамика доходов</div>
-                    <div class="chart-subtitle">Ежедневные поступления от размещений</div>
+                    <h3 class="chart-title">Динамика просмотров</h3>
+                    <p class="chart-subtitle">За последние 30 дней</p>
                 </div>
-                <div class="chart-container">
-                    <canvas id="revenueChart"></canvas>
+                <div class="chart-placeholder">
+                    📈 График будет загружен
                 </div>
             </div>
 
-            <div class="chart-card slide-up" style="animation-delay: 0.6s;">
+            <div class="chart-card">
                 <div class="chart-header">
-                    <div class="chart-title">Распределение по каналам</div>
-                    <div class="chart-subtitle">Доля каждого канала в доходах</div>
+                    <h3 class="chart-title">Распределение доходов</h3>
+                    <p class="chart-subtitle">По каналам</p>
                 </div>
-                <div class="chart-container">
-                    <canvas id="channelsChart"></canvas>
+                <div class="chart-placeholder">
+                    🥧 Круговая диаграмма
                 </div>
             </div>
-        </div>
 
-        <!-- Performance Table -->
-        <div class="performance-section slide-up" style="animation-delay: 0.7s;">
-            <div class="chart-header">
-                <div class="chart-title">Эффективность каналов</div>
-                <div class="chart-subtitle">Детальная статистика по каждому каналу</div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Эффективность офферов</h3>
+                    <p class="chart-subtitle">CTR по категориям</p>
+                </div>
+                <div class="chart-placeholder">
+                    📊 Столбчатая диаграмма
+                </div>
             </div>
-            <table class="performance-table" id="performanceTable">
-                <thead>
-                    <tr>
-                        <th>Канал</th>
-                        <th>Подписчики</th>
-                        <th>Офферы</th>
-                        <th>Доход</th>
-                        <th>CTR</th>
-                        <th>Конверсия</th>
-                        <th>Рейтинг</th>
-                    </tr>
-                </thead>
-                <tbody id="performanceTableBody">
-                    <tr>
-                        <td colspan="7" class="loading">Загрузка данных...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
 
-        <!-- AI Recommendations -->
-        <div class="recommendations-section slide-up" style="animation-delay: 0.8s;">
-            <div class="chart-header">
-                <div class="chart-title">🤖 AI-рекомендации</div>
-                <div class="chart-subtitle">Персональные советы для улучшения эффективности</div>
-            </div>
-            <div id="recommendationsContainer">
-                <div class="loading">Генерация рекомендаций...</div>
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Прогноз доходов</h3>
+                    <p class="chart-subtitle">На следующий месяц</p>
+                </div>
+                <div class="chart-placeholder">
+                    📅 Прогнозная модель
+                </div>
             </div>
         </div>
     </div>
 
     <script>
-        // Глобальные переменные
-        let currentTimeRange = '30d';
-        let analyticsData = {};
-        let revenueChart = null;
-        let channelsChart = null;
+        // Telegram WebApp initialization
+        if (window.Telegram && window.Telegram.WebApp) {
+            const tg = window.Telegram.WebApp;
+            tg.ready();
+            tg.expand();
+        }
 
-        // Инициализация
-        document.addEventListener('DOMContentLoaded', async () => {
-            await initializeAnalytics();
-            setupTimeRangeSelector();
-            setupCharts();
-            await loadAnalyticsData();
+        // Back button functionality
+        function goBack() {
+    try {
+        console.log('🔙 Переход на главную страницу');
+
+        // ВСЕГДА переходим на главную страницу, даже в Telegram WebApp
+        window.location.href = '/';
+
+    } catch (error) {
+        console.error('Ошибка при переходе на главную:', error);
+        // Дополнительная попытка
+        try {
+            window.location.replace('/');
+        } catch (e) {
+            // Крайний случай - перезагрузка с главной
+            window.location = '/';
+        }
+    }
+}
+
+        // Navigation functionality
+        function showSection(section) {
+            // Remove active class from all nav cards
+            document.querySelectorAll('.nav-card').forEach(card => {
+                card.classList.remove('active');
+            });
+
+            // Add active class to clicked card
+            event.currentTarget.classList.add('active');
+
+            console.log('Showing section:', section);
+
+            // Here you would typically load data for the selected section
+            // For now, just log the action
+        }
+
+        // Mock data loading
+        function loadAnalyticsData() {
+            // Simulate loading delay
+            setTimeout(() => {
+                document.getElementById('total-views').innerHTML = '1,234,567';
+                document.getElementById('click-rate').innerHTML = '3.45%';
+                document.getElementById('total-revenue').innerHTML = '₽ 45,230';
+                document.getElementById('conversion-rate').innerHTML = '2.1%';
+            }, 1000);
+        }
+
+        // Initialize analytics data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAnalyticsData();
         });
-
-        async function initializeAnalytics() {
-            console.log('🚀 Инициализация аналитики...');
-            
-            // Проверяем авторизацию
-            const authResult = await checkAuth();
-            if (!authResult.success) {
-                showError('Требуется авторизация');
-                return;
-            }
-
-            console.log('✅ Пользователь авторизован:', authResult.telegram_user_id);
-        }
-
-        async function checkAuth() {
-            try {
-                const response = await fetch('/api/auth/check');
-                return await response.json();
-            } catch (error) {
-                console.error('Auth check error:', error);
-                return { success: false };
-            }
-        }
-
-        function setupTimeRangeSelector() {
-            const buttons = document.querySelectorAll('.time-range-btn');
-            buttons.forEach(btn => {
-                btn.addEventListener('click', async (e) => {
-                    // Убираем активный класс с всех кнопок
-                    buttons.forEach(b => b.classList.remove('active'));
-                    
-                    // Добавляем активный класс к нажатой кнопке
-                    e.target.classList.add('active');
-                    
-                    // Обновляем текущий период
-                    currentTimeRange = e.target.dataset.range;
-                    
-                    // Перезагружаем данные
-                    await loadAnalyticsData();
-                });
-            });
-        }
-
-        function setupCharts() {
-            // Настройка графика доходов
-            const revenueCtx = document.getElementById('revenueChart').getContext('2d');
-            revenueChart = new Chart(revenueCtx, {
-                type: 'line',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        label: 'Доходы',
-                        data: [],
-                        borderColor: '#667eea',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: '#f1f5f9'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return '₽' + value.toLocaleString();
-                                }
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        }
-                    }
-                }
-            });
-
-            // Настройка графика каналов
-            const channelsCtx = document.getElementById('channelsChart').getContext('2d');
-            channelsChart = new Chart(channelsCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: [],
-                    datasets: [{
-                        data: [],
-                        backgroundColor: [
-                            '#667eea',
-                            '#f093fb',
-                            '#4facfe',
-                            '#ff9a56',
-                            '#ff6b6b',
-                            '#51cf66'
-                        ],
-                        borderWidth: 0
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                padding: 20,
-                                usePointStyle: true
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        async function loadAnalyticsData() {
-            try {
-                showLoadingState(true);
-
-                // Загружаем основные метрики
-                const metricsResponse = await fetch(`/api/analytics/metrics?range=${currentTimeRange}`);
-                const metricsData = await metricsResponse.json();
-
-                if (metricsData.success) {
-                    updateKPICards(metricsData.metrics);
-                } else {
-                    // Показываем демо-данные
-                    updateKPICards({
-                        total_revenue: 45230,
-                        revenue_trend: 12.5,
-                        total_audience: 125400,
-                        audience_trend: 8.3,
-                        conversion_rate: 24.6,
-                        conversion_trend: 15.2,
-                        avg_response_time: 3.2,
-                        response_trend: -2.1
-                    });
-                }
-
-                // Загружаем данные для графиков
-                const chartResponse = await fetch(`/api/analytics/charts?range=${currentTimeRange}`);
-                const chartData = await chartResponse.json();
-
-                if (chartData.success) {
-                    updateCharts(chartData);
-                } else {
-                    updateChartsWithDemoData();
-                }
-
-                // Загружаем таблицу эффективности
-                const performanceResponse = await fetch(`/api/analytics/performance?range=${currentTimeRange}`);
-                const performanceData = await performanceResponse.json();
-
-                if (performanceData.success) {
-                    updatePerformanceTable(performanceData.channels);
-                } else {
-                    updatePerformanceTableWithDemoData();
-                }
-
-                // Загружаем AI-рекомендации
-                const recommendationsResponse = await fetch(`/api/analytics/recommendations?range=${currentTimeRange}`);
-                const recommendationsData = await recommendationsResponse.json();
-
-                if (recommendationsData.success) {
-                    updateRecommendations(recommendationsData.recommendations);
-                } else {
-                    updateRecommendationsWithDemoData();
-                }
-
-            } catch (error) {
-                console.error('Error loading analytics:', error);
-                showError('Ошибка загрузки данных аналитики');
-            } finally {
-                showLoadingState(false);
-            }
-        }
-
-        function updateKPICards(metrics) {
-            document.getElementById('total-revenue').textContent = 
-                '₽ ' + (metrics.total_revenue || 0).toLocaleString();
-            document.getElementById('revenue-trend').textContent = 
-                (metrics.revenue_trend > 0 ? '+' : '') + (metrics.revenue_trend || 0).toFixed(1) + '%';
-
-            document.getElementById('total-audience').textContent = 
-                (metrics.total_audience || 0).toLocaleString();
-            document.getElementById('audience-trend').textContent = 
-                (metrics.audience_trend > 0 ? '+' : '') + (metrics.audience_trend || 0).toFixed(1) + '%';
-
-            document.getElementById('conversion-rate').textContent = 
-                (metrics.conversion_rate || 0).toFixed(1) + '%';
-            document.getElementById('conversion-trend').textContent = 
-                (metrics.conversion_trend > 0 ? '+' : '') + (metrics.conversion_trend || 0).toFixed(1) + '%';
-
-            document.getElementById('avg-response-time').textContent = 
-                (metrics.avg_response_time || 0).toFixed(1) + 'ч';
-            document.getElementById('response-trend').textContent = 
-                (metrics.response_trend > 0 ? '+' : '') + (metrics.response_trend || 0).toFixed(1) + '%';
-        }
-
-        function updateCharts(data) {
-            // Обновляем график доходов
-            if (data.revenue_chart) {
-                revenueChart.data.labels = data.revenue_chart.labels;
-                revenueChart.data.datasets[0].data = data.revenue_chart.data;
-                revenueChart.update();
-            }
-
-            // Обновляем график каналов
-            if (data.channels_chart) {
-                channelsChart.data.labels = data.channels_chart.labels;
-                channelsChart.data.datasets[0].data = data.channels_chart.data;
-                channelsChart.update();
-            }
-        }
-
-        function updateChartsWithDemoData() {
-            // Демо-данные для графика доходов
-            const days = [];
-            const revenues = [];
-            const now = new Date();
-            
-            for (let i = 29; i >= 0; i--) {
-                const date = new Date(now);
-                date.setDate(date.getDate() - i);
-                days.push(date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }));
-                revenues.push(Math.random() * 3000 + 1000);
-            }
-
-            revenueChart.data.labels = days;
-            revenueChart.data.datasets[0].data = revenues;
-            revenueChart.update();
-
-            // Демо-данные для графика каналов
-            channelsChart.data.labels = ['Tech Channel', 'News Hub', 'Lifestyle', 'Business', 'Gaming'];
-            channelsChart.data.datasets[0].data = [35, 25, 20, 15, 5];
-            channelsChart.update();
-        }
-
-        function updatePerformanceTable(channels) {
-            const tbody = document.getElementById('performanceTableBody');
-            
-            if (!channels || channels.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">Нет данных</td></tr>';
-                return;
-            }
-
-            tbody.innerHTML = channels.map(channel => `
-                <tr>
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="width: 8px; height: 8px; border-radius: 50%; background: ${channel.is_active ? '#4facfe' : '#a0aec0'};"></div>
-                            <strong>@${channel.username}</strong>
-                        </div>
-                    </td>
-                    <td>${(channel.subscriber_count || 0).toLocaleString()}</td>
-                    <td>${channel.offers_count || 0}</td>
-                    <td>₽${(channel.revenue || 0).toLocaleString()}</td>
-                    <td>${(channel.ctr || 0).toFixed(1)}%</td>
-                    <td>${(channel.conversion || 0).toFixed(1)}%</td>
-                    <td>
-                        <div style="display: flex; align-items: center; gap: 4px;">
-                            <span>${'⭐'.repeat(Math.round(channel.rating || 4))}</span>
-                            <span style="color: var(--text-muted);">${(channel.rating || 4.0).toFixed(1)}</span>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        function updatePerformanceTableWithDemoData() {
-            const demoChannels = [
-                {
-                    username: 'tech_news_daily',
-                    subscriber_count: 45200,
-                    offers_count: 12,
-                    revenue: 18500,
-                    ctr: 3.2,
-                    conversion: 24.5,
-                    rating: 4.8,
-                    is_active: true
-                },
-                {
-                    username: 'business_insights',
-                    subscriber_count: 28900,
-                    offers_count: 8,
-                    revenue: 12300,
-                    ctr: 2.8,
-                    conversion: 18.7,
-                    rating: 4.6,
-                    is_active: true
-                },
-                {
-                    username: 'lifestyle_trends',
-                    subscriber_count: 51300,
-                    offers_count: 15,
-                    revenue: 14200,
-                    ctr: 4.1,
-                    conversion: 21.3,
-                    rating: 4.5,
-                    is_active: false
-                }
-            ];
-
-            updatePerformanceTable(demoChannels);
-        }
-
-        function updateRecommendations(recommendations) {
-            const container = document.getElementById('recommendationsContainer');
-            
-            if (!recommendations || recommendations.length === 0) {
-                container.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 40px;">Нет рекомендаций</div>';
-                return;
-            }
-
-            container.innerHTML = recommendations.map(rec => `
-                <div class="recommendation-item">
-                    <div class="recommendation-type">${rec.type}</div>
-                    <div class="recommendation-text">${rec.text}</div>
-                    <div class="recommendation-impact">Ожидаемый эффект: ${rec.impact}</div>
-                </div>
-            `).join('');
-        }
-
-        function updateRecommendationsWithDemoData() {
-            const demoRecommendations = [
-                {
-                    type: 'Оптимизация цен',
-                    text: 'Рассмотрите увеличение цены за размещение в канале @tech_news_daily на 15%',
-                    impact: 'Увеличение дохода на ₽2,700 в месяц'
-                },
-                {
-                    type: 'Улучшение контента',
-                    text: 'Добавьте больше визуального контента в канал @lifestyle_trends',
-                    impact: 'Рост вовлеченности на 23%'
-                },
-                {
-                    type: 'Время публикации',
-                    text: 'Оптимальное время для размещений: 10:00-12:00 и 18:00-20:00',
-                    impact: 'Увеличение CTR на 18%'
-                },
-                {
-                    type: 'Новые категории',
-                    text: 'Рассмотрите добавление каналов в категории "Финансы" и "Образование"',
-                    impact: 'Расширение аудитории на 35,000 подписчиков'
-                }
-            ];
-
-            updateRecommendations(demoRecommendations);
-        }
-
-        function showLoadingState(isLoading) {
-            const loadingElements = document.querySelectorAll('.loading');
-            loadingElements.forEach(el => {
-                el.style.display = isLoading ? 'flex' : 'none';
-            });
-        }
-
-        function showError(message) {
-            console.error('Analytics error:', message);
-            // В будущем можно добавить toast-уведомления
-        }
-
-        // Автообновление данных каждые 5 минут
-        setInterval(loadAnalyticsData, 300000);
     </script>
 </body>
 </html>
