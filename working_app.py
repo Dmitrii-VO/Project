@@ -15,7 +15,7 @@ import os
 import logger
 from dotenv import load_dotenv
 load_dotenv()
-os.environ['BOT_TOKEN'] = '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8'
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 try:
     from app.services.telegram_verification import verification_service
@@ -49,20 +49,19 @@ class AppConfig:
     """Централизованная конфигурация приложения"""
 
     # Основные настройки
-    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
-    DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
-
+    SECRET_KEY = os.environ.get('SECRET_KEY')
+    DEBUG = os.environ.get('DEBUG')
+    BOT_TOKEN = os.getenv("BOT_TOKEN")
     # База данных
-    DATABASE_URL = os.environ.get('DATABASE_URL', 'sqlite:///telegram_mini_app.db')
-    DATABASE_PATH = os.path.join(PROJECT_ROOT, 'telegram_mini_app.db')
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    DATABASE_PATH = os.path.join(PROJECT_ROOT)
 
     # Telegram
-    BOT_TOKEN = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
     TELEGRAM_PAYMENT_TOKEN = os.environ.get('TELEGRAM_PAYMENT_TOKEN')
-    YOUR_TELEGRAM_ID = int(os.environ.get('YOUR_TELEGRAM_ID', 373086959))
+    YOUR_TELEGRAM_ID = os.environ.get('YOUR_TELEGRAM_ID')
 
     # Веб-хуки и безопасность
-    WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', 'your-webhook-secret')
+    WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET')
     WEBAPP_URL = os.environ.get('WEBAPP_URL', 'http://localhost:5000')
 
     # Функциональность
