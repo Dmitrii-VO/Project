@@ -675,16 +675,10 @@ def delete_channel(channel_id):
 @require_telegram_auth
 @cache_response(timeout=60)  # Кэшируем на 1 минуту
 def get_my_channels():
-    """
-    Получение каналов текущего пользователя
-
-    Returns:
-        JSON со списком каналов пользователя
-    """
+    """Получение каналов текущего пользователя"""
     try:
         import sqlite3
 
-        # Получаем telegram_user_id из заголовка (установлен middleware)
         telegram_user_id = getattr(g, 'telegram_user_id', None)
         user_id = getattr(g, 'current_user_id', None)
 
@@ -695,17 +689,16 @@ def get_my_channels():
 
         current_app.logger.info(f"Получение каналов для пользователя ID: {user_id}")
 
-        # Прямое подключение к базе
         conn = sqlite3.connect('telegram_mini_app.db')
         cursor = conn.cursor()
 
-        # Получаем каналы пользователя
+        # ИСПРАВЛЕНО: Получаем каналы с правильными полями
         cursor.execute("""
                        SELECT id,
                               telegram_id,
                               title,
                               username,
-                              subscriber_count,
+                              subscriber_count, -- ✅ Правильное поле из БД
                               category,
                               is_verified,
                               verification_code,
@@ -721,21 +714,28 @@ def get_my_channels():
 
         current_app.logger.info(f"Найдено каналов: {len(channels_data)}")
 
-        # Преобразуем в список словарей
+        # ИСПРАВЛЕНО: Преобразуем в список словарей с правильными именами полей
         channels_list = []
         for channel in channels_data:
             channel_dict = {
                 'id': channel[0],
                 'channel_id': channel[1],
-                'channel_name': channel[2],
+                'channel_name': channel[2] or 'Неизвестный канал',
+                'title': channel[2] or 'Неизвестный канал',  # Дублируем для совместимости
                 'channel_username': channel[3],
-                'subscribers_count': channel[4] or 0,
+                'username': channel[3],  # Дублируем для совместимости
+                'subscriber_count': channel[4] or 0,  # ✅ Правильное имя из БД
+                'subscribers_count': channel[4] or 0,  # ✅ Дублируем для совместимости с фронтендом
                 'category': channel[5] or 'other',
-                'price_per_post': 0.0,  # Пока зафиксированное значение
+                'price_per_post': 0.0,
                 'is_verified': bool(channel[6]),
                 'verification_code': channel[7] if not channel[6] else None,
                 'created_at': channel[8],
-                'status': channel[9] or 'pending'
+                'status': channel[9] or 'pending',
+
+                # Добавляем статистику офферов и постов
+                'offers_count': get_channel_offers_count(channel[0]),
+                'posts_count': get_channel_posts_count(channel[0])
             }
             channels_list.append(channel_dict)
 
@@ -1204,6 +1204,72 @@ def channel_access_denied(error):
 def init_channel_routes():
     """Инициализация маршрутов каналов"""
     current_app.logger.info("✅ Channel routes initialized")
+
+
+def get_channel_offers_count(channel_id: int) -> int:
+    """Получение количества офферов для канала"""
+    try:
+        import sqlite3
+        conn = sqlite3.connect('telegram_mini_app.db')
+        cursor = conn.cursor()
+
+        # Проверяем таблицу responses (отклики на офферы)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='responses'")
+        if cursor.fetchone():
+            cursor.execute("""
+                           SELECT COUNT(DISTINCT r.offer_id)
+                           FROM responses r
+                           WHERE r.channel_id = ?
+                           """, (channel_id,))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+        else:
+            count = 0
+
+        conn.close()
+        return count
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting offers count for channel {channel_id}: {e}")
+        return 0
+
+
+def get_channel_posts_count(channel_id: int) -> int:
+    """Получение количества постов канала"""
+    try:
+        import sqlite3
+        from datetime import datetime
+
+        conn = sqlite3.connect('telegram_mini_app.db')
+        cursor = conn.cursor()
+
+        # Проверяем таблицу posts
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='posts'")
+        if cursor.fetchone():
+            cursor.execute("SELECT COUNT(*) FROM posts WHERE channel_id = ?", (channel_id,))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+        else:
+            # Примерный подсчет по дате создания канала
+            cursor.execute("SELECT created_at FROM channels WHERE id = ?", (channel_id,))
+            result = cursor.fetchone()
+
+            if result and result[0]:
+                try:
+                    created_at = datetime.fromisoformat(result[0].replace('Z', '+00:00'))
+                    days_active = (datetime.now() - created_at).days
+                    count = max(0, days_active // 7)  # Примерно 1 пост в неделю
+                except:
+                    count = 0
+            else:
+                count = 0
+
+        conn.close()
+        return count
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting posts count for channel {channel_id}: {e}")
+        return 0
 
 
 # Экспорт

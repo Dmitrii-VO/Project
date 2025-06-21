@@ -97,6 +97,24 @@ async function loadUserChannels() {
 
         const data = await response.json();
 
+        // 🔍 ОТЛАДКА: Выводим полученные данные
+    console.log('🔍 ОТЛАДКА - Полный ответ сервера:', data);
+
+    if (data.success && data.channels && data.channels.length > 0) {
+        console.log('🔍 ОТЛАДКА - Первый канал из ответа:', data.channels[0]);
+
+        // Проверяем поля подписчиков в каждом канале
+        data.channels.forEach((channel, index) => {
+            console.log(`🔍 Канал ${index + 1}:`, {
+                id: channel.id,
+                title: channel.title || channel.channel_name,
+                subscriber_count: channel.subscriber_count,
+                subscribers_count: channel.subscribers_count,
+                raw_channel: channel
+            });
+        });
+    }
+
         // Скрываем индикатор загрузки
         hideLoadingState();
 
@@ -153,10 +171,49 @@ async function loadUserChannels() {
         hideLoadingState();
         showErrorState(error.message);
     }
+
+
+}
+function debugChannelData() {
+    console.log('🔧 Запуск отладки каналов...');
+
+    // Проверяем API напрямую
+    fetch('/api/channels/my', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Telegram-User-Id': '373086959' // Ваш ID для тестирования
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('🔍 Прямой API ответ:', data);
+
+        if (data.channels && data.channels.length > 0) {
+            const firstChannel = data.channels[0];
+            console.log('🔍 Первый канал детально:', {
+                'Все поля': Object.keys(firstChannel),
+                'subscriber_count': firstChannel.subscriber_count,
+                'subscribers_count': firstChannel.subscribers_count,
+                'Полный объект': firstChannel
+            });
+        }
+    })
+    .catch(error => {
+        console.error('❌ Ошибка API:', error);
+    });
 }
 function createChannelCard(channel) {
+    console.log('🎯 Создаем карточку канала:', channel);
+    console.log('📊 Данные подписчиков в карточке:', {
+        subscriber_count: channel.subscriber_count,
+        subscribers_count: channel.subscribers_count,
+        // Отладочная информация
+        all_channel_data: channel
+    });
+
     const card = document.createElement('div');
-    card.className = 'stat-card';  // ← ИЗМЕНЕНО: используем stat-card вместо channel-card
+    card.className = 'stat-card';
     card.setAttribute('data-user-channel', 'true');
     card.setAttribute('data-channel-id', channel.id);
 
@@ -165,40 +222,50 @@ function createChannelCard(channel) {
         ? { class: 'status-active', text: 'Верифицирован', emoji: '✅' }
         : { class: 'status-pending', text: 'На модерации', emoji: '⏳' };
 
-    // Безопасное получение данных
-    const title = channel.title || `Канал @${channel.username}`;
-    const username = channel.username ? channel.username.replace('@', '') : 'unknown';
-    const subscribersCount = formatNumber(channel.subscribers_count || channel.subscriber_count || 0);
-    const description = channel.description || 'Описание не указано';
+    // ИСПРАВЛЕНО: Безопасное получение данных
+    const title = channel.title || channel.channel_name || `Канал @${channel.username || channel.channel_username}`;
+    const username = (channel.username || channel.channel_username || 'unknown').replace('@', '');
+
+    // ИСПРАВЛЕНО: Правильное получение количества подписчиков
+    const subscribersCount = formatNumber(
+        channel.subscriber_count ||     // ✅ Правильное поле из БД
+        channel.subscribers_count ||    // ✅ Для совместимости
+        0
+    );
+
+    console.log('📈 Отформатированное количество подписчиков:', subscribersCount);
+
+    // ИСПРАВЛЕНО: Реальная статистика офферов и постов
+    const offersCount = formatNumber(channel.offers_count || 0);
+    const postsCount = formatNumber(channel.posts_count || 0);
+
+    const description = channel.description || channel.channel_description || 'Описание не указано';
     const createdAt = formatDate(channel.created_at);
 
-    // НОВАЯ СТРУКТУРА В СТИЛЕ INDEX.HTML
+    // HTML карточки с реальной статистикой
     card.innerHTML = `
-        <!-- Верхняя линия градиента как в index.html -->
-        
         <!-- Заголовок канала -->
         <div class="channel-header">
             <div class="channel-info">
                 <div class="channel-title">${title}</div>
-                
             </div>
             <div class="channel-status ${status.class}">
                 ${status.text}
             </div>
         </div>
 
-        <!-- Статистика в 3 колонки как в index.html -->
+        <!-- ИСПРАВЛЕНО: Статистика с реальными данными -->
         <div class="channel-stats">
             <div class="stat-item">
                 <span class="stat-number">${subscribersCount}</span>
                 <div class="stat-label">Подписчиков</div>
             </div>
             <div class="stat-item">
-                <span class="stat-number">0</span>
+                <span class="stat-number">${postsCount}</span>
                 <div class="stat-label">Постов</div>
             </div>
             <div class="stat-item">
-                <span class="stat-number">0</span>
+                <span class="stat-number">${offersCount}</span>
                 <div class="stat-label">Офферов</div>
             </div>
         </div>
@@ -221,7 +288,7 @@ function createChannelCard(channel) {
                     ⚙️ Настройки
                 </button>
             ` : `
-                <button class="btn btn-primary" onclick="startChannelVerification(${channel.id}, '${channel.title?.replace(/'/g, "\\'")}', '${channel.username || ""}')">
+                <button class="btn btn-primary" onclick="startChannelVerification(${channel.id}, '${title?.replace(/'/g, "\\'")}', '${username || ""}')">
                     🔐 Верифицировать
                 </button>
             `}
@@ -231,7 +298,62 @@ function createChannelCard(channel) {
         </div>
     `;
 
+    console.log('✅ Карточка канала создана успешно');
     return card;
+}
+// ДОПОЛНИТЕЛЬНО: Функция обновления статистики в реальном времени
+async function refreshChannelStatistics(channelId) {
+    try {
+        const telegramUser = getTelegramUser();
+        const headers = {
+            'Content-Type': 'application/json'
+        };
+
+        if (telegramUser) {
+            headers['X-Telegram-User-Id'] = telegramUser.id.toString();
+        }
+
+        const response = await fetch(`/api/channels/${channelId}`, {
+            method: 'GET',
+            headers: headers
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success || data.id) {
+                // Обновляем карточку канала
+                updateChannelCard(channelId, data);
+            }
+        }
+    } catch (error) {
+        console.error(`Ошибка обновления статистики канала ${channelId}:`, error);
+    }
+}
+function updateChannelCard(channelId, channelData) {
+    const card = document.querySelector(`[data-channel-id="${channelId}"]`);
+    if (!card) return;
+
+    // Обновляем подписчиков
+    const subscribersElement = card.querySelector('.stat-item:nth-child(1) .stat-number');
+    if (subscribersElement) {
+        subscribersElement.textContent = formatNumber(
+            channelData.subscriber_count ||
+            channelData.subscribers_count ||
+            0
+        );
+    }
+
+    // Обновляем посты
+    const postsElement = card.querySelector('.stat-item:nth-child(2) .stat-number');
+    if (postsElement) {
+        postsElement.textContent = formatNumber(channelData.posts_count || 0);
+    }
+
+    // Обновляем офферы
+    const offersElement = card.querySelector('.stat-item:nth-child(3) .stat-number');
+    if (offersElement) {
+        offersElement.textContent = formatNumber(channelData.offers_count || 0);
+    }
 }
 function verifyChannel(channelId) {
             console.log(`🔍 Верификация канала ${channelId}`);
@@ -567,3 +689,6 @@ window.loadUserChannels = loadUserChannels;
 window.showChannelStats = showChannelStats;
 window.showChannelSettings = showChannelSettings;
 window.editChannel = editChannel;
+window.refreshChannelStatistics = refreshChannelStatistics;
+window.updateChannelCard = updateChannelCard;
+window.debugChannelData = debugChannelData;

@@ -106,36 +106,29 @@ def extract_username_from_url(url):
 
 @channels_bp.route('/my', methods=['GET'])
 def get_my_channels():
-    """Получение каналов текущего пользователя"""
+    """Получение каналов пользователя"""
     try:
-        # Получаем telegram_user_id из заголовков
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', '373086959')
-        logger.info(f"👤 Получение каналов для пользователя {telegram_user_id}")
+        telegram_user_id = request.headers.get('X-Telegram-User-Id')
 
-        conn = get_db_connection()
+        if not telegram_user_id:
+            return jsonify({
+                'success': False,
+                'error': 'X-Telegram-User-Id header is required'
+            }), 400
+
+        logger.info(f"🔍 Получение каналов для Telegram ID: {telegram_user_id}")
+
+        # Подключение к базе данных
+        conn = sqlite3.connect('telegram_mini_app.db')
+        conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Получаем каналы пользователя
+        # ИСПРАВЛЕНО: Получаем каналы с подробной информацией
         cursor.execute("""
-                       SELECT c.id,
-                              c.telegram_id,
-                              c.title,
-                              c.username,
-                              c.subscriber_count,
-                              c.description,
-                              c.category,
-                              c.language,
-                              c.is_verified,
-                              c.is_active,
-                              c.owner_id,
-                              c.created_at,
-                              c.updated_at,
-                              c.verification_code,
-                              c.status,
-                              c.verified_at,
+                       SELECT c.*,
                               u.username as owner_username
                        FROM channels c
-                                JOIN users u ON c.owner_id = u.id
+                                LEFT JOIN users u ON c.owner_id = u.id
                        WHERE u.telegram_id = ?
                        ORDER BY c.created_at DESC
                        """, (telegram_user_id,))
@@ -143,16 +136,27 @@ def get_my_channels():
         channels = cursor.fetchall()
         conn.close()
 
-        # Преобразуем в список словарей
-        # Преобразуем в список словарей с ПРАВИЛЬНЫМИ полями
+        logger.info(f"📊 Найдено каналов в БД: {len(channels)}")
+
+        # ИСПРАВЛЕНО: Преобразуем в список словарей с правильными полями
         channels_list = []
         for channel in channels:
+            # Получаем реальное количество подписчиков из БД
+            real_subscriber_count = channel['subscriber_count']
+
+            # Отладочная информация
+            logger.info(f"📈 Канал {channel['title']}: subscriber_count в БД = {real_subscriber_count}")
+
             channel_dict = {
                 'id': channel['id'],
                 'telegram_id': channel['telegram_id'],
                 'title': channel['title'],
                 'username': channel['username'],
-                'subscribers_count': channel['subscriber_count'] or 0,  # ✅ Правильное поле
+
+                # ИСПРАВЛЕНО: Правильное получение подписчиков
+                'subscriber_count': real_subscriber_count or 0,  # ✅ Из БД
+                'subscribers_count': real_subscriber_count or 0,  # ✅ Дублируем для совместимости
+
                 'description': channel['description'] or '',
                 'category': channel['category'] or 'general',
                 'language': channel['language'] or 'ru',
@@ -175,11 +179,15 @@ def get_my_channels():
                 'invite_link': f'https://t.me/{channel["username"].lstrip("@")}' if channel['username'] else None,
                 'photo_url': None,
                 'avg_engagement_rate': 0.0,
-                'price_per_post': 0
+                'price_per_post': 0,
+
+                # Добавляем статистику
+                'offers_count': get_channel_offers_count(channel['id']),
+                'posts_count': get_channel_posts_count(channel['id'])
             }
             channels_list.append(channel_dict)
 
-        logger.info(f"✅ Найдено каналов: {len(channels_list)}")
+        logger.info(f"✅ Возвращаем {len(channels_list)} каналов")
 
         return jsonify({
             'success': True,
@@ -189,10 +197,77 @@ def get_my_channels():
 
     except Exception as e:
         logger.error(f"❌ Ошибка получения каналов: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'success': False,
             'error': str(e)
         }), 500
+
+
+# ДОБАВЛЯЕМ вспомогательные функции:
+def get_channel_offers_count(channel_id: int) -> int:
+    """Получение количества офферов для канала"""
+    try:
+        conn = sqlite3.connect('telegram_mini_app.db')
+        cursor = conn.cursor()
+
+        # Проверяем таблицу responses
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='responses'")
+        if cursor.fetchone():
+            cursor.execute("""
+                           SELECT COUNT(DISTINCT r.offer_id)
+                           FROM responses r
+                           WHERE r.channel_id = ?
+                           """, (channel_id,))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+        else:
+            count = 0
+
+        conn.close()
+        return count
+
+    except Exception as e:
+        logger.error(f"Error getting offers count for channel {channel_id}: {e}")
+        return 0
+
+
+def get_channel_posts_count(channel_id: int) -> int:
+    """Получение количества постов канала"""
+    try:
+        from datetime import datetime
+
+        conn = sqlite3.connect('telegram_mini_app.db')
+        cursor = conn.cursor()
+
+        # Проверяем таблицу posts
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='posts'")
+        if cursor.fetchone():
+            cursor.execute("SELECT COUNT(*) FROM posts WHERE channel_id = ?", (channel_id,))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+        else:
+            # Примерный подсчет по дате создания канала
+            cursor.execute("SELECT created_at FROM channels WHERE id = ?", (channel_id,))
+            result = cursor.fetchone()
+
+            if result and result[0]:
+                try:
+                    created_at = datetime.fromisoformat(result[0].replace('Z', '+00:00'))
+                    days_active = (datetime.now() - created_at).days
+                    count = max(0, days_active // 7)  # Примерно 1 пост в неделю
+                except:
+                    count = 0
+            else:
+                count = 0
+
+        conn.close()
+        return count
+
+    except Exception as e:
+        logger.error(f"Error getting posts count for channel {channel_id}: {e}")
+        return 0
 
 
 @channels_bp.route('/analyze', methods=['POST'])

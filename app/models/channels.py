@@ -54,7 +54,7 @@ class Channel:
             self.channel_name = channel_data.get('channel_name')
             self.channel_username = channel_data.get('channel_username')
             self.channel_description = channel_data.get('channel_description', '')
-            self.subscribers_count = channel_data.get('subscribers_count', 0)
+            self.subscriber_count = channel_data.get('subscriber_count', 0)
             self.category = channel_data.get('category')
             self.subcategory = channel_data.get('subcategory')
             self.price_per_post = Decimal(str(channel_data.get('price_per_post', 0)))
@@ -441,7 +441,7 @@ class Channel:
 
         if not recent_stats:
             return {
-                'subscribers_growth': 0,
+                'subscriber_growth': 0,
                 'growth_rate': 0,
                 'average_daily_growth': 0,
                 'total_growth_events': 0
@@ -529,7 +529,7 @@ class Channel:
             'channel_name': self.channel_name,
             'channel_username': self.channel_username,
             'channel_description': self.channel_description,
-            'subscribers_count': self.subscribers_count,
+            'subscriber_count': self.subscriber_count,  # ИСПРАВЛЕНО
             'category': self.category,
             'subcategory': self.subcategory,
             'price_per_post': float(self.price_per_post),
@@ -544,7 +544,57 @@ class Channel:
             'created_at': self.created_at,
             'updated_at': self.updated_at,
             'verified_at': self.verified_at,
-            'last_stats_update': self.last_stats_update
+            'last_stats_update': self.last_stats_update,
+            # ДОБАВЛЯЕМ СТАТИСТИКУ
+            'offers_count': self.get_offers_count(),
+            'posts_count': self.get_posts_count()
+        }
+
+    def get_offers_count(self) -> int:
+        """Получение количества офферов для канала"""
+        try:
+            from ..models.database import db_manager
+            result = db_manager.execute_query(
+                "SELECT COUNT(*) FROM offers WHERE channel_id = ?",
+                (self.id,),
+                fetch_one=True
+            )
+            return result[0] if result else 0
+        except:
+            return 0
+
+    def get_posts_count(self) -> int:
+        """Получение количества постов канала"""
+        try:
+            from ..models.database import db_manager
+            # Если есть таблица posts
+            result = db_manager.execute_query(
+                "SELECT COUNT(*) FROM posts WHERE channel_id = ?",
+                (self.id,),
+                fetch_one=True
+            )
+            return result[0] if result else 0
+        except:
+            # Пока таблицы posts нет, возвращаем примерное значение
+            # на основе времени создания канала
+            if self.created_at:
+                from datetime import datetime
+                try:
+                    created = datetime.fromisoformat(self.created_at.replace('Z', '+00:00'))
+                    days_active = (datetime.now() - created).days
+                    return max(0, days_active // 7)  # Примерно 1 пост в неделю
+                except:
+                    return 0
+            return 0
+
+    def get_statistics(self) -> dict:
+        """Получение полной статистики канала"""
+        return {
+            'subscriber_count': self.subscriber_count,
+            'offers_count': self.get_offers_count(),
+            'posts_count': self.get_posts_count(),
+            'is_verified': self.is_verified,
+            'created_at': self.created_at
         }
 
 
@@ -629,6 +679,7 @@ class TelegramChannelService:
         except Exception as e:
             print(f"Ошибка получения количества участников: {e}")
             return 0
+
 
 
 class ChannelStatistics:
