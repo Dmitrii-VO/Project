@@ -35,29 +35,54 @@ document.getElementById('addChannelForm').addEventListener('submit', async funct
 
         // Собираем данные формы
         const formData = {
-            channelUrl: document.getElementById('channelUrl').value,
-            category: document.getElementById('channelCategory').value,
-            description: document.getElementById('channelDescription').value,
-            pricePerPost: document.getElementById('pricePerPost').value,
-            paymentTerms: document.getElementById('paymentTerms').value
-        };
+    username: document.getElementById('channelUrl').value.trim(),
+    title: document.getElementById('channelTitle')?.value ||
+           channelAnalyzer.currentChannelData?.title ||
+           `Канал @${document.getElementById('channelUrl').value.trim()}`,
 
+    description: document.getElementById('channelDescription').value ||
+                channelAnalyzer.currentChannelData?.description || '',
 
-        // Отправляем данные на сервер
+    category: document.getElementById('channelCategory').value || 'general',
+
+    // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Передаем данные подписчиков из ВСЕХ источников
+    subscriber_count: channelAnalyzer.currentChannelData?.raw_subscriber_count ||
+                     channelAnalyzer.currentChannelData?.subscriber_count ||
+                     channelAnalyzer.currentChannelData?.member_count || 0,
+
+    subscribers_count: channelAnalyzer.currentChannelData?.raw_subscriber_count ||
+                      channelAnalyzer.currentChannelData?.subscriber_count ||
+                      channelAnalyzer.currentChannelData?.member_count || 0,
+
+    // Дополнительные поля для совместимости
+    raw_subscriber_count: channelAnalyzer.currentChannelData?.raw_subscriber_count || 0,
+    member_count: channelAnalyzer.currentChannelData?.member_count || 0,
+
+    // Telegram данные если есть
+    telegram_id: channelAnalyzer.currentChannelData?.telegram_id ||
+                channelAnalyzer.currentChannelData?.channel_id,
+
+    // Остальные поля
+    price_per_post: parseFloat(document.getElementById('pricePerPost')?.value || 0),
+    payment_terms: document.getElementById('paymentTerms')?.value || 'prepaid'
+};
+        // Проверяем что данные не пустые
+        if (formData.subscriber_count === 0 && channelAnalyzer.currentChannelData?.raw_subscriber_count) {
+            console.warn('⚠️ ВНИМАНИЕ: subscriber_count = 0, но raw_subscriber_count =',
+                         channelAnalyzer.currentChannelData.raw_subscriber_count);
+        }
+        console.groupEnd();
+        // Отправляем данные
         const response = await fetch('/api/channels', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Telegram-User-Id': window.Telegram?.WebApp?.initDataUnsafe?.user?.id || 373086959
+                'X-Telegram-User-Id': window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '373086959'
             },
-            body: JSON.stringify({
-                username: formData.channelUrl,
-                category: formData.category,
-                description: formData.description,
-                //price_per_post: parseFloat(formData.pricePerPost),
-                payment_terms: formData.paymentTerms
-            })
+            body: JSON.stringify(formData)
         });
+        // Отправляем данные на сервер
+
 
         const result = await response.json();
 
@@ -206,9 +231,6 @@ document.querySelector('.search-input').addEventListener('input', function() {
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📺 Страница каналов загружена');
-
-// Загружаем список каналов пользователя
-loadUserChannels();
 });
 
 // Функции форматирования

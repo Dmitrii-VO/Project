@@ -21,7 +21,7 @@ function getTelegramUser() {
             return null;
         }
 async function loadUserChannels() {
-        // ЗАЩИТА ОТ МНОЖЕСТВЕННЫХ ВЫЗОВОВ
+    // ✅ ЗАЩИТА ОТ МНОЖЕСТВЕННЫХ ВЫЗОВОВ
     if (window.channelsLoading) {
         console.log('⚠️ Загрузка каналов уже выполняется, пропускаем...');
         return;
@@ -31,29 +31,16 @@ async function loadUserChannels() {
     try {
         console.log('🔍 Начинаем загрузку каналов пользователя...');
 
-        // ... остальной код функции ...
+        // Показываем индикатор загрузки
+        showLoadingState();
 
-    } catch (error) {
-        console.error('💥 Ошибка загрузки каналов:', error);
-        hideLoadingState();
-        showErrorState(error.message);
-    } finally {
-        // СБРАСЫВАЕМ флаг загрузки
-        window.channelsLoading = false;
-    }
-            try {
-                console.log('🔍 Начинаем загрузку каналов пользователя...');
+        // Получаем данные Telegram пользователя
+        const telegramUser = getTelegramUser();
+        console.log('👤 Telegram пользователь:', telegramUser);
 
-                // Показываем индикатор загрузки
-                showLoadingState();
-
-                // Получаем данные Telegram пользователя
-                const telegramUser = getTelegramUser();
-                console.log('👤 Telegram пользователь:', telegramUser);
-
-                const headers = {
-                    'Content-Type': 'application/json'
-                };
+        const headers = {
+            'Content-Type': 'application/json'
+        };
 
         // Добавляем Telegram данные в заголовки если доступны
         if (telegramUser) {
@@ -64,7 +51,7 @@ async function loadUserChannels() {
                 headers['X-Telegram-Username'] = telegramUser.username;
             }
 
-            // ИСПРАВЛЕНО: Кодируем кириллические символы в Base64
+            // ✅ ИСПРАВЛЕНО: Кодируем кириллические символы в Base64
             if (telegramUser.first_name) {
                 try {
                     headers['X-Telegram-First-Name'] = btoa(unescape(encodeURIComponent(telegramUser.first_name)));
@@ -85,6 +72,7 @@ async function loadUserChannels() {
             headers['X-Telegram-User-Id'] = '373086959';
         }
 
+        // ✅ Запрос к API
         const response = await fetch('/api/channels/my', {
             method: 'GET',
             headers: headers
@@ -97,24 +85,6 @@ async function loadUserChannels() {
 
         const data = await response.json();
 
-        // 🔍 ОТЛАДКА: Выводим полученные данные
-    console.log('🔍 ОТЛАДКА - Полный ответ сервера:', data);
-
-    if (data.success && data.channels && data.channels.length > 0) {
-        console.log('🔍 ОТЛАДКА - Первый канал из ответа:', data.channels[0]);
-
-        // Проверяем поля подписчиков в каждом канале
-        data.channels.forEach((channel, index) => {
-            console.log(`🔍 Канал ${index + 1}:`, {
-                id: channel.id,
-                title: channel.title || channel.channel_name,
-                subscriber_count: channel.subscriber_count,
-                subscribers_count: channel.subscribers_count,
-                raw_channel: channel
-            });
-        });
-    }
-
         // Скрываем индикатор загрузки
         hideLoadingState();
 
@@ -124,24 +94,28 @@ async function loadUserChannels() {
             return;
         }
 
-        // Очищаем существующие карточки
+        // ✅ Очищаем существующие карточки перед добавлением новых
         const existingCards = channelsGrid.querySelectorAll('.stat-card[data-user-channel="true"], .channel-card[data-user-channel="true"]');
         existingCards.forEach(card => card.remove());
+
+        // Скрываем элементы ошибок
         const errorElement = document.getElementById('channelsError');
         if (errorElement) {
             errorElement.style.display = 'none';
         }
+
+        // ✅ Обработка успешного ответа
         if (data.success && data.channels && data.channels.length > 0) {
             console.log(`📊 Получено ${data.channels.length} каналов от сервера`);
 
-            // Скрываем все состояния
+            // Скрываем все состояния загрузки и пустых данных
             const emptyState = document.getElementById('emptyState');
             const loadingElement = document.getElementById('channelsLoading');
 
             if (emptyState) emptyState.style.display = 'none';
             if (loadingElement) loadingElement.style.display = 'none';
 
-            // ДОБАВЛЯЕМ каналы БЕЗ ДУБЛИРОВАНИЯ
+            // ✅ ДОБАВЛЯЕМ каналы БЕЗ ДУБЛИРОВАНИЯ
             let addedCount = 0;
             data.channels.forEach((channel, index) => {
                 // Проверяем, не существует ли уже карточка с таким ID
@@ -150,7 +124,7 @@ async function loadUserChannels() {
                     const channelCard = createChannelCard(channel);
                     channelsGrid.appendChild(channelCard);
                     addedCount++;
-                    console.log(`✅ Добавлен канал ${index + 1}: ${channel.title || channel.username}`);
+                    console.log(`✅ Добавлен канал: ${channel.title || channel.username}`);
                 } else {
                     console.log(`⚠️ Канал ${channel.title || channel.username} уже существует, пропускаем`);
                 }
@@ -158,22 +132,62 @@ async function loadUserChannels() {
 
             console.log(`📺 Итого добавлено карточек: ${addedCount} из ${data.channels.length}`);
 
+            // ✅ Обновляем счетчик каналов если функция существует
             if (typeof updateChannelsCounter === 'function') {
                 updateChannelsCounter(data.channels.length);
             }
+
         } else {
+            // ✅ Нет каналов для отображения
             console.log('ℹ️ Нет каналов для отображения');
             showEmptyState();
         }
 
     } catch (error) {
-        console.error('💥 Ошибка загрузки каналов:', error);
+        console.error('❌ Ошибка загрузки каналов:', error);
         hideLoadingState();
         showErrorState(error.message);
+    } finally {
+        // ✅ ОБЯЗАТЕЛЬНО сбрасываем флаг загрузки в любом случае
+        window.channelsLoading = false;
     }
-
-
 }
+
+// ✅ Вспомогательные функции форматирования (если их нет)
+
+function formatNumber(number) {
+    if (!number || number === 0) return '0';
+
+    if (number >= 1000000) {
+        return (number / 1000000).toFixed(1) + 'M';
+    } else if (number >= 1000) {
+        return (number / 1000).toFixed(1) + 'K';
+    }
+    return number.toString();
+}
+
+function formatPrice(price) {
+    if (!price) return '0';
+    return new Intl.NumberFormat('ru-RU').format(price);
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Недавно';
+
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric'
+        });
+    } catch (e) {
+        return 'Недавно';
+    }
+}
+
+// ✅ Глобальный доступ
+window.loadUserChannels = loadUserChannels;
 function debugChannelData() {
     console.log('🔧 Запуск отладки каналов...');
 
@@ -204,13 +218,6 @@ function debugChannelData() {
     });
 }
 function createChannelCard(channel) {
-    console.log('🎯 Создаем карточку канала:', channel);
-    console.log('📊 Данные подписчиков в карточке:', {
-        subscriber_count: channel.subscriber_count,
-        subscribers_count: channel.subscribers_count,
-        // Отладочная информация
-        all_channel_data: channel
-    });
 
     const card = document.createElement('div');
     card.className = 'stat-card';
@@ -232,8 +239,6 @@ function createChannelCard(channel) {
         channel.subscribers_count ||    // ✅ Для совместимости
         0
     );
-
-    console.log('📈 Отформатированное количество подписчиков:', subscribersCount);
 
     // ИСПРАВЛЕНО: Реальная статистика офферов и постов
     const offersCount = formatNumber(channel.offers_count || 0);
@@ -681,7 +686,163 @@ function goBack() {
         }
     }
 }
+// Добавьте эти функции в channels-core.js или создайте отдельный файл
 
+async function updateChannelWithTelegramData(channelId, username) {
+    try {
+        console.log(`🔄 Обновляем данные канала ${channelId} (@${username})`);
+
+        // Получаем свежие данные от Telegram API
+        const telegramData = await channelAnalyzer.getTelegramChannelInfo(username);
+
+        if (!telegramData.success) {
+            throw new Error('Не удалось получить данные от Telegram API');
+        }
+
+        console.log('📊 Полученные данные от Telegram:', telegramData);
+
+        // Отправляем обновление на сервер
+        const response = await fetch(`/api/channels/${channelId}/update-stats`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            },
+            body: JSON.stringify({
+                telegram_data: telegramData,
+                raw_subscriber_count: telegramData.data.raw_subscriber_count,
+                title: telegramData.data.title,
+                description: telegramData.data.description
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            console.log(`✅ Канал ${channelId} обновлен:`, result);
+            return result;
+        } else {
+            throw new Error(result.error || 'Ошибка обновления');
+        }
+
+    } catch (error) {
+        console.error(`❌ Ошибка обновления канала ${channelId}:`, error);
+        throw error;
+    }
+}
+
+async function updateAllChannelsWithZeroSubscribers() {
+    try {
+        console.log('🔄 Начинаем обновление каналов с 0 подписчиков...');
+
+        // Получаем текущий список каналов
+        const response = await fetch('/api/channels/my', {
+            headers: {
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error('Не удалось получить список каналов');
+        }
+
+        // Находим каналы с 0 подписчиков
+        const channelsToUpdate = data.channels.filter(channel =>
+            channel.subscriber_count === 0 || channel.subscribers_count === 0
+        );
+
+        console.log(`📊 Найдено ${channelsToUpdate.length} каналов для обновления`);
+
+        // Обновляем каждый канал
+        const results = [];
+        for (const channel of channelsToUpdate) {
+            try {
+                console.log(`🔄 Обновляем канал: ${channel.title} (@${channel.username})`);
+
+                const result = await updateChannelWithTelegramData(
+                    channel.id,
+                    channel.username.replace('@', '')
+                );
+
+                results.push({
+                    channel_id: channel.id,
+                    success: true,
+                    old_count: channel.subscriber_count,
+                    new_count: result.channel.subscriber_count
+                });
+
+                // Небольшая пауза между запросами
+                await new Promise(resolve => setTimeout(resolve, 1000));
+
+            } catch (error) {
+                console.error(`❌ Ошибка обновления ${channel.title}:`, error);
+                results.push({
+                    channel_id: channel.id,
+                    success: false,
+                    error: error.message
+                });
+            }
+        }
+
+        console.log('✅ Обновление завершено:', results);
+
+        // Перезагружаем страницу для отображения обновленных данных
+        if (results.some(r => r.success)) {
+            console.log('🔄 Перезагружаем список каналов...');
+            await loadUserChannels();
+        }
+
+        return results;
+
+    } catch (error) {
+        console.error('❌ Ошибка массового обновления:', error);
+        throw error;
+    }
+}
+
+// Функция для быстрого исправления конкретного канала
+async function fixChannelData(channelId) {
+    try {
+        // Находим канал в текущем списке
+        const channelCard = document.querySelector(`[data-channel-id="${channelId}"]`);
+        if (!channelCard) {
+            throw new Error('Канал не найден на странице');
+        }
+
+        // Извлекаем username из карточки
+        const usernameElement = channelCard.querySelector('.channel-username');
+        if (!usernameElement) {
+            throw new Error('Username не найден в карточке');
+        }
+
+        const username = usernameElement.textContent.replace('@', '').trim();
+
+        console.log(`🛠️ Исправляем данные канала ${channelId} (@${username})`);
+
+        const result = await updateChannelWithTelegramData(channelId, username);
+
+        // Обновляем карточку на странице
+        const subscribersElement = channelCard.querySelector('.subscribers-count');
+        if (subscribersElement && result.channel.subscriber_count > 0) {
+            subscribersElement.textContent = formatSubscriberCount(result.channel.subscriber_count);
+        }
+
+        console.log(`✅ Канал ${channelId} исправлен!`);
+        return result;
+
+    } catch (error) {
+        console.error(`❌ Ошибка исправления канала ${channelId}:`, error);
+        alert(`Ошибка исправления: ${error.message}`);
+        throw error;
+    }
+}
+
+// Экспортируем функции для использования в консоли
+window.updateChannelWithTelegramData = updateChannelWithTelegramData;
+window.updateAllChannelsWithZeroSubscribers = updateAllChannelsWithZeroSubscribers;
+window.fixChannelData = fixChannelData;
 
 // Делаем функции глобально доступными для onclick
 window.verifyChannel = verifyChannel;

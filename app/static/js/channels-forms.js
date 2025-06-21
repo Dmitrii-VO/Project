@@ -26,5 +26,4 @@ document.getElementById('channelUrl').addEventListener('input', async function()
 // Инициализация при загрузке
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📺 Страница каналов загружена');
-    loadUserChannels();
-});
+    });

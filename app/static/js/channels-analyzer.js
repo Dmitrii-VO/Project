@@ -87,6 +87,7 @@ class ChannelAnalyzer {
                     avatar_letter: (channelInfo.title || username).charAt(0).toUpperCase(),
                     subscribers: this.formatSubscriberCount(memberCount),
                     raw_subscriber_count: memberCount, // ✅ Добавляем сырое число
+                    subscriber_count: memberCount, // ✅ Добавляем поле для совместимости с backend
                     verified: channelInfo.is_verified || false,
                     category: this.suggestCategory(channelInfo.title || username),
                     description: channelInfo.description || this.generateDescription(channelInfo.title || username),
@@ -469,6 +470,325 @@ class ChannelAnalyzer {
                 this.showChannelPreview(manualData);
             }
         }
+// Добавьте эту функцию в channels-analyzer.js или в основной файл формы
+
+function submitChannelForm() {
+    try {
+        // Получаем данные формы
+        const formData = new FormData(document.getElementById('addChannelForm'));
+
+        // Получаем данные канала от анализатора
+        const channelData = channelAnalyzer.currentChannelData;
+
+        if (!channelData) {
+            alert('Сначала проанализируйте канал');
+            return;
+        }
+
+        // Подготавливаем данные для отправки
+        const submitData = {
+            username: formData.get('channel_url') || channelData.username,
+            title: channelData.title,
+            description: formData.get('description') || channelData.description,
+            category: formData.get('category') || channelData.category,
+
+            // ✅ ГЛАВНОЕ: Передаем количество подписчиков
+            subscribers_count: channelData.raw_subscriber_count || 0,
+            raw_subscriber_count: channelData.raw_subscriber_count || 0,
+
+            // Передаем полные данные канала для резерва
+            channel_data: {
+                data: channelData
+            }
+        };
+
+        console.log('📤 Отправляем данные канала:', submitData);
+
+        // Отправляем на сервер
+        fetch('/api/channels', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId() // Ваша функция получения ID
+            },
+            body: JSON.stringify(submitData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                console.log('✅ Канал добавлен:', data);
+                alert('Канал успешно добавлен!');
+                // Перенаправление или обновление списка
+                window.location.href = '/channels/verify/' + data.channel.id;
+            } else {
+                console.error('❌ Ошибка:', data.error);
+                alert('Ошибка: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('❌ Сетевая ошибка:', error);
+            alert('Ошибка сети');
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка отправки формы:', error);
+        alert('Ошибка отправки формы');
+    }
+}
+
+// 🔍 ОТЛАДОЧНЫЙ КОД ДЛЯ ДИАГНОСТИКИ ПРОБЛЕМЫ С ПОДПИСЧИКАМИ
+// Добавьте этот код в channels-analyzer.js для отладки
+
+class SubscriberDebugger {
+    constructor() {
+        this.debugMode = true;
+    }
+
+    // 📊 Функция для отладки данных подписчиков
+    debugSubscriberData(channelData, source = 'unknown') {
+        if (!this.debugMode) return;
+
+        console.group(`🔍 ОТЛАДКА ПОДПИСЧИКОВ - Источник: ${source}`);
+
+        // Проверяем все возможные поля с подписчиками
+        const subscriberFields = [
+            'subscribers',
+            'subscriber_count',
+            'subscribers_count',
+            'raw_subscriber_count',
+            'member_count',
+            'members_count'
+        ];
+
+        console.log('📋 Полные данные канала:', channelData);
+
+        subscriberFields.forEach(field => {
+            const value = this.getNestedValue(channelData, field);
+            if (value !== undefined) {
+                console.log(`✅ ${field}: ${value} (тип: ${typeof value})`);
+            } else {
+                console.log(`❌ ${field}: не найдено`);
+            }
+        });
+
+        // Проверяем данные в data объекте если есть
+        if (channelData.data) {
+            console.log('📊 Данные в channelData.data:');
+            subscriberFields.forEach(field => {
+                const value = channelData.data[field];
+                if (value !== undefined) {
+                    console.log(`  ✅ data.${field}: ${value} (тип: ${typeof value})`);
+                } else {
+                    console.log(`  ❌ data.${field}: не найдено`);
+                }
+            });
+        }
+
+        console.groupEnd();
+    }
+
+    // 🔧 Получение вложенного значения
+    getNestedValue(obj, path) {
+        return path.split('.').reduce((current, key) => {
+            return current && current[key] !== undefined ? current[key] : undefined;
+        }, obj);
+    }
+
+    // 📈 Отладка API ответа от сервера
+    debugServerResponse(response, endpoint) {
+        if (!this.debugMode) return;
+
+        console.group(`🌐 ОТЛАДКА СЕРВЕРНОГО ОТВЕТА - ${endpoint}`);
+        console.log('📥 Полный ответ:', response);
+
+        if (response.channels) {
+            console.log(`📊 Количество каналов: ${response.channels.length}`);
+
+            response.channels.forEach((channel, index) => {
+                console.log(`\n📺 Канал ${index + 1}: ${channel.title || 'Без названия'}`);
+                console.log(`  🔢 subscriber_count: ${channel.subscriber_count}`);
+                console.log(`  🔢 subscribers_count: ${channel.subscribers_count}`);
+                console.log(`  🔢 subscribers: ${channel.subscribers}`);
+                console.log(`  📊 Все поля канала:`, channel);
+            });
+        }
+
+        console.groupEnd();
+    }
+
+    // 🗄️ Отладка данных в базе
+    async debugDatabaseData() {
+        if (!this.debugMode) return;
+
+        console.group('🗄️ ОТЛАДКА ДАННЫХ В БАЗЕ');
+
+        try {
+            // Прямой запрос к API для получения каналов
+            const response = await fetch('/api/channels/my', {
+                headers: {
+                    'X-Telegram-User-Id': window.Telegram?.WebApp?.initDataUnsafe?.user?.id || '373086959'
+                }
+            });
+
+            const data = await response.json();
+            this.debugServerResponse(data, '/api/channels/my');
+
+        } catch (error) {
+            console.error('❌ Ошибка запроса к API:', error);
+        }
+
+        console.groupEnd();
+    }
+
+    // 📝 Отладка отправки данных на сервер
+    debugChannelSubmission(formData, telegramData) {
+        if (!this.debugMode) return;
+
+        console.group('📤 ОТЛАДКА ОТПРАВКИ КАНАЛА');
+        console.log('📋 Данные формы:', formData);
+        console.log('🤖 Данные Telegram API:', telegramData);
+
+        // Проверяем какие данные о подписчиках отправляем
+        const subscribersInForm = formData.subscribers_count || formData.subscriber_count || 0;
+        const subscribersInTelegram = telegramData?.raw_subscriber_count || telegramData?.subscribers || 0;
+
+        console.log(`📊 Подписчики в форме: ${subscribersInForm}`);
+        console.log(`📊 Подписчики из Telegram: ${subscribersInTelegram}`);
+
+        // Рекомендация
+        if (subscribersInTelegram > 0 && subscribersInForm === 0) {
+            console.warn('⚠️ ПРОБЛЕМА: Telegram данные есть, но в форме 0!');
+            console.log('💡 Рекомендация: Используйте raw_subscriber_count из Telegram данных');
+        }
+
+        console.groupEnd();
+    }
+}
+
+// 🚀 Инициализация отладчика
+const subscriberDebugger = new SubscriberDebugger();
+
+// 🔧 ИСПРАВЛЕННАЯ ФУНКЦИЯ getTelegramChannelInfo с отладкой
+async function getTelegramChannelInfoWithDebug(username) {
+    try {
+        console.log('🤖 Запрос к Telegram API для:', username);
+
+        const telegramUrl = `https://api.telegram.org/bot6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8/getChat?chat_id=@${username}`;
+        const response = await fetch(telegramUrl);
+        const data = await response.json();
+
+        subscriberDebugger.debugSubscriberData(data, 'Telegram getChat API');
+
+        if (data.ok && data.result) {
+            const channelInfo = data.result;
+
+            // Получаем количество участников
+            const membersResponse = await fetch(
+                `https://api.telegram.org/bot6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8/getChatMemberCount?chat_id=@${username}`
+            );
+            const membersData = await membersResponse.json();
+
+            subscriberDebugger.debugSubscriberData(membersData, 'Telegram getChatMemberCount API');
+
+            const memberCount = membersData.ok ? membersData.result : 0;
+
+            console.log('🔢 Финальное количество участников:', memberCount);
+
+            const result = {
+                success: true,
+                data: {
+                    username: channelInfo.username ? `@${channelInfo.username}` : `@${username}`,
+                    title: channelInfo.title || `Канал @${username}`,
+                    avatar_letter: (channelInfo.title || username).charAt(0).toUpperCase(),
+
+                    // ✅ ИСПРАВЛЕНИЕ: Добавляем ВСЕ варианты полей для подписчиков
+                    subscribers: formatSubscriberCount(memberCount),
+                    subscriber_count: memberCount,           // ✅ Для backend
+                    subscribers_count: memberCount,          // ✅ Для совместимости
+                    raw_subscriber_count: memberCount,       // ✅ Сырое число
+                    member_count: memberCount,               // ✅ Альтернативное поле
+
+                    verified: channelInfo.is_verified || false,
+                    category: suggestCategory(channelInfo.title || username),
+                    description: channelInfo.description || `Telegram канал @${username}`,
+                    engagement_rate: calculateEngagementRate(memberCount),
+                    channel_type: channelInfo.type,
+                    invite_link: channelInfo.invite_link,
+                    photo: channelInfo.photo ? channelInfo.photo.big_file_id : null,
+                    raw_data: channelInfo
+                }
+            };
+
+            subscriberDebugger.debugSubscriberData(result, 'Финальный результат getTelegramChannelInfo');
+            return result;
+        } else {
+            throw new Error(data.description || 'Канал не найден или недоступен');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка Telegram API:', error);
+        throw error;
+    }
+}
+
+// 🔧 Вспомогательные функции (добавьте если их нет)
+function formatSubscriberCount(count) {
+    if (count >= 1000000) {
+        return (count / 1000000).toFixed(1) + 'M';
+    } else if (count >= 1000) {
+        return (count / 1000).toFixed(1) + 'K';
+    }
+    return count.toString();
+}
+
+function calculateEngagementRate(subscriberCount) {
+    if (subscriberCount < 1000) return (Math.random() * 15 + 10).toFixed(1);
+    if (subscriberCount < 10000) return (Math.random() * 10 + 5).toFixed(1);
+    if (subscriberCount < 100000) return (Math.random() * 5 + 2).toFixed(1);
+    return (Math.random() * 3 + 1).toFixed(1);
+}
+
+function suggestCategory(title) {
+    const keywords = {
+        'технолог': 'technology',
+        'it': 'technology',
+        'бизнес': 'business',
+        'крипто': 'finance',
+        'новост': 'news'
+    };
+
+    const titleLower = title.toLowerCase();
+    for (const [keyword, category] of Object.entries(keywords)) {
+        if (titleLower.includes(keyword)) {
+            return category;
+        }
+    }
+    return 'other';
+}
+
+// 🚀 АВТОМАТИЧЕСКАЯ ОТЛАДКА при загрузке страницы "Мои каналы"
+document.addEventListener('DOMContentLoaded', function() {
+    // Проверяем, находимся ли мы на странице "Мои каналы"
+    if (window.location.hash === '#my-channels' || document.querySelector('.my-channels-section')) {
+        console.log('🔍 АВТОМАТИЧЕСКАЯ ОТЛАДКА: Страница "Мои каналы" загружена');
+
+        // Запускаем отладку через 2 секунды после загрузки
+        setTimeout(() => {
+            subscriberDebugger.debugDatabaseData();
+        }, 2000);
+    }
+});
+
+// 📋 Инструкции по использованию
+console.log(`
+🔍 ОТЛАДЧИК ПОДПИСЧИКОВ АКТИВИРОВАН
+
+Доступные команды в консоли:
+- subscriberDebugger.debugDatabaseData() - Проверить данные из базы
+- subscriberDebugger.debugSubscriberData(данные, 'источник') - Отладить объект данных
+- subscriberDebugger.debugChannelSubmission(формаДанные, telegramДанные) - Отладить отправку
+
+Автоматически запускается при загрузке страницы "Мои каналы"
+`);
 
         // Инициализация анализатора каналов
         const channelAnalyzer = new ChannelAnalyzer();
