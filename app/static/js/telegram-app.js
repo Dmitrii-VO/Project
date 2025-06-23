@@ -1,50 +1,38 @@
-// static/js/app-init.js - Инициализация всего приложения
-// TELEGRAM MINI APP - СОВМЕСТИМЫЙ С СУЩЕСТВУЮЩИМ КОДОМ
-class TelegramMiniApp {
+// TELEGRAM MINI APP - ОПТИМИЗИРОВАННЫЙ КЛАСС
+class TelegramApp {
     constructor() {
         this.isReady = false;
         this.user = null;
         this.tg = window.Telegram?.WebApp;
-        this.initialized = false;
     }
 
     // Инициализация приложения
     async init() {
         console.log('🚀 Инициализация Telegram Mini App...');
-        
+
         try {
             // Инициализация Telegram WebApp
             this.initTelegramWebApp();
-            
+
             // Применение темы
             this.applyTheme();
-            
+
             // Настройка обработчиков
             this.setupEventListeners();
-            
+
             // Скрытие экрана загрузки
             this.hideLoadingScreen();
-            
+
             this.isReady = true;
-            this.initialized = true;
-            
-            // Установка глобальных переменных
-            if (window.appGlobals) {
-                window.appGlobals.tg = this.tg;
-                window.appGlobals.user = this.user;
-                window.appGlobals.isInTelegram = !!this.tg;
-                window.appGlobals.initialized = true;
-            }
-            
             console.log('✅ Приложение готово');
-            
+
         } catch (error) {
             console.error('❌ Ошибка инициализации:', error);
             this.hideLoadingScreen(); // Показать контент даже при ошибке
         }
     }
 
-    // Инициализация Telegram WebApp (совместимо с существующим кодом)
+    // Инициализация Telegram WebApp
     initTelegramWebApp() {
         if (this.tg) {
             this.tg.ready();
@@ -56,21 +44,19 @@ class TelegramMiniApp {
         }
     }
 
-    // Применение темы Telegram (совместимо с существующими CSS переменными)
+    // Применение темы Telegram
     applyTheme() {
         if (!this.tg?.themeParams) return;
 
         const root = document.documentElement;
         const theme = this.tg.themeParams;
 
-        // Применяем цвета темы к существующим CSS переменным
+        // Применяем цвета темы
         Object.entries({
             '--tg-theme-bg-color': theme.bg_color,
             '--tg-theme-text-color': theme.text_color,
             '--tg-theme-button-color': theme.button_color,
             '--tg-theme-button-text-color': theme.button_text_color,
-            '--tg-theme-hint-color': theme.hint_color,
-            '--tg-theme-link-color': theme.link_color,
         }).forEach(([property, value]) => {
             if (value) root.style.setProperty(property, value);
         });
@@ -80,13 +66,13 @@ class TelegramMiniApp {
     setupEventListeners() {
         // Обработчик кнопок
         document.addEventListener('click', this.handleClick.bind(this));
-        
+
         // Обработчик форм
         document.addEventListener('submit', this.handleSubmit.bind(this));
-        
+
         // Обработчик изменения размера
         window.addEventListener('resize', this.handleResize.bind(this));
-        
+
         // Обработчик ошибок
         window.addEventListener('error', this.handleError.bind(this));
     }
@@ -104,40 +90,36 @@ class TelegramMiniApp {
 
     // Обработчик отправки форм
     handleSubmit(event) {
+        // Базовая обработка - можно расширить
         console.log('📤 Отправка формы:', event.target);
     }
 
     // Обработчик изменения размера
     handleResize() {
+        // Адаптация для мобильных устройств
         const isMobile = window.innerWidth <= 768;
         document.body.classList.toggle('mobile', isMobile);
-        
-        // Совместимость с существующим кодом
-        if (this.tg && isMobile) {
-            document.body.classList.add('telegram-webapp');
-            const appContainer = document.getElementById('app-container');
-            if (appContainer) appContainer.classList.add('telegram-webapp');
-        }
     }
 
     // Обработчик ошибок
     handleError(event) {
         console.error('❌ Ошибка приложения:', event.error);
+        // Показать контент даже при ошибках
         this.hideLoadingScreen();
     }
 
-    // Скрытие экрана загрузки (совместимо с существующим кодом)
+    // Скрытие экрана загрузки
     hideLoadingScreen() {
         setTimeout(() => {
             const loadingScreen = document.getElementById('loading-screen');
             const appContainer = document.getElementById('app-container');
-            
+
             if (loadingScreen) loadingScreen.classList.add('hidden');
             if (appContainer) appContainer.classList.add('visible');
         }, 1000);
     }
 
-    // Утилиты для взаимодействия с Telegram (совместимые API)
+    // Утилиты для взаимодействия с Telegram
     showAlert(message) {
         if (this.tg?.showAlert) {
             this.tg.showAlert(message);
@@ -156,21 +138,18 @@ class TelegramMiniApp {
 
     // Навигация
     goBack() {
-        if (this.tg?.BackButton?.isVisible) {
-            window.history.back();
+        if (this.tg?.BackButton) {
+            this.tg.BackButton.onClick(() => window.history.back());
         } else {
-            window.location.href = '/';
+            window.history.back();
         }
     }
 }
 
-// Создание глобального экземпляра (совместимо с существующим кодом)
-window.TelegramMiniApp = new TelegramMiniApp();
-
-// Обратная совместимость со старым API
-window.TelegramApp = window.TelegramMiniApp;
+// Создание глобального экземпляра
+window.TelegramApp = new TelegramApp();
 
 // Глобальные функции для совместимости
-window.showAlert = (message) => window.TelegramMiniApp.showAlert(message);
-window.closeApp = () => window.TelegramMiniApp.close();
-window.goBack = () => window.TelegramMiniApp.goBack();
+window.showAlert = (message) => window.TelegramApp.showAlert(message);
+window.closeApp = () => window.TelegramApp.close();
+window.goBack = () => window.TelegramApp.goBack();

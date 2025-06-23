@@ -5,282 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>{% block title %}Telegram Mini App{% endblock %}</title>
 
-    <!-- Telegram WebApp Script - ОБЯЗАТЕЛЬНО ПЕРВЫМ! -->
+    <!-- Telegram WebApp Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- Основные стили -->
-    <style>
-        /* Базовые стили для корректного отображения */
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        html, body {
-            height: 100%;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background: var(--tg-theme-bg-color, #f7fafc);
-            color: var(--tg-theme-text-color, #2d3748);
-            overflow-x: hidden;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        /* Экран загрузки */
-        #loading-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 18px;
-            z-index: 9999;
-            transition: opacity 0.5s ease-out;
-        }
-
-        #loading-screen.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .loading-content {
-            text-align: center;
-        }
-
-        .loading-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
-        /* Основной контент */
-        #app-container {
-            min-height: 100vh;
-            opacity: 0;
-            transition: opacity 0.5s ease-in;
-        }
-
-        #app-container.visible {
-            opacity: 1;
-        }
-
-        /* Telegram WebApp CSS Variables Override */
-        :root {
-            --tg-theme-bg-color: #ffffff;
-            --tg-theme-text-color: #000000;
-            --tg-theme-hint-color: #999999;
-            --tg-theme-link-color: #667eea;
-            --tg-theme-button-color: #667eea;
-            --tg-theme-button-text-color: #ffffff;
-            --tg-theme-secondary-bg-color: #f7fafc;
-        }
-
-        /* Адаптивность для Telegram */
-        @media (max-width: 768px) {
-            .container {
-                padding: 16px;
-            }
-        }
-
-        /* Предотвращение скролла body в Telegram */
-        body.telegram-webapp {
-            overflow: hidden;
-            position: fixed;
-            width: 100%;
-        }
-
-        #app-container.telegram-webapp {
-            overflow-y: auto;
-            height: 100vh;
-        }
-    </style>
+    <!-- Стили -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
 
     <!-- Дополнительные стили страницы -->
-    {% block extra_head %}{% endblock %}
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Экран загрузки -->
     <div id="loading-screen">
         <div class="loading-content">
-            <div class="loading-icon">🚀</div>
-            <div>Инициализация приложения...</div>
+            <div class="loading-icon">📱</div>
+            <div>Загрузка приложения...</div>
         </div>
     </div>
 
     <!-- Основной контент -->
-    <div id="app-container">
-        {% block content %}
-        <div class="container">
-            <h1>Загрузка...</h1>
-            <p>Если страница не загружается, проверьте подключение к интернету.</p>
-        </div>
-        {% endblock %}
-    </div>
+    <main id="app-container">
+        {% block content %}{% endblock %}
+    </main>
 
-    <!-- Базовый JavaScript -->
-    <script>
-        // Telegram WebApp инициализация
-        window.TelegramApp = {
-            isReady: false,
-            user: null,
-            themeParams: {},
-
-            init: function() {
-                console.log('🔧 Инициализация Telegram WebApp...');
-
-                if (window.Telegram && window.Telegram.WebApp) {
-                    const tg = window.Telegram.WebApp;
-
-                    // Инициализация
-                    tg.ready();
-                    tg.expand();
-
-                    // Сохранение данных
-                    this.user = tg.initDataUnsafe.user || null;
-                    this.themeParams = tg.themeParams || {};
-                    this.isReady = true;
-
-                    // Применение темы
-                    this.applyTheme();
-
-                    // Настройка для мобильного
-                    if (window.innerWidth <= 768) {
-                        document.body.classList.add('telegram-webapp');
-                        document.getElementById('app-container').classList.add('telegram-webapp');
-                    }
-
-                    console.log('✅ Telegram WebApp инициализирован');
-                    console.log('👤 Пользователь:', this.user);
-                } else {
-                    console.log('⚠️ Telegram WebApp API недоступен - работаем в режиме эмуляции');
-                    this.isReady = true;
-                }
-
-                // Показать контент
-                this.showContent();
-            },
-
-            applyTheme: function() {
-                if (this.themeParams) {
-                    const root = document.documentElement;
-
-                    // Применяем цвета темы Telegram
-                    if (this.themeParams.bg_color) {
-                        root.style.setProperty('--tg-theme-bg-color', this.themeParams.bg_color);
-                        document.body.style.backgroundColor = this.themeParams.bg_color;
-                    }
-
-                    if (this.themeParams.text_color) {
-                        root.style.setProperty('--tg-theme-text-color', this.themeParams.text_color);
-                    }
-
-                    if (this.themeParams.button_color) {
-                        root.style.setProperty('--tg-theme-button-color', this.themeParams.button_color);
-                    }
-
-                    if (this.themeParams.button_text_color) {
-                        root.style.setProperty('--tg-theme-button-text-color', this.themeParams.button_text_color);
-                    }
-                }
-            },
-
-            showContent: function() {
-                setTimeout(() => {
-                    const loadingScreen = document.getElementById('loading-screen');
-                    const appContainer = document.getElementById('app-container');
-
-                    if (loadingScreen) {
-                        loadingScreen.classList.add('hidden');
-                    }
-
-                    if (appContainer) {
-                        appContainer.classList.add('visible');
-                    }
-
-                    console.log('🎉 Приложение готово к использованию');
-
-                    // Событие готовности приложения
-                    window.dispatchEvent(new CustomEvent('app:ready'));
-                }, 1000);
-            },
-
-            showAlert: function(message) {
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.showAlert(message);
-                } else {
-                    alert(message);
-                }
-            },
-
-            close: function() {
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.close();
-                } else {
-                    console.log('Закрытие приложения...');
-                }
-            }
-        };
-
-        // Функции для быстрого доступа
-        window.showAlert = function(message) {
-            window.TelegramApp.showAlert(message);
-        };
-
-        window.closeApp = function() {
-            window.TelegramApp.close();
-        };
-
-        // Инициализация при загрузке DOM
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('📱 DOM загружен, инициализация приложения...');
-            window.TelegramApp.init();
-        });
-
-        // Обработка ошибок
-        window.addEventListener('error', function(event) {
-            console.error('❌ Ошибка приложения:', event.error);
-
-            // Показать контент даже при ошибках
-            setTimeout(() => {
-                const loadingScreen = document.getElementById('loading-screen');
-                const appContainer = document.getElementById('app-container');
-
-                if (loadingScreen) loadingScreen.classList.add('hidden');
-                if (appContainer) appContainer.classList.add('visible');
-            }, 2000);
-        });
-
-        // Обработка изменения размера окна
-        window.addEventListener('resize', function() {
-            if (window.TelegramApp.isReady) {
-                if (window.innerWidth <= 768) {
-                    document.body.classList.add('telegram-webapp');
-                    document.getElementById('app-container').classList.add('telegram-webapp');
-                } else {
-                    document.body.classList.remove('telegram-webapp');
-                    document.getElementById('app-container').classList.remove('telegram-webapp');
-                }
-            }
-        });
-    </script>
+    <!-- Базовые скрипты -->
+    <script src="{{ url_for('static', filename='js/telegram-app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 
     <!-- Дополнительные скрипты страницы -->
     {% block extra_scripts %}{% endblock %}
+
+    <!-- Инициализация -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Проверяем что TelegramApp загружен
+            if (window.TelegramApp && typeof window.TelegramApp.init === 'function') {
+                window.TelegramApp.init();
+            } else {
+                console.error('❌ TelegramApp не загружен или не имеет метода init');
+            }
+        });
+    </script>
 </body>
 </html>

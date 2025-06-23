@@ -1,120 +1,259 @@
-// static/js/utils.js - Вспомогательные функции
+// УТИЛИТЫ ДЛЯ TELEGRAM MINI APP
 
-// === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
-window.appGlobals = {
-    tg: null,
-    user: null,
-    isInTelegram: false,
-    initialized: false
+// Утилиты для API запросов
+const API = {
+    // Базовый запрос
+    async request(url, options = {}) {
+        try {
+            const response = await fetch(url, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                },
+                ...options
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('API Error:', error);
+            throw error;
+        }
+    },
+
+    // GET запрос
+    get(url, options = {}) {
+        return this.request(url, { ...options, method: 'GET' });
+    },
+
+    // POST запрос
+    post(url, data = {}, options = {}) {
+        return this.request(url, {
+            ...options,
+            method: 'POST',
+            body: JSON.stringify(data)
+        });
+    },
+
+    // PUT запрос
+    put(url, data = {}, options = {}) {
+        return this.request(url, {
+            ...options,
+            method: 'PUT',
+            body: JSON.stringify(data)
+        });
+    },
+
+    // DELETE запрос
+    delete(url, options = {}) {
+        return this.request(url, { ...options, method: 'DELETE' });
+    }
 };
 
-// === УТИЛИТЫ API ===
-async function apiRequest(url, options = {}) {
-    const defaultOptions = {
-        headers: {
-            'Content-Type': 'application/json',
-        }
-    };
-
-    const config = { ...defaultOptions, ...options };
-
-    try {
-        const response = await fetch(url, config);
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        return await response.json();
-    } catch (error) {
-        console.error('API Request failed:', error);
-        throw error;
-    }
-}
-
-// === УТИЛИТЫ UI ===
-function showLoading() {
-    const loadingScreen = document.getElementById('loading-screen');
-    if (loadingScreen) {
-        loadingScreen.style.display = 'flex';
-    }
-}
-
-function hideLoading() {
-    const loadingScreen = document.getElementById('loading-screen');
-    const appContainer = document.getElementById('app-container');
-
-    if (loadingScreen) {
-        loadingScreen.style.display = 'none';
-    }
-    if (appContainer) {
-        appContainer.style.display = 'block';
-    }
-}
-
-function showAlert(message, type = 'info') {
-    if (window.appGlobals.isInTelegram && window.appGlobals.tg) {
-        window.appGlobals.tg.showAlert(message);
-    } else {
-        alert(message);
-    }
-}
-
-function showConfirm(message, callback) {
-    if (window.appGlobals.isInTelegram && window.appGlobals.tg) {
-        window.appGlobals.tg.showConfirm(message, callback);
-    } else {
-        const result = confirm(message);
-        callback(result);
-    }
-}
-
-// === НАВИГАЦИЯ ===
-function navigateTo(url) {
-    try {
-        if (window.appGlobals.isInTelegram && window.appGlobals.tg) {
-            // В Telegram просто меняем URL
-            window.location.href = url;
+// Утилиты для UI
+const UI = {
+    // Показать уведомление
+    showNotification(message, type = 'info') {
+        if (window.TelegramApp) {
+            window.TelegramApp.showAlert(message);
         } else {
-            // В браузере обычная навигация
-            window.location.href = url;
+            alert(message);
         }
-    } catch (error) {
-        console.error('Navigation error:', error);
-        window.location.href = url;
+    },
+
+    // Показать лоадер
+    showLoader(element) {
+        if (element) {
+            element.innerHTML = '<div class="loading-spinner"></div>';
+        }
+    },
+
+    // Скрыть лоадер
+    hideLoader(element, content = '') {
+        if (element) {
+            element.innerHTML = content;
+        }
+    },
+
+    // Форматирование чисел
+    formatNumber(num) {
+        if (num >= 1000000) {
+            return (num / 1000000).toFixed(1) + 'M';
+        } else if (num >= 1000) {
+            return (num / 1000).toFixed(1) + 'K';
+        }
+        return num.toString();
+    },
+
+    // Форматирование валюты
+    formatCurrency(amount) {
+        return new Intl.NumberFormat('ru-RU', {
+            style: 'currency',
+            currency: 'RUB'
+        }).format(amount);
+    },
+
+    // Дебаунс функция
+    debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    },
+
+    // Троттлинг функция
+    throttle(func, limit) {
+        let inThrottle;
+        return function() {
+            const args = arguments;
+            const context = this;
+            if (!inThrottle) {
+                func.apply(context, args);
+                inThrottle = true;
+                setTimeout(() => inThrottle = false, limit);
+            }
+        };
     }
-}
+};
 
-// === ФОРМАТИРОВАНИЕ ===
-function formatNumber(num) {
-    return new Intl.NumberFormat('ru-RU').format(num);
-}
+// Утилиты для локального хранения (замена localStorage для Telegram)
+const Storage = {
+    data: new Map(),
 
-function formatCurrency(amount) {
-    return `₽${formatNumber(amount)}`;
-}
+    set(key, value) {
+        this.data.set(key, JSON.stringify(value));
+    },
 
-function formatTime(timestamp) {
-    if (!timestamp) return 'Недавно';
+    get(key) {
+        const value = this.data.get(key);
+        return value ? JSON.parse(value) : null;
+    },
 
-    try {
-        const date = new Date(timestamp);
-        const now = new Date();
-        const diff = now - date;
+    remove(key) {
+        this.data.delete(key);
+    },
 
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
-
-        if (minutes < 1) return 'Только что';
-        if (minutes < 60) return `${minutes} мин назад`;
-        if (hours < 24) return `${hours} ч назад`;
-        if (days < 7) return `${days} дн назад`;
-
-        return date.toLocaleDateString('ru-RU');
-    } catch (error) {
-        return 'Недавно';
+    clear() {
+        this.data.clear();
     }
-}
+};
 
-console.log('✅ Utils loaded');
+// Утилиты для валидации форм
+const Validation = {
+    // Проверка email
+    isValidEmail(email) {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
+    },
+
+    // Проверка URL
+    isValidUrl(url) {
+        try {
+            new URL(url);
+            return true;
+        } catch {
+            return false;
+        }
+    },
+
+    // Проверка Telegram username
+    isValidTelegramUsername(username) {
+        const re = /^[a-zA-Z0-9_]{5,32}$/;
+        return re.test(username.replace('@', ''));
+    },
+
+    // Проверка на пустоту
+    isEmpty(value) {
+        return !value || value.trim() === '';
+    },
+
+    // Проверка минимальной длины
+    minLength(value, min) {
+        return value && value.length >= min;
+    },
+
+    // Проверка максимальной длины
+    maxLength(value, max) {
+        return value && value.length <= max;
+    },
+
+    // Проверка числа
+    isNumber(value) {
+        return !isNaN(value) && !isNaN(parseFloat(value));
+    },
+
+    // Проверка положительного числа
+    isPositiveNumber(value) {
+        return this.isNumber(value) && parseFloat(value) > 0;
+    }
+};
+
+// Утилиты для работы с DOM
+const DOM = {
+    // Найти элемент
+    $(selector) {
+        return document.querySelector(selector);
+    },
+
+    // Найти все элементы
+    $(selector) {
+        return document.querySelectorAll(selector);
+    },
+
+    // Добавить класс
+    addClass(element, className) {
+        if (element) element.classList.add(className);
+    },
+
+    // Удалить класс
+    removeClass(element, className) {
+        if (element) element.classList.remove(className);
+    },
+
+    // Переключить класс
+    toggleClass(element, className) {
+        if (element) element.classList.toggle(className);
+    },
+
+    // Проверить наличие класса
+    hasClass(element, className) {
+        return element ? element.classList.contains(className) : false;
+    },
+
+    // Создать элемент
+    createElement(tag, attributes = {}, content = '') {
+        const element = document.createElement(tag);
+
+        Object.entries(attributes).forEach(([key, value]) => {
+            element.setAttribute(key, value);
+        });
+
+        if (content) {
+            element.innerHTML = content;
+        }
+
+        return element;
+    },
+
+    // Удалить элемент
+    removeElement(element) {
+        if (element && element.parentNode) {
+            element.parentNode.removeChild(element);
+        }
+    }
+};
+
+// Глобальный экспорт утилит
+window.API = API;
+window.UI = UI;
+window.Storage = Storage;
+window.Validation = Validation;
+window.DOM = DOM;
