@@ -93,6 +93,25 @@ def test_endpoint():
     })
 
 
+@main_bp.route('/test-offers')
+def test_offers_page():
+    """Тестовая страница для проверки API офферов"""
+    try:
+        return render_template('test-offers.html')
+    except Exception as e:
+        current_app.logger.error(f"Error rendering test offers page: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@main_bp.route('/offers/available')
+def available_offers_page():
+    """Страница доступных офферов"""
+    try:
+        return render_template('offers-list.html')
+    except Exception as e:
+        current_app.logger.error(f"Error rendering available offers page: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
 # === API СТАТИСТИКИ ===
 # тут считаю количество на главной странице
 @main_bp.route('/api/stats/global')
@@ -203,55 +222,6 @@ def global_stats():
                 'offers': 0,
                 'revenue': 0
             }
-        }), 500
-
-# Для диагностики, потом можно удалить
-@main_bp.route('/api/debug/tables')
-def debug_tables():
-    """Диагностический эндпоинт для проверки таблиц"""
-    try:
-        from ..models.database import db_manager
-
-        # Получаем список таблиц
-        tables_result = db_manager.execute_query(
-            "SELECT name FROM sqlite_master WHERE type='table'",
-            fetch_all=True
-        )
-
-        tables_info = {}
-        if tables_result:
-            for table_row in tables_result:
-                table_name = table_row['name']
-                try:
-                    count_result = db_manager.execute_query(
-                        f"SELECT COUNT(*) as count FROM {table_name}",
-                        fetch_one=True
-                    )
-                    tables_info[table_name] = count_result['count'] if count_result else 0
-
-                    # Для основных таблиц показываем структуру
-                    if table_name in ['users', 'channels', 'offers', 'offers_extended']:
-                        schema_result = db_manager.execute_query(
-                            f"PRAGMA table_info({table_name})",
-                            fetch_all=True
-                        )
-                        if schema_result:
-                            columns = [col['name'] for col in schema_result]
-                            tables_info[f"{table_name}_columns"] = columns
-
-                except Exception as e:
-                    tables_info[table_name] = f"Error: {e}"
-
-        return jsonify({
-            'success': True,
-            'tables': tables_info
-        })
-
-    except Exception as e:
-        current_app.logger.error(f"Debug tables error: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
         }), 500
 
 # Экспорт

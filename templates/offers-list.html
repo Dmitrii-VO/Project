@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Доступные офферы - Telegram Mini App</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="hero-section">
+            <div class="hero-icon">🎯</div>
+            <h1 class="hero-title">Доступные офферы</h1>
+            <p class="hero-subtitle">Выберите подходящие предложения для ваших каналов</p>
+        </div>
+
+        <div class="filters-section">
+            <div class="filter-group">
+                <label for="categoryFilter">Категория:</label>
+                <select id="categoryFilter">
+                    <option value="">Все категории</option>
+                    <option value="tech">Технологии</option>
+                    <option value="finance">Финансы</option>
+                    <option value="lifestyle">Стиль жизни</option>
+                    <option value="education">Образование</option>
+                </select>
+            </div>
+
+            <div class="filter-group">
+                <label for="budgetFilter">Минимальный бюджет:</label>
+                <input type="number" id="budgetFilter" placeholder="1000" min="1">
+            </div>
+        </div>
+
+        <div id="offersContainer" class="offers-grid">
+            <!-- Офферы будут загружены через JavaScript -->
+        </div>
+
+        <div id="loadingSpinner" style="text-align: center; padding: 40px;">
+            <div>⏳ Загрузка офферов...</div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/offers.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof AvailableOffersManager !== 'undefined') {
+                new AvailableOffersManager();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест создания оффера</title>
+</head>
+<body>
+    <h1>Тест создания оффера</h1>
+    <button onclick="testCreateOffer()">Создать тестовый оффер</button>
+
+    <script>
+        function testCreateOffer() {
+            const testData = {
+                title: "Тестовый оффер",
+                content: "Это тестовое описание оффера для проверки API",
+                budget: 5000,
+                currency: "RUB",
+                targetAudience: "Все пользователи",
+                minSubscribers: 1,
+                duration: 7
+            };
+
+            fetch('/api/offers', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': '373086959'
+                },
+                body: JSON.stringify(testData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Результат:', data);
+                alert(JSON.stringify(data, null, 2));
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка: ' + error);
+            });
+        }
+    </script>
+</body>
+</html>

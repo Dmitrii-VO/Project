@@ -9,7 +9,7 @@ from flask import Flask, render_template
 from .main_router import main_bp
 from .api_router import api_bp
 from .channel_router import channel_bp
-from .offer_router import offer_bp
+
 from .analytics_router import analytics_bp
 from .payment_router import payment_bp
 
@@ -18,7 +18,6 @@ BLUEPRINTS = [
     (main_bp, '', 'main'),  # Основные страницы: /, /channels, /offers, /analytics, /payments
     (api_bp, '/api', 'api'),  # Общие API endpoints
     (channel_bp, '/api/channels', 'channels_api'),  # API для каналов
-    (offer_bp, '/api/offers', 'offers_api'),  # API для офферов
     (analytics_bp, '/api/analytics', 'analytics_api'),  # API для аналитики
     (payment_bp, '/api/payments', 'payments_api'),  # API для платежей
 ]

@@ -10,10 +10,13 @@ import sys
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
+
 import os
 
 import logger
 from dotenv import load_dotenv
+
+
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
@@ -156,6 +159,7 @@ def create_app() -> Flask:
     register_error_handlers(app)
     register_system_routes(app)  # Только служебные маршруты
 
+
     return app
 
 
@@ -190,8 +194,6 @@ def register_blueprints(app: Flask) -> None:
             ('app.api.channel_analyzer', 'analyzer_bp', '/api/analyzer'),
             ('app.routers.main_router', 'main_bp', ''),  # Основные страницы без префикса
             ('app.routers.api_router', 'api_bp', '/api'),
-            #('app.routers.channel_router', 'channel_bp', '/api/channels'),
-            ('app.routers.offer_router', 'offer_bp', '/api/offers'),
             ('app.routers.analytics_router', 'analytics_bp', '/api/analytics'),
             ('app.routers.payment_router', 'payment_bp', '/api/payments'),
         ]
@@ -221,6 +223,15 @@ def register_blueprints(app: Flask) -> None:
         logger.info("✅ channels_bp зарегистрирован на /api/channels")
     except Exception as e:
         logger.error(f"❌ Ошибка регистрации channels_bp: {e}")
+        # Не поднимаем исключение, просто логируем ошибку
+
+    # Регистрируем offers_bp из app.api.offers
+    try:
+        from app.api.offers import offers_bp
+        app.register_blueprint(offers_bp, url_prefix='/api/offers')
+        logger.info("✅ offers_bp зарегистрирован на /api/offers")
+    except Exception as e:
+        logger.error(f"❌ Ошибка регистрации offers_bp: {e}")
         # Не поднимаем исключение, просто логируем ошибку
 
 # Инициализируем анализатор каналов с токеном бота
@@ -376,6 +387,9 @@ def register_system_routes(app: Flask) -> None:
             }), 400
 
     logger.info("🔧 Endpoints для каналов добавлены")
+
+
+
 
 
 # === СТАТИСТИКА И МОНИТОРИНГ ===
@@ -816,6 +830,74 @@ def test_verification_service():
             'error': str(e)
         }), 500
 
+@app.route('/debug/table-schema/<table_name>')
+def debug_table_schema(table_name):
+    import sqlite3
+    conn = sqlite3.connect('telegram_mini_app.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = cursor.fetchall()
+
+        cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+        create_sql = cursor.fetchone()
+
+        return jsonify({
+            'table': table_name,
+            'columns': columns,
+            'create_sql': create_sql[0] if create_sql else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)})
+    finally:
+        conn.close()
+
+@app.route('/debug/routes')
+def debug_routes():
+    import urllib
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': rule.rule
+        })
+    return jsonify(routes)
+
+@app.route('/api/offers/debug', methods=['POST'])
+def debug_create_offer():
+    """Отладочный endpoint для создания оффера"""
+    try:
+        data = request.get_json()
+        telegram_user_id = request.headers.get('X-Telegram-User-Id', '373086959')
+
+        print(f"DEBUG: Получены данные: {data}")
+        print(f"DEBUG: User ID: {telegram_user_id}")
+
+        # Проверяем импорт
+        try:
+            from add_offer import add_offer
+            print("DEBUG: add_offer импортирован успешно")
+        except ImportError as e:
+            return jsonify({'error': f'Ошибка импорта add_offer: {e}'}), 500
+
+        # Проверяем функцию
+        try:
+            result = add_offer(int(telegram_user_id), data)
+            print(f"DEBUG: Результат add_offer: {result}")
+            return jsonify(result)
+        except Exception as e:
+            print(f"DEBUG: Ошибка в add_offer: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': f'Ошибка в add_offer: {str(e)}'}), 500
+
+    except Exception as e:
+        print(f"DEBUG: Общая ошибка: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': f'Общая ошибка: {str(e)}'}), 500
 
 logger.info("🔧 Система верификации каналов инициализирована")
 # === ТОЧКА ВХОДА ===
