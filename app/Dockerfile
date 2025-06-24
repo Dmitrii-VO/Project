@@ -44,7 +44,7 @@ RUN touch /app/telegram_mini_app.db
 # Настройка прав доступа
 RUN chown -R appuser:appuser /app && \
     chmod +x /app/working_app.py && \
-    chmod +x /app/main.py
+
 USER appuser
 
 # Переменные окружения
