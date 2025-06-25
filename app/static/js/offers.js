@@ -346,6 +346,29 @@ class OffersManager {
 
         // Настройка слайдера подписчиков
         this.setupSubscribersSlider();
+        // Добавьте это в конец функции setupEventListeners()
+
+        // Обновление предпросмотра при изменении полей
+        const titleInput = document.querySelector('input[name="title"]');
+        const budgetInput = document.querySelector('input[name="budget"]');
+        const geographySelect = document.querySelector('select[name="geography"]');
+
+        if (titleInput) {
+            titleInput.addEventListener('input', () => this.updatePreview());
+        }
+        if (budgetInput) {
+            budgetInput.addEventListener('input', () => this.updatePreview());
+        }
+        if (geographySelect) {
+            geographySelect.addEventListener('change', () => this.updatePreview());
+        }
+
+        // Обновление при клике по чипам
+        document.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', () => {
+                setTimeout(() => this.updatePreview(), 10); // Небольшая задержка для обновления класса
+            });
+        });
     }
 
     setupChips() {
@@ -424,34 +447,72 @@ class OffersManager {
     }
 
     updatePreview() {
-        console.log('🔍 Обновление предпросмотра');
+    console.log('🔍 Обновление предпросмотра');
 
-        const titleInput = document.querySelector('input[name="title"]');
-        const budgetInput = document.querySelector('input[name="budget"]');
-
-        if (titleInput) {
-            const previewTitle = document.getElementById('previewTitle');
-            if (previewTitle) {
-                previewTitle.textContent = titleInput.value || 'Не указано';
-            }
-        }
-
-        if (budgetInput) {
-            const previewBudget = document.getElementById('previewBudget');
-            if (previewBudget) {
-                const budget = budgetInput.value;
-                previewBudget.textContent = budget ? formatPrice(budget) + ' RUB' : 'Не указан';
-            }
-        }
-
-        // Обновляем выбранные тематики
-        const selectedTopics = Array.from(document.querySelectorAll('.chip.selected'))
-            .map(chip => chip.textContent);
-        const previewTopics = document.getElementById('previewTopics');
-        if (previewTopics) {
-            previewTopics.textContent = selectedTopics.length > 0 ? selectedTopics.join(', ') : 'Не выбраны';
-        }
+    // 1. НАЗВАНИЕ
+    const titleInput = document.querySelector('input[name="title"]');
+    const previewTitle = document.getElementById('previewTitle');
+    if (previewTitle) {
+        previewTitle.textContent = titleInput?.value || 'Не указано';
     }
+
+    // 2. БЮДЖЕТ
+    const budgetInput = document.querySelector('input[name="budget"]');
+    const previewBudget = document.getElementById('previewBudget');
+    if (previewBudget) {
+        const budget = budgetInput?.value;
+        previewBudget.textContent = budget ? formatPrice(budget) + ' RUB' : 'Не указан';
+    }
+
+    // 3. ТЕМАТИКИ (ТОЛЬКО тематики каналов, БЕЗ возрастных групп)
+    const allSelectedChips = Array.from(document.querySelectorAll('.chip.selected'))
+        .map(chip => chip.textContent.trim());
+
+    // Список возрастных групп для исключения
+    const ageGroups = ['18-25 лет', '26-35 лет', '36-45 лет', '46+ лет'];
+
+    // Фильтруем ТОЛЬКО тематики каналов
+    const selectedTopics = allSelectedChips.filter(text => {
+        return !ageGroups.includes(text);
+    });
+
+    const previewTopics = document.getElementById('previewTopics');
+    if (previewTopics) {
+        previewTopics.textContent = selectedTopics.length > 0 ? selectedTopics.join(', ') : 'Не выбраны';
+    }
+
+    // 4. ЦЕЛЕВАЯ АУДИТОРИЯ (ТОЛЬКО возрастные группы)
+    const selectedAudience = allSelectedChips.filter(text => {
+        return ageGroups.includes(text);
+    });
+
+    const previewAudience = document.getElementById('previewAudience');
+    if (previewAudience) {
+        previewAudience.textContent = selectedAudience.length > 0 ? selectedAudience.join(', ') : 'Не указана';
+    }
+
+    // 5. ГЕОГРАФИЯ
+    const geographySelect = document.querySelector('select[name="geography"]');
+    const previewGeography = document.getElementById('previewGeography');
+    if (previewGeography) {
+        const geographyValue = geographySelect?.value;
+        const geographyText = {
+            'russia': 'Россия',
+            'cis': 'СНГ',
+            'europe': 'Европа',
+            'world': 'Весь мир'
+        }[geographyValue] || 'Не указана';
+
+        previewGeography.textContent = geographyText;
+    }
+
+    console.log('✅ Предпросмотр обновлен', {
+        allSelected: allSelectedChips,
+        topics: selectedTopics,
+        audience: selectedAudience,
+        geography: geographySelect?.value
+    });
+}
 
     async submitOffer() {
         console.log('📤 Отправка оффера...');
