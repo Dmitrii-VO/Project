@@ -1607,3 +1607,71 @@ body {
         min-width: 200px;
     }
 }
+
+/* ===== КОМПАКТНЫЕ КАРТОЧКИ ОФФЕРОВ ===== */
+.offer-card-compact {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-sm);
+    transition: var(--transition);
+    position: relative;
+}
+
+.offer-card-compact:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-color);
+}
+
+/* Контейнер для офферов - сетка */
+.stats-grid {
+    display: grid;
+    gap: 12px;
+    margin-top: 16px;
+}
+
+/* Мобильная оптимизация для компактных карточек */
+@media (max-width: 768px) {
+    .offer-card-compact {
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+    }
+
+    .stats-grid {
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .offer-card-compact {
+        padding: 8px;
+        margin-bottom: 8px;
+    }
+
+    .stats-grid {
+        gap: 8px;
+        margin-top: 12px;
+    }
+}
+
+/* Кнопки в компактных карточках */
+.offer-card-compact button {
+    transition: var(--transition);
+    font-family: inherit;
+    border: none;
+    outline: none;
+    cursor: pointer;
+}
+
+.offer-card-compact button:hover {
+    transform: translateY(-1px);
+    opacity: 0.9;
+}
+
+.offer-card-compact button:active {
+    transform: translateY(0);
+}

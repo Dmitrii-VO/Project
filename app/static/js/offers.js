@@ -106,7 +106,7 @@ function renderOffers(offers) {
         const description = offer.description || offer.content || 'Нет описания';
         const rawPrice = offer.price || 0;
         const currency = offer.currency || 'RUB';
-        const category = offer.category || 'Не указана';
+        const category = offer.category || 'general';
         const status = offer.status || 'active';
         const responseCount = offer.response_count || 0;
         const createdAt = offer.created_at || '';
@@ -121,74 +121,112 @@ function renderOffers(offers) {
             'cancelled': 'Отменен'
         }[status] || 'Неизвестно';
 
-        const shortDescription = description.length > 150 ?
-            description.substring(0, 150) + '...' : description;
+        // Сокращаем описание еще больше
+        const shortDescription = description.length > 80 ?
+            description.substring(0, 80) + '...' : description;
+
+        // Сокращаем название если слишком длинное
+        const shortTitle = title.length > 25 ?
+            title.substring(0, 25) + '...' : title;
 
         html += `
-            <div class="offer-card" data-offer-id="${offer.id}" style="background: white; border: 1px solid #ddd; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <div class="offer-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: #333; font-size: 18px; font-weight: 600;">${title}</h3>
-                    <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: ${status === 'active' ? '#d4edda' : '#f8d7da'}; color: ${status === 'active' ? '#155724' : '#721c24'};">${statusText}</span>
+            <div class="offer-card-compact" data-offer-id="${offer.id}" style="
+                background: white; 
+                border: 1px solid #e2e8f0; 
+                border-radius: 8px; 
+                padding: 12px; 
+                margin-bottom: 12px; 
+                box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                position: relative;
+            ">
+                <!-- Заголовок и статус -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <h3 style="margin: 0; color: #2d3748; font-size: 14px; font-weight: 600; flex: 1;">${shortTitle}</h3>
+                    <span style="
+                        padding: 2px 8px; 
+                        border-radius: 12px; 
+                        font-size: 10px; 
+                        font-weight: 500; 
+                        background: ${status === 'active' ? '#d4edda' : '#f8d7da'}; 
+                        color: ${status === 'active' ? '#155724' : '#721c24'};
+                        white-space: nowrap;
+                        margin-left: 8px;
+                    ">${statusText}</span>
                 </div>
                 
-                <div style="margin-bottom: 15px;">
-                    <div style="display: flex; align-items: baseline; gap: 8px;">
-                        <span style="font-size: 28px; font-weight: bold; color: #007bff;">${formattedPrice}</span>
-                        <span style="font-size: 16px; color: #666; font-weight: 500;">${currency}</span>
+                <!-- Цена крупно -->
+                <div style="margin-bottom: 8px;">
+                    <span style="font-size: 18px; font-weight: bold; color: #667eea;">${formattedPrice}</span>
+                    <span style="font-size: 12px; color: #718096; margin-left: 4px;">${currency}</span>
+                </div>
+                
+                <!-- Краткая информация в 2 колонки -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #718096;">📁</span>
+                        <span style="font-weight: 500; text-align: right;">${category}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span style="color: #718096;">💬</span>
+                        <span style="font-weight: 500; text-align: right;">${responseCount}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; grid-column: 1 / -1;">
+                        <span style="color: #718096;">📅</span>
+                        <span style="font-weight: 500;">${formattedDate}</span>
                     </div>
                 </div>
                 
-                <div style="margin-bottom: 15px;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">📁 Категория:</span>
-                            <span style="font-weight: 600;">${category}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">📊 Откликов:</span>
-                            <span style="font-weight: 600;">${responseCount}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">📅 Создан:</span>
-                            <span style="font-weight: 600;">${formattedDate}</span>
-                        </div>
-                    </div>
-                </div>
+                <!-- Краткое описание -->
+                <div style="
+                    background: #f7fafc; 
+                    padding: 8px; 
+                    border-radius: 4px; 
+                    margin-bottom: 8px;
+                    font-size: 11px;
+                    line-height: 1.3;
+                    color: #4a5568;
+                ">${shortDescription}</div>
                 
-                <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-                    <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #495057;">${shortDescription}</p>
-                </div>
-                
-                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button onclick="editOffer(${offer.id})" style="padding: 8px 16px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        ✏️ Редактировать
-                    </button>
-                    <button onclick="viewOfferDetails(${offer.id})" style="padding: 8px 16px; border: 1px solid #007bff; background: #007bff; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        👁️ Подробнее
-                    </button>
+                <!-- Компактные кнопки -->
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <button onclick="viewOfferDetails(${offer.id})" style="
+                        padding: 4px 8px; 
+                        border: 1px solid #667eea; 
+                        background: #667eea; 
+                        color: white; 
+                        border-radius: 4px; 
+                        cursor: pointer; 
+                        font-size: 10px;
+                        flex: 1;
+                    ">👁️ Подробнее</button>
+                    
                     ${responseCount > 0 ? `
-                    <button onclick="manageResponses(${offer.id})" style="padding: 8px 16px; border: 1px solid #28a745; background: #28a745; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        💬 Отклики (${responseCount})
-                    </button>` : ''}
+                    <button onclick="manageResponses(${offer.id})" style="
+                        padding: 4px 8px; 
+                        border: 1px solid #48bb78; 
+                        background: #48bb78; 
+                        color: white; 
+                        border-radius: 4px; 
+                        cursor: pointer; 
+                        font-size: 10px;
+                        flex: 1;
+                    ">💬 ${responseCount}</button>` : ''}
+                    
                     ${status === 'active' || status === 'paused' ? `
-                    <button onclick="cancelOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="padding: 8px 16px; border: 1px solid #ffc107; background: #ffc107; color: #212529; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        ❌ Отменить
-                    </button>` : ''}
-                    ${status === 'paused' ? `
-                    <button onclick="resumeOffer(${offer.id}, this)" style="padding: 8px 16px; border: 1px solid #28a745; background: #28a745; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        ▶️ Возобновить
-                    </button>` : ''}
-                    ${status === 'active' ? `
-                    <button onclick="pauseOffer(${offer.id}, this)" style="padding: 8px 16px; border: 1px solid #6c757d; background: #6c757d; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        ⏸️ Приостановить
-                    </button>` : ''}
-                    ${status === 'completed' || status === 'cancelled' ? `
-                    <button onclick="deleteOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="padding: 8px 16px; border: 1px solid #dc3545; background: #dc3545; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
-                        🗑️ Удалить
-                    </button>` : ''}
+                    <button onclick="cancelOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="
+                        padding: 4px 8px; 
+                        border: 1px solid #ed8936; 
+                        background: #ed8936; 
+                        color: white; 
+                        border-radius: 4px; 
+                        cursor: pointer; 
+                        font-size: 10px;
+                        flex: 1;
+                    ">❌</button>` : ''}
                 </div>
                 
-                <div style="margin-top: 10px; font-size: 12px; color: #666;">
+                <!-- ID внизу мелким шрифтом -->
+                <div style="margin-top: 4px; font-size: 9px; color: #a0aec0; text-align: right;">
                     ID: ${offer.id}
                 </div>
             </div>
@@ -196,7 +234,7 @@ function renderOffers(offers) {
     });
 
     container.innerHTML = html;
-    console.log('✅ Офферы отрисованы');
+    console.log('✅ Компактные офферы отрисованы');
 }
 
 async function loadMyOffers() {
@@ -853,6 +891,7 @@ function applyFindFilters() {
     const filters = {
         search: document.getElementById('findOffersSearch')?.value.trim() || '',
         category: document.getElementById('findCategoryFilter')?.value || '',
+        // ВАЖНО: Фильтруем по цене за размещение (price), а не по общему бюджету
         min_budget: parseFloat(document.getElementById('findBudgetMin')?.value) || null,
         max_budget: parseFloat(document.getElementById('findBudgetMax')?.value) || null,
         min_subscribers: parseInt(document.getElementById('findMinSubscribers')?.value) || null
@@ -865,7 +904,7 @@ function applyFindFilters() {
         }
     });
 
-    console.log('🎯 Фильтры:', filters);
+    console.log('🎯 Фильтры по цене за размещение:', filters);
     loadAvailableOffers(filters);
 }
 
@@ -961,7 +1000,9 @@ function renderAvailableOffers(offers) {
     offers.forEach((offer) => {
         const title = offer.title || 'Без названия';
         const description = offer.description || offer.content || 'Нет описания';
-        const price = formatPrice(offer.price || 0);
+
+        // ВАЖНО: Показываем ЦЕНУ ЗА РАЗМЕЩЕНИЕ, а не общий бюджет
+        const pricePerPlacement = offer.price || 0;
         const currency = offer.currency || 'RUB';
         const category = offer.category || 'Не указана';
         const minSubscribers = offer.min_subscribers || 0;
@@ -969,6 +1010,7 @@ function renderAvailableOffers(offers) {
         const createdAt = formatDate(offer.created_at);
         const creatorName = offer.creator_name || 'Неизвестный автор';
 
+        const formattedPrice = formatPrice(pricePerPlacement);
         const shortDescription = description.length > 200 ?
             description.substring(0, 200) + '...' : description;
 
@@ -985,22 +1027,25 @@ function renderAvailableOffers(offers) {
                         Активен
                     </span>
                 </div>
-                
+
                 <!-- Автор оффера -->
                 <div style="margin-bottom: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #667eea;">
                     <div style="font-size: 12px; color: #666;">👤 Автор оффера:</div>
                     <div style="font-size: 14px; font-weight: 600; color: #333;">${creatorName}</div>
                 </div>
-                
+
+                <!-- ЦЕНА ЗА РАЗМЕЩЕНИЕ - выделяем крупно и ярко -->
+                <div style="margin: 12px 0; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; text-align: center;">
+                    <div style="color: white; font-size: 24px; font-weight: bold;">${formattedPrice} ${currency}</div>
+                    <div style="color: rgba(255,255,255,0.9); font-size: 12px; margin-top: 4px;">💰 Оплата за размещение</div>
+                </div>
+
                 <div style="margin: 12px 0; color: #666; font-size: 14px; line-height: 1.5;">
                     ${shortDescription}
                 </div>
-                
+
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
                     <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                        <div style="font-size: 12px; color: #888;">
-                            💰 <strong style="color: #333;">${price} ${currency}</strong>
-                        </div>
                         <div style="font-size: 12px; color: #888;">
                             📂 <strong style="color: #333;">${category}</strong>
                         </div>
@@ -1010,9 +1055,13 @@ function renderAvailableOffers(offers) {
                         <div style="font-size: 12px; color: #888;">
                             📅 <strong style="color: #333;">${createdAt}</strong>
                         </div>
+                        ${offer.budget_total ? `
+                        <div style="font-size: 12px; color: #888;">
+                            💼 <strong style="color: #333;">Общий бюджет: ${formatPrice(offer.budget_total)} ${currency}</strong>
+                        </div>` : ''}
                     </div>
-                    
-                    <button class="btn btn-primary" style="padding: 8px 16px; font-size: 12px; margin-left: 12px;" onclick="event.stopPropagation(); acceptOffer(${offer.id})">
+
+                    <button class="btn btn-primary" style="padding: 12px 20px; font-size: 14px; margin-left: 12px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);" onclick="event.stopPropagation(); acceptOffer(${offer.id})">
                         ✅ Откликнуться
                     </button>
                 </div>
