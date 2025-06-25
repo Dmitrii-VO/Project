@@ -494,12 +494,29 @@ class OffersManager {
         previewTitle.textContent = titleInput?.value || 'Не указано';
     }
 
-    // 2. БЮДЖЕТ
+    // 2. БЮДЖЕТ - показать и общий бюджет, и максимальную цену за размещение
     const budgetInput = document.querySelector('input[name="budget"]');
+    const maxPriceInput = document.querySelector('input[name="max_price"]');
     const previewBudget = document.getElementById('previewBudget');
     if (previewBudget) {
         const budget = budgetInput?.value;
-        previewBudget.textContent = budget ? formatPrice(budget) + ' RUB' : 'Не указан';
+        const maxPrice = maxPriceInput?.value;
+
+        let budgetText = '';
+        if (budget) {
+            budgetText += `${formatPrice(budget)} RUB общий`;
+        }
+        if (maxPrice) {
+            if (budgetText) budgetText += ' | ';
+            budgetText += `${formatPrice(maxPrice)} RUB за размещение`;
+        } else if (budget) {
+            // Если максимальная цена не указана, показываем расчетную
+            const estimatedMaxPrice = Math.min(parseFloat(budget) * 0.1, 50000);
+            if (budgetText) budgetText += ' | ';
+            budgetText += `~${formatPrice(estimatedMaxPrice)} RUB за размещение`;
+        }
+
+        previewBudget.textContent = budgetText || 'Не указан';
     }
 
     // 3. ТЕМАТИКИ (ТОЛЬКО тематики каналов, БЕЗ возрастных групп)
@@ -552,107 +569,125 @@ class OffersManager {
     });
 }
 
+    // В функции submitOffer() класса OffersManager добавьте сохранение max_price:
+
     async submitOffer() {
-        console.log('📤 Отправка оффера...');
+    console.log('📤 Отправка оффера...');
 
-        const submitBtn = document.getElementById('submitBtn');
-        const originalText = submitBtn?.textContent;
+    const submitBtn = document.getElementById('submitBtn');
+    const originalText = submitBtn?.textContent;
 
-        try {
-            if (submitBtn) {
-                submitBtn.disabled = true;
-                submitBtn.textContent = '⏳ Создание...';
-            }
+    try {
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = '⏳ Создание...';
+        }
 
-            // Собираем данные формы
-            const data = {
-                title: '',
-                description: '',
-                budget_total: 0,
-                price: 0,
-                currency: 'RUB',
-                category: 'general'
-            };
+        // Собираем данные формы
+        const data = {
+            title: '',
+            description: '',
+            budget_total: 0,
+            price: 0,
+            max_price: 0,  // ДОБАВИЛИ поле max_price
+            currency: 'RUB',
+            category: 'general'
+        };
 
-            // Название
-            const titleField = document.querySelector('input[name="title"]');
-            if (titleField && titleField.value) {
-                data.title = titleField.value.trim();
+        // Название
+        const titleField = document.querySelector('input[name="title"]');
+        if (titleField && titleField.value) {
+            data.title = titleField.value.trim();
+        } else {
+            throw new Error('Укажите название оффера');
+        }
+
+        // Описание
+        const descField = document.querySelector('textarea[name="description"]');
+        if (descField && descField.value) {
+            data.description = descField.value.trim();
+        } else {
+            throw new Error('Укажите описание оффера');
+        }
+
+        // Общий бюджет
+        const budgetField = document.querySelector('input[name="budget"]');
+        if (budgetField && budgetField.value) {
+            const budgetValue = parseFloat(budgetField.value);
+            if (budgetValue > 0) {
+                data.budget_total = budgetValue;
             } else {
-                throw new Error('Укажите название оффера');
+                throw new Error('Укажите корректный общий бюджет');
             }
+        } else {
+            throw new Error('Укажите общий бюджет');
+        }
 
-            // Описание
-            const descField = document.querySelector('textarea[name="description"]');
-            if (descField && descField.value) {
-                data.description = descField.value.trim();
+        // ИСПРАВЛЕНИЕ: Максимальная цена за размещение
+        const maxPriceField = document.querySelector('input[name="max_price"]');
+        if (maxPriceField && maxPriceField.value) {
+            const maxPriceValue = parseFloat(maxPriceField.value);
+            if (maxPriceValue > 0) {
+                data.max_price = maxPriceValue;
+                data.price = maxPriceValue; // Также сохраняем в price для совместимости
             } else {
-                throw new Error('Укажите описание оффера');
+                throw new Error('Укажите корректную максимальную цену за размещение');
             }
+        } else {
+            // Если максимальная цена не указана, используем 10% от общего бюджета
+            data.max_price = Math.min(data.budget_total * 0.1, 50000);
+            data.price = data.max_price;
+        }
 
-            // Бюджет
-            const budgetField = document.querySelector('input[name="budget"]');
-            if (budgetField && budgetField.value) {
-                const budgetValue = parseFloat(budgetField.value);
-                if (budgetValue > 0) {
-                    data.budget_total = budgetValue;
-                    data.price = Math.min(budgetValue, 10000);
-                } else {
-                    throw new Error('Укажите корректный бюджет');
-                }
-            } else {
-                throw new Error('Укажите бюджет');
-            }
+        // Категория
+        const categoryField = document.querySelector('select[name="category"]');
+        if (categoryField && categoryField.value) {
+            data.category = categoryField.value;
+        }
 
-            // Категория
-            const categoryField = document.querySelector('select[name="category"]');
-            if (categoryField && categoryField.value) {
-                data.category = categoryField.value;
-            }
+        data.content = data.description;
 
-            data.content = data.description;
+        console.log('🚀 Отправляемые данные:', data);
 
-            console.log('🚀 Отправляемые данные:', data);
+        const response = await fetch('/api/offers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            },
+            body: JSON.stringify(data)
+        });
 
-            const response = await fetch('/api/offers', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Telegram-User-Id': getTelegramUserId()
-                },
-                body: JSON.stringify(data)
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            alert('✅ Оффер успешно создан!');
+
+            // Очищаем форму
+            document.getElementById('offerForm').reset();
+            document.querySelectorAll('.chip.selected').forEach(chip => {
+                chip.classList.remove('selected');
             });
 
-            const result = await response.json();
+            // Возвращаемся к первому шагу
+            this.updateStep(1);
 
-            if (response.ok && result.success) {
-                alert('✅ Оффер успешно создан!');
+            // Переходим к списку офферов
+            switchTab('my-offers');
+        } else {
+            throw new Error(result.error || 'Ошибка создания оффера');
+        }
 
-                // Очищаем форму
-                document.getElementById('offerForm').reset();
-                document.querySelectorAll('.chip.selected').forEach(chip => {
-                    chip.classList.remove('selected');
-                });
-
-                // Возвращаемся к первому шагу
-                this.updateStep(1);
-
-                // Переходим к списку офферов
-                switchTab('my-offers');
-            } else {
-                throw new Error(result.error || 'Ошибка создания оффера');
-            }
-
-        } catch (error) {
-            console.error('❌ Ошибка создания оффера:', error);
-            alert(`❌ Ошибка: ${error.message}`);
-        } finally {
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.textContent = originalText;
-            }
+    } catch (error) {
+        console.error('❌ Ошибка создания оффера:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
         }
     }
+}
 }
 
 // ===== ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ OFFERS MANAGER =====
@@ -1001,8 +1036,8 @@ function renderAvailableOffers(offers) {
         const title = offer.title || 'Без названия';
         const description = offer.description || offer.content || 'Нет описания';
 
-        // ВАЖНО: Показываем ЦЕНУ ЗА РАЗМЕЩЕНИЕ, а не общий бюджет
-        const pricePerPlacement = offer.price || 0;
+        // ИСПРАВЛЕНИЕ: Показываем максимальную цену за размещение
+        const maxPricePerPlacement = offer.max_price || offer.price || 0;
         const currency = offer.currency || 'RUB';
         const category = offer.category || 'Не указана';
         const minSubscribers = offer.min_subscribers || 0;
@@ -1010,7 +1045,7 @@ function renderAvailableOffers(offers) {
         const createdAt = formatDate(offer.created_at);
         const creatorName = offer.creator_name || 'Неизвестный автор';
 
-        const formattedPrice = formatPrice(pricePerPlacement);
+        const formattedMaxPrice = formatPrice(maxPricePerPlacement);
         const shortDescription = description.length > 200 ?
             description.substring(0, 200) + '...' : description;
 
@@ -1034,9 +1069,9 @@ function renderAvailableOffers(offers) {
                     <div style="font-size: 14px; font-weight: 600; color: #333;">${creatorName}</div>
                 </div>
 
-                <!-- ЦЕНА ЗА РАЗМЕЩЕНИЕ - выделяем крупно и ярко -->
+                <!-- МАКСИМАЛЬНАЯ ЦЕНА ЗА РАЗМЕЩЕНИЕ - выделяем крупно и ярко -->
                 <div style="margin: 12px 0; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; text-align: center;">
-                    <div style="color: white; font-size: 24px; font-weight: bold;">${formattedPrice} ${currency}</div>
+                    <div style="color: white; font-size: 24px; font-weight: bold;">${formattedMaxPrice} ${currency}</div>
                     <div style="color: rgba(255,255,255,0.9); font-size: 12px; margin-top: 4px;">💰 Оплата за размещение</div>
                 </div>
 
@@ -1055,10 +1090,7 @@ function renderAvailableOffers(offers) {
                         <div style="font-size: 12px; color: #888;">
                             📅 <strong style="color: #333;">${createdAt}</strong>
                         </div>
-                        ${offer.budget_total ? `
-                        <div style="font-size: 12px; color: #888;">
-                            💼 <strong style="color: #333;">Общий бюджет: ${formatPrice(offer.budget_total)} ${currency}</strong>
-                        </div>` : ''}
+                        <!-- УБРАЛИ отображение общего бюджета -->
                     </div>
 
                     <button class="btn btn-primary" style="padding: 12px 20px; font-size: 14px; margin-left: 12px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);" onclick="event.stopPropagation(); acceptOffer(${offer.id})">
