@@ -886,8 +886,8 @@ function renderAvailableOffers(offers) {
         container.innerHTML = `
             <div class="empty-state">
                 <div class="empty-icon" style="font-size: 48px; margin-bottom: 16px;">🎯</div>
-                <h3>Офферы не найдены</h3>
-                <p>Попробуйте изменить критерии поиска или очистить фильтры</p>
+                <h3>Нет доступных офферов</h3>
+                <p>В данный момент нет офферов от других пользователей, соответствующих вашим критериям поиска</p>
                 <button class="btn btn-primary" onclick="clearFindFilters()">
                     🗑️ Очистить фильтры
                 </button>
@@ -906,17 +906,29 @@ function renderAvailableOffers(offers) {
         const minSubscribers = offer.min_subscribers || 0;
         const maxSubscribers = offer.max_subscribers || 'Без ограничений';
         const createdAt = formatDate(offer.created_at);
+        const creatorName = offer.creator_name || 'Неизвестный автор';
 
         const shortDescription = description.length > 200 ?
             description.substring(0, 200) + '...' : description;
 
+        // Форматируем подписчиков
+        const subscribersText = maxSubscribers !== 'Без ограничений' && maxSubscribers > 0
+            ? `${formatNumber(minSubscribers)}-${formatNumber(maxSubscribers)}`
+            : `${formatNumber(minSubscribers)}+`;
+
         html += `
-            <div class="offer-card" data-offer-id="${offer.id}" style="cursor: pointer;" onclick="showOfferDetails(${offer.id})">
+            <div class="offer-card" data-offer-id="${offer.id}" style="cursor: pointer; margin-bottom: 20px;" onclick="showOfferDetails(${offer.id})">
                 <div class="offer-header">
                     <h3 style="margin: 0; color: #333; font-size: 18px; font-weight: 600; flex: 1;">${title}</h3>
                     <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #d4edda; color: #155724; margin-left: 12px;">
                         Активен
                     </span>
+                </div>
+                
+                <!-- Автор оффера -->
+                <div style="margin-bottom: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #667eea;">
+                    <div style="font-size: 12px; color: #666;">👤 Автор оффера:</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #333;">${creatorName}</div>
                 </div>
                 
                 <div style="margin: 12px 0; color: #666; font-size: 14px; line-height: 1.5;">
@@ -932,7 +944,7 @@ function renderAvailableOffers(offers) {
                             📂 <strong style="color: #333;">${category}</strong>
                         </div>
                         <div style="font-size: 12px; color: #888;">
-                            👥 <strong style="color: #333;">${minSubscribers}${maxSubscribers !== 'Без ограничений' ? '-' + maxSubscribers : '+'}</strong>
+                            👥 <strong style="color: #333;">${subscribersText}</strong>
                         </div>
                         <div style="font-size: 12px; color: #888;">
                             📅 <strong style="color: #333;">${createdAt}</strong>
@@ -940,7 +952,7 @@ function renderAvailableOffers(offers) {
                     </div>
                     
                     <button class="btn btn-primary" style="padding: 8px 16px; font-size: 12px; margin-left: 12px;" onclick="event.stopPropagation(); acceptOffer(${offer.id})">
-                        ✅ Принять
+                        ✅ Откликнуться
                     </button>
                 </div>
             </div>
@@ -948,6 +960,19 @@ function renderAvailableOffers(offers) {
     });
 
     container.innerHTML = html;
+}
+
+// Функция для форматирования чисел (например, 1000 -> 1K)
+function formatNumber(num) {
+    if (!num || num === 0) return '0';
+
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    }
+    if (num >= 1000) {
+        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    }
+    return num.toString();
 }
 
 function showFindOffersError(message) {

@@ -242,29 +242,50 @@ def get_offers_stats():
 
 @offers_bp.route('/available', methods=['GET'])
 def get_available_offers():
-    """Получение доступных офферов для владельцев каналов"""
+    """Получение доступных офферов для владельцев каналов (исключая свои офферы)"""
     try:
+        # Получаем user_id текущего пользователя
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
+
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 20))
         category = request.args.get('category')
         min_budget = request.args.get('min_budget', type=float)
         max_budget = request.args.get('max_budget', type=float)
+        search = request.args.get('search', '').strip()
+        min_subscribers = request.args.get('min_subscribers', type=int)
 
         filters = {
             'category': category,
             'min_budget': min_budget,
             'max_budget': max_budget,
-            'limit': limit
+            'search': search,
+            'min_subscribers': min_subscribers,
+            'limit': limit,
+            'exclude_user_id': telegram_user_id  # Исключаем офферы текущего пользователя
         }
-        
+
         # Убираем None значения
-        filters = {k: v for k, v in filters.items() if v is not None}
+        filters = {k: v for k, v in filters.items() if v is not None and v != ''}
+
+        logger.info(f"Загрузка доступных офферов для пользователя {telegram_user_id} с фильтрами: {filters}")
 
         try:
             sys.path.insert(0, os.getcwd())
             from add_offer import get_available_offers
             offers = get_available_offers(filters)
-            return jsonify({'success': True, 'offers': offers, 'count': len(offers)})
+
+            logger.info(f"Найдено доступных офферов: {len(offers)} (исключая офферы пользователя {telegram_user_id})")
+
+            return jsonify({
+                'success': True,
+                'offers': offers,
+                'count': len(offers),
+                'current_user_id': telegram_user_id,
+                'filters_applied': filters
+            })
 
         except ImportError as e:
             logger.error(f"Ошибка импорта get_available_offers: {e}")

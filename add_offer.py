@@ -745,80 +745,144 @@ def get_offer_by_id(offer_id: int, include_responses: bool = False) -> Optional[
         return None
 
 
-def get_available_offers(filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
-    """Получение доступных офферов для владельцев каналов"""
+def get_available_offers(filters=None):
+    """
+    Получить доступные офферы с фильтрацией
+
+    Args:
+        filters (dict): Словарь с фильтрами:
+            - category: категория оффера
+            - min_budget: минимальный бюджет
+            - max_budget: максимальный бюджет
+            - search: поиск по названию/описанию
+            - min_subscribers: минимальное количество подписчиков
+            - exclude_user_id: ID пользователя, чьи офферы нужно исключить
+            - limit: количество записей
+
+    Returns:
+        list: Список офферов
+    """
+    if filters is None:
+        filters = {}
+
     try:
-        filters = filters or {}
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
 
-        # Базовый запрос для активных офферов
-        query = '''
-                SELECT o.*, \
-                       u.username                 as creator_username, \
-                       u.first_name               as creator_name,
-                       COUNT(DISTINCT or_resp.id) as response_count
-                FROM offers o
-                         JOIN users u ON o.created_by = u.id
-                         LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-                WHERE o.status = 'active' \
-                '''
-        params = []
+        # Базовый запрос - исключаем только активные офферы других пользователей
+        base_query = """
+                     SELECT o.*, \
+                            u.first_name, \
+                            u.last_name, \
+                            u.username as creator_username
+                     FROM offers o
+                              LEFT JOIN users u ON o.created_by = u.id
+                     WHERE o.status = 'active' \
+                     """
 
-        # Добавляем фильтры
+        query_params = []
+        conditions = []
+
+        # ВАЖНО: Исключаем офферы текущего пользователя
+        exclude_user_id = filters.get('exclude_user_id')
+        if exclude_user_id:
+            # Получаем ID пользователя в базе данных
+            cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (exclude_user_id,))
+            user_row = cursor.fetchone()
+            if user_row:
+                conditions.append("o.created_by != ?")
+                query_params.append(user_row['id'])
+                logger.info(f"Исключаем офферы пользователя с DB ID: {user_row['id']} (Telegram ID: {exclude_user_id})")
+
+        # Фильтр по категории
         if filters.get('category'):
-            query += ' AND o.category = ?'
-            params.append(filters['category'])
+            conditions.append("o.category = ?")
+            query_params.append(filters['category'])
 
+        # Фильтр по минимальному бюджету
         if filters.get('min_budget'):
-            query += ' AND o.price >= ?'
-            params.append(float(filters['min_budget']))
+            conditions.append("o.price >= ?")
+            query_params.append(filters['min_budget'])
 
+        # Фильтр по максимальному бюджету
         if filters.get('max_budget'):
-            query += ' AND o.price <= ?'
-            params.append(float(filters['max_budget']))
+            conditions.append("o.price <= ?")
+            query_params.append(filters['max_budget'])
 
-        # Группировка и сортировка
-        query += '''
-            GROUP BY o.id
-            ORDER BY o.created_at DESC
-            LIMIT ?
-        '''
-        limit = int(filters.get('limit', 50))
-        params.append(limit)
+        # Поиск по названию и описанию
+        if filters.get('search'):
+            search_term = f"%{filters['search']}%"
+            conditions.append("(o.title LIKE ? OR o.description LIKE ?)")
+            query_params.extend([search_term, search_term])
 
-        offers = safe_execute_query(query, tuple(params), fetch_all=True)
+        # Фильтр по минимальному количеству подписчиков
+        if filters.get('min_subscribers'):
+            conditions.append("o.min_subscribers <= ?")
+            query_params.append(filters['min_subscribers'])
 
-        # Форматируем для фронтенда
-        formatted_offers = []
-        for offer in offers:
-            try:
-                metadata = json.loads(offer.get('metadata', '{}'))
-            except:
-                metadata = {}
+        # Добавляем условия к запросу
+        if conditions:
+            base_query += " AND " + " AND ".join(conditions)
 
-            formatted_offer = {
-                'id': offer['id'],
-                'title': offer['title'],
-                'description': offer['description'],
-                'price': float(offer['price']),
-                'currency': offer['currency'],
-                'category': offer['category'],
-                'target_audience': offer.get('target_audience', ''),
-                'requirements': offer.get('requirements', ''),
-                'deadline': offer.get('deadline', ''),
-                'created_at': offer['created_at'],
-                'creator_username': offer.get('creator_username', ''),
-                'creator_name': offer.get('creator_name', ''),
-                'response_count': offer.get('response_count', 0),
-                'min_subscribers': offer.get('min_subscribers', 1),
-                'max_subscribers': offer.get('max_subscribers', 100000000),
-                'metadata': metadata
+        # Сортировка по дате создания (новые сначала)
+        base_query += " ORDER BY o.created_at DESC"
+
+        # Лимит
+        limit = filters.get('limit', 50)
+        base_query += " LIMIT ?"
+        query_params.append(limit)
+
+        logger.info(f"SQL запрос: {base_query}")
+        logger.info(f"Параметры: {query_params}")
+
+        cursor.execute(base_query, query_params)
+        rows = cursor.fetchall()
+
+        offers = []
+        for row in rows:
+            # Формируем имя создателя
+            creator_name = ""
+            if row['first_name']:
+                creator_name += row['first_name']
+            if row['last_name']:
+                creator_name += f" {row['last_name']}"
+            if not creator_name and row['creator_username']:
+                creator_name = f"@{row['creator_username']}"
+            if not creator_name:
+                creator_name = "Анонимный пользователь"
+
+            offer = {
+                'id': row['id'],
+                'title': row['title'],
+                'description': row['description'],
+                'content': row['content'],
+                'price': float(row['price']) if row['price'] else 0,
+                'currency': row['currency'] or 'RUB',
+                'category': row['category'],
+                'status': row['status'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+                'created_by': row['created_by'],
+                'creator_name': creator_name,
+                'budget_total': float(row['budget_total']) if row['budget_total'] else 0,
+                'min_subscribers': row['min_subscribers'] or 0,
+                'max_subscribers': row['max_subscribers'] or 0,
+                'deadline': row['deadline'],
+                'target_audience': row['target_audience'],
+                'requirements': row['requirements']
             }
-            formatted_offers.append(formatted_offer)
+            offers.append(offer)
 
-        return formatted_offers
+        conn.close()
+
+        logger.info(f"Возвращено {len(offers)} доступных офферов")
+        return offers
 
     except Exception as e:
         logger.error(f"Ошибка получения доступных офферов: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
