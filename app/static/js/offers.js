@@ -1,6 +1,236 @@
-// app/static/js/offers.js
-// JavaScript для работы с системой офферов
+// app/static/js/offers.js - ПО АНАЛОГИИ С CHANNELS
 
+// ===== ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК (точно как в channels-ui.js) =====
+function switchTab(tabName) {
+    console.log('🔄 Переключение на вкладку:', tabName);
+
+    // Убираем активные классы у навигационных карточек
+    document.querySelectorAll('.nav-card').forEach(card => card.classList.remove('active'));
+
+    // Скрываем все контенты вкладок
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+    // Активируем выбранную навигационную карточку
+    const activeCard = document.querySelector(`[data-tab="${tabName}"]`);
+    if (activeCard) {
+        activeCard.classList.add('active');
+    }
+
+    // Показываем соответствующий контент
+    const activeContent = document.getElementById(tabName);
+    if (activeContent) {
+        activeContent.classList.add('active');
+    }
+
+    // Специальные действия для каждой вкладки
+    if (tabName === 'my-offers') {
+        loadMyOffers();
+    }
+}
+
+// ===== ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP (как в channels) =====
+if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+}
+
+// ===== ЗАГРУЗКА МОИХ ОФФЕРОВ =====
+async function loadMyOffers() {
+    console.log('📋 Загрузка моих офферов...');
+    const container = document.getElementById('offersGrid');
+
+    if (!container) {
+        console.error('❌ Контейнер offersGrid не найден');
+        return;
+    }
+
+    try {
+        // Показываем индикатор загрузки
+        showOffersLoading();
+
+        const response = await fetch('/api/offers/my', {
+            headers: {
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.success && result.offers && result.offers.length > 0) {
+            console.log('✅ Офферы загружены:', result.offers.length);
+            renderOffers(result.offers);
+        } else {
+            console.log('ℹ️ Офферов не найдено');
+            showEmptyOffersState();
+        }
+    } catch (error) {
+        console.error('❌ Ошибка загрузки офферов:', error);
+        showOffersError('Ошибка загрузки офферов');
+    }
+}
+
+function renderOffers(offers) {
+    const container = document.getElementById('offersGrid');
+    const emptyState = document.getElementById('emptyOffersState');
+
+    if (!container) return;
+
+    // Скрываем пустое состояние
+    if (emptyState) {
+        emptyState.style.display = 'none';
+    }
+
+    container.innerHTML = offers.map(offer => `
+        <div class="offer-card">
+            <div class="offer-header">
+                <div class="offer-title">${escapeHtml(offer.title || 'Без названия')}</div>
+                <div class="offer-status status-${offer.status || 'pending'}">${getStatusText(offer.status)}</div>
+            </div>
+            
+            <div class="offer-meta">
+                <div class="meta-item">
+                    <span>💰</span>
+                    <span>${formatCurrency(offer.price || offer.budget || 0)} ${offer.currency || 'RUB'}</span>
+                </div>
+                <div class="meta-item">
+                    <span>📅</span>
+                    <span>${formatDate(offer.created_at)}</span>
+                </div>
+                <div class="meta-item">
+                    <span>👥</span>
+                    <span>Мин. ${formatNumber(offer.min_subscribers || 0)} подписчиков</span>
+                </div>
+                ${offer.responses_count ? `
+                <div class="meta-item">
+                    <span>💬</span>
+                    <span>${offer.responses_count} откликов</span>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+
+function showOffersLoading() {
+    const container = document.getElementById('offersGrid');
+    if (container) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px;">
+                <div class="loading-spinner"></div>
+                <div>Загрузка офферов...</div>
+            </div>
+        `;
+    }
+}
+
+function showEmptyOffersState() {
+    const container = document.getElementById('offersGrid');
+    const emptyState = document.getElementById('emptyOffersState');
+
+    if (container) {
+        container.innerHTML = '';
+    }
+
+    if (emptyState) {
+        emptyState.style.display = 'block';
+    }
+}
+
+function showOffersError(message) {
+    const container = document.getElementById('offersGrid');
+    if (container) {
+        container.innerHTML = `
+            <div style="grid-column: 1 / -1; text-align: center; padding: 40px; color: var(--danger-color);">
+                <div>❌ ${message}</div>
+                <button class="btn btn-primary" onclick="loadMyOffers()" style="margin-top: 16px;">
+                    🔄 Попробовать снова
+                </button>
+            </div>
+        `;
+    }
+}
+
+// ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ (как в channels) =====
+function getStatusText(status) {
+    const statusMap = {
+        'active': 'Активен',
+        'pending': 'На модерации',
+        'paused': 'Приостановлен',
+        'completed': 'Завершен',
+        'draft': 'Черновик'
+    };
+    return statusMap[status] || 'Неизвестно';
+}
+
+function formatCurrency(amount) {
+    return Number(amount || 0).toLocaleString('ru-RU');
+}
+
+function formatNumber(num) {
+    if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'M';
+    }
+    if (num >= 1000) {
+        return (num / 1000).toFixed(1) + 'K';
+    }
+    return num.toString();
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Не указано';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ru-RU', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+function getTelegramUserId() {
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
+        return window.Telegram.WebApp.initDataUnsafe.user?.id || 'demo_user';
+    }
+    return 'demo_user';
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+function goBack() {
+    try {
+        console.log('🔙 Переход на главную страницу');
+        window.location.href = '/';
+    } catch (error) {
+        console.error('Ошибка при переходе на главную:', error);
+        window.location = '/';
+    }
+}
+
+// ===== ПОИСК ПО ОФФЕРАМ (как поиск в channels) =====
+function setupOffersSearch() {
+    const searchInput = document.getElementById('offersSearch');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase();
+            const offerCards = document.querySelectorAll('.offer-card');
+
+            offerCards.forEach(card => {
+                const title = card.querySelector('.offer-title')?.textContent.toLowerCase() || '';
+
+                if (title.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        });
+    }
+}
+
+// ===== КЛАСС ДЛЯ СОЗДАНИЯ ОФФЕРОВ =====
 class OffersManager {
     constructor() {
         this.currentStep = 1;
@@ -10,190 +240,36 @@ class OffersManager {
     }
 
     init() {
-        console.log('🎯 Инициализация системы офферов');
+        console.log('🎯 Инициализация OffersManager');
         this.setupEventListeners();
         this.updateStep(this.currentStep);
-        this.loadUserData();
     }
 
     setupEventListeners() {
-        // Кнопки навигации
+        // Кнопки навигации по шагам
         document.getElementById('nextBtn')?.addEventListener('click', () => this.nextStep());
         document.getElementById('prevBtn')?.addEventListener('click', () => this.prevStep());
         document.getElementById('submitBtn')?.addEventListener('click', () => this.submitOffer());
 
-        // Форма валидация
-        this.setupFormValidation();
 
-        // Предпросмотр
-        this.setupPreview();
-
-        // Слайдеры
-        this.setupSliders();
-    }
-
-    setupFormValidation() {
-        const inputs = document.querySelectorAll('input, textarea, select');
-        inputs.forEach(input => {
-            input.addEventListener('input', () => this.validateField(input));
-            input.addEventListener('blur', () => this.validateField(input));
-        });
-    }
-
-    setupPreview() {
-        // Обновление предпросмотра при изменении полей
-        const titleInput = document.getElementById('title');
-        const budgetInput = document.getElementById('budget');
-        const currencySelect = document.getElementById('currency');
-
-        titleInput?.addEventListener('input', () => {
-            document.getElementById('previewTitle').textContent = titleInput.value || '-';
-        });
-
-        const updateBudget = () => {
-            const budget = budgetInput?.value || 0;
-            const currency = currencySelect?.value || 'RUB';
-            document.getElementById('previewBudget').textContent = 
-                budget ? `${Number(budget).toLocaleString()} ${currency}` : '-';
-        };
-
-        budgetInput?.addEventListener('input', updateBudget);
-        currencySelect?.addEventListener('change', updateBudget);
-    }
-
-    setupSliders() {
-        // Слайдер бюджета
-        const budgetSlider = document.getElementById('budgetSlider');
-        const budgetInput = document.getElementById('budget');
-        const budgetDisplay = document.getElementById('budgetDisplay');
-
-        if (budgetSlider && budgetInput) {
-            budgetSlider.addEventListener('input', (e) => {
-                const value = e.target.value;
-                budgetInput.value = value;
-                budgetDisplay.textContent = Number(value).toLocaleString();
-                budgetInput.dispatchEvent(new Event('input'));
-            });
-
-            budgetInput.addEventListener('input', (e) => {
-                const value = Math.min(Math.max(e.target.value, 1000), 1000000);
-                budgetSlider.value = value;
-                budgetDisplay.textContent = Number(value).toLocaleString();
-            });
-        }
 
         // Слайдер подписчиков
-        const subscribersSlider = document.getElementById('minSubscribersSlider');
-        const subscribersInput = document.getElementById('minSubscribers');
-        const subscribersDisplay = document.getElementById('subscribersDisplay');
+        const subscribersRange = document.querySelector('input[name="min_subscribers"]');
+        const subscribersValue = document.getElementById('subscribersValue');
 
-        if (subscribersSlider && subscribersInput) {
-            subscribersSlider.addEventListener('input', (e) => {
-                const value = Math.max(1, e.target.value); // Минимум 1 подписчик
-                subscribersInput.value = value;
-                subscribersDisplay.textContent = Number(value).toLocaleString();
-            });
-
-            subscribersInput.addEventListener('input', (e) => {
-                const value = Math.max(1, Math.min(e.target.value, 5000000));
-                subscribersSlider.value = value;
-                subscribersDisplay.textContent = Number(value).toLocaleString();
+        if (subscribersRange && subscribersValue) {
+            subscribersRange.addEventListener('input', function() {
+                const value = parseInt(this.value);
+                subscribersValue.textContent = value >= 1000000 ? '1M+' :
+                                              value >= 1000 ? Math.round(value/1000) + 'K' :
+                                              value.toString();
             });
         }
-    }
-
-    validateField(field) {
-        const value = field.value.trim();
-        let isValid = true;
-        let errorMessage = '';
-
-        // Валидация по типу поля
-        switch (field.id) {
-            case 'title':
-                if (!value || value.length < 5) {
-                    isValid = false;
-                    errorMessage = 'Название должно содержать минимум 5 символов';
-                }
-                break;
-
-            case 'content':
-                if (!value || value.length < 20) {
-                    isValid = false;
-                    errorMessage = 'Описание должно содержать минимум 20 символов';
-                }
-                break;
-
-            case 'budget':
-                const budget = Number(value);
-                if (!budget || budget < 1000) {
-                    isValid = false;
-                    errorMessage = 'Минимальный бюджет: 1,000 ₽';
-                }
-                break;
-
-            case 'minSubscribers':
-                const subscribers = Number(value);
-                if (!subscribers || subscribers < 1) {
-                    isValid = false;
-                    errorMessage = 'Минимальное количество подписчиков: 1';
-                    field.value = 1; // Принудительно устанавливаем минимум
-                }
-                break;
-
-            case 'targetAudience':
-                if (!value || value.length < 10) {
-                    isValid = false;
-                    errorMessage = 'Опишите целевую аудиторию (минимум 10 символов)';
-                }
-                break;
-        }
-
-        // Показываем/скрываем ошибку
-        this.showFieldError(field, isValid, errorMessage);
-        return isValid;
-    }
-
-    showFieldError(field, isValid, message) {
-        const errorElement = document.getElementById(`${field.id}Error`);
-        
-        if (errorElement) {
-            if (isValid) {
-                errorElement.style.display = 'none';
-                field.classList.remove('error');
-            } else {
-                errorElement.textContent = message;
-                errorElement.style.display = 'block';
-                field.classList.add('error');
-            }
-        }
-
-        // Добавляем CSS класс для поля с ошибкой
-        if (isValid) {
-            field.classList.remove('invalid');
-            field.classList.add('valid');
-        } else {
-            field.classList.remove('valid');
-            field.classList.add('invalid');
-        }
-    }
-
-    validateStep(step) {
-        const stepElement = document.querySelector(`[data-step="${step}"]`);
-        if (!stepElement) return true;
-
-        const inputs = stepElement.querySelectorAll('input, textarea, select');
-        let stepValid = true;
-
-        inputs.forEach(input => {
-            if (!this.validateField(input)) {
-                stepValid = false;
-            }
-        });
-
-        return stepValid;
     }
 
     updateStep(step) {
+        console.log('📝 Обновление шага:', step);
+
         // Обновляем индикатор шагов
         document.querySelectorAll('.step').forEach((stepEl, index) => {
             const stepNumber = index + 1;
@@ -215,6 +291,13 @@ class OffersManager {
         if (nextBtn) nextBtn.style.display = step === this.totalSteps ? 'none' : 'inline-flex';
         if (submitBtn) submitBtn.style.display = step === this.totalSteps ? 'inline-flex' : 'none';
 
+        // Обновляем progress bar
+        const stepperProgress = document.getElementById('stepperProgress');
+        if (stepperProgress) {
+            const progress = ((step - 1) / (this.totalSteps - 1)) * 100;
+            stepperProgress.style.width = progress + '%';
+        }
+
         // Обновляем предпросмотр на последнем шаге
         if (step === this.totalSteps) {
             this.updatePreview();
@@ -224,12 +307,8 @@ class OffersManager {
     }
 
     nextStep() {
-        if (this.validateStep(this.currentStep)) {
-            if (this.currentStep < this.totalSteps) {
-                this.updateStep(this.currentStep + 1);
-            }
-        } else {
-            this.showNotification('Пожалуйста, исправьте ошибки перед продолжением', 'error');
+        if (this.currentStep < this.totalSteps) {
+            this.updateStep(this.currentStep + 1);
         }
     }
 
@@ -240,127 +319,85 @@ class OffersManager {
     }
 
     updatePreview() {
-        // Обновляем все поля предпросмотра
-        const fields = {
-            'previewTitle': document.getElementById('title')?.value || '-',
-            'previewBudget': (() => {
-                const budget = document.getElementById('budget')?.value;
-                const currency = document.getElementById('currency')?.value || 'RUB';
-                return budget ? `${Number(budget).toLocaleString()} ${currency}` : '-';
-            })(),
-            'previewAudience': document.getElementById('targetAudience')?.value || '-',
-            'previewGeography': (() => {
-                const geo = document.getElementById('geography')?.value;
-                return geo || 'Весь мир';
-            })(),
-            'previewTopics': (() => {
-                const checkboxes = document.querySelectorAll('input[name="categories"]:checked');
-                const topics = Array.from(checkboxes).map(cb => cb.value);
-                return topics.length > 0 ? topics.join(', ') : '-';
-            })()
-        };
+        // Обновляем предпросмотр
+        const titleInput = document.querySelector('input[name="title"]');
+        const budgetInput = document.querySelector('input[name="budget"]');
 
-        // Устанавливаем значения
-        Object.entries(fields).forEach(([id, value]) => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.textContent = value;
+        if (titleInput) {
+            const previewTitle = document.getElementById('previewTitle');
+            if (previewTitle) {
+                previewTitle.textContent = titleInput.value || 'Не указано';
             }
-        });
-    }
+        }
 
-    collectFormData() {
-        const formData = {
-            title: document.getElementById('title')?.value?.trim(),
-            content: document.getElementById('content')?.value?.trim(),
-            budget: Number(document.getElementById('budget')?.value) || 0,
-            currency: document.getElementById('currency')?.value || 'RUB',
-            targetAudience: document.getElementById('targetAudience')?.value?.trim(),
-            geography: document.getElementById('geography')?.value?.trim(),
-            minSubscribers: Math.max(1, Number(document.getElementById('minSubscribers')?.value) || 1),
-            duration: Number(document.getElementById('duration')?.value) || 7,
-            categories: Array.from(document.querySelectorAll('input[name="categories"]:checked')).map(cb => cb.value),
-            requirements: document.getElementById('requirements')?.value?.trim() || '',
-            contactInfo: document.getElementById('contactInfo')?.value?.trim() || ''
-        };
+        if (budgetInput) {
+            const previewBudget = document.getElementById('previewBudget');
+            if (previewBudget) {
+                const budget = budgetInput.value;
+                previewBudget.textContent = budget ? `₽${Number(budget).toLocaleString()}` : 'Не указан';
+            }
+        }
 
-        // Добавляем поле price как алиас для budget для совместимости
-        formData.price = formData.budget;
-        formData.duration_days = formData.duration;
-        formData.target_audience = formData.targetAudience;
+        // Тематики
+        const selectedChips = document.querySelectorAll('.chip.selected');
+        const previewTopics = document.getElementById('previewTopics');
+        if (previewTopics) {
+            const topics = Array.from(selectedChips).map(chip => chip.textContent).join(', ');
+            previewTopics.textContent = topics || 'Не выбраны';
+        }
 
-        return formData;
+        // География
+        const geographySelect = document.querySelector('select[name="geography"]');
+        const previewGeography = document.getElementById('previewGeography');
+        if (previewGeography && geographySelect) {
+            const geographyMap = {
+                'russia': 'Россия',
+                'cis': 'СНГ',
+                'europe': 'Европа',
+                'world': 'Весь мир'
+            };
+            previewGeography.textContent = geographyMap[geographySelect.value] || 'Не указана';
+        }
     }
 
     async submitOffer() {
         console.log('📤 Отправка оффера...');
 
-        if (!this.validateStep(this.totalSteps)) {
-            this.showNotification('Пожалуйста, проверьте все поля', 'error');
-            return;
-        }
-
-        const formData = this.collectFormData();
-        
-        // Валидация обязательных полей
-        if (!formData.title || !formData.content || !formData.budget || formData.minSubscribers < 1) {
-            this.showNotification('Заполните все обязательные поля', 'error');
-            return;
-        }
-
         const submitBtn = document.getElementById('submitBtn');
         const originalText = submitBtn?.textContent;
-        
+
         try {
-            // Блокируем кнопку
             if (submitBtn) {
                 submitBtn.disabled = true;
                 submitBtn.textContent = '⏳ Создание...';
             }
 
-            // Получаем данные для аутентификации
-            const telegramUserId = this.getTelegramUserId();
-            const telegramInitData = this.getTelegramInitData();
-
-            const headers = {
-                'Content-Type': 'application/json'
-            };
-
-            // Добавляем заголовки аутентификации
-            if (telegramUserId) {
-                headers['X-Telegram-User-Id'] = telegramUserId.toString();
-            }
-
-            if (telegramInitData) {
-                headers['X-Telegram-Init-Data'] = telegramInitData;
-            }
-
-            console.log('Отправка с заголовками:', headers);
+            // Собираем данные формы
+            const formData = this.collectFormData();
 
             const response = await fetch('/api/offers', {
                 method: 'POST',
-                headers: headers,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': getTelegramUserId()
+                },
                 body: JSON.stringify(formData)
             });
 
             const result = await response.json();
 
             if (response.ok && result.success) {
-                this.showNotification('Оффер успешно создан!', 'success');
-
-                // Redirect через 2 секунды
-                setTimeout(() => {
-                    window.location.href = '/offers';
-                }, 2000);
+                alert('✅ Оффер успешно создан!');
+                // Переходим на вкладку "Мои офферы"
+                switchTab('my-offers');
             } else {
-                throw new Error(result.error || `HTTP ${response.status}: ${response.statusText}`);
+                throw new Error(result.error || 'Ошибка создания оффера');
             }
 
         } catch (error) {
-            console.error('Ошибка создания оффера:', error);
-            this.showNotification(`Ошибка: ${error.message}`, 'error');
+            console.error('❌ Ошибка создания оффера:', error);
+            alert(`❌ Ошибка: ${error.message}`);
         } finally {
-            // Восстанавливаем кнопку
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.textContent = originalText;
@@ -368,282 +405,39 @@ class OffersManager {
         }
     }
 
-    getTelegramUserId() {
-        // Получаем ID пользователя из Telegram WebApp
-        if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-            return window.Telegram.WebApp.initDataUnsafe.user.id;
-        }
+    collectFormData() {
+        const form = document.getElementById('offerForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
 
-        // Fallback для тестирования
-        return localStorage.getItem('test_user_id') || '373086959';
-    }
+        // Добавляем выбранные чипы
+        data.categories = Array.from(document.querySelectorAll('.chip.selected'))
+            .map(chip => chip.dataset.value || chip.textContent);
 
-    getTelegramInitData() {
-        // Получаем полные данные инициализации
-        if (window.Telegram?.WebApp?.initData) {
-            return window.Telegram.WebApp.initData;
-        }
-        return null;
-    }
-
-    loadUserData() {
-        // Загружаем данные пользователя если доступны
-        if (window.Telegram?.WebApp?.initDataUnsafe?.user) {
-            const user = window.Telegram.WebApp.initDataUnsafe.user;
-
-            // Предзаполняем контактную информацию
-            const contactField = document.getElementById('contactInfo');
-            if (contactField && !contactField.value) {
-                contactField.value = `@${user.username || user.first_name}`;
-            }
-        }
-    }
-
-    showNotification(message, type = 'info') {
-        // Используем простые уведомления вместо Telegram WebApp для совместимости
-        console.log(`${type.toUpperCase()}: ${message}`);
-
-        // Fallback уведомления
-        const notification = document.createElement('div');
-        notification.className = `notification notification-${type}`;
-        notification.textContent = message;
-
-        // Стили для уведомления
-        Object.assign(notification.style, {
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            left: '20px',
-            padding: '16px 20px',
-            borderRadius: '8px',
-            color: 'white',
-            fontWeight: '600',
-            zIndex: '10000',
-            transform: 'translateY(-100px)',
-            transition: 'transform 0.3s ease',
-            textAlign: 'center',
-            fontSize: '14px'
-        });
-
-        // Цвета по типу
-        const colors = {
-            success: '#4facfe',
-            error: '#ff6b6b',
-            info: '#667eea'
-        };
-        notification.style.background = colors[type] || colors.info;
-
-        document.body.appendChild(notification);
-
-        // Анимация появления
-        setTimeout(() => {
-            notification.style.transform = 'translateY(0)';
-        }, 100);
-
-        // Автоудаление
-        setTimeout(() => {
-            notification.style.transform = 'translateY(-100px)';
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 300);
-        }, 4000);
-
-        // Для отладки также показываем browser alert при ошибках
-        if (type === 'error') {
-            setTimeout(() => alert(message), 500);
-        }
+        return data;
     }
 }
 
-// Класс для управления списком офферов
-class OffersListManager {
-    constructor() {
-        this.offers = [];
-        this.filters = {
-            status: 'all',
-            category: 'all',
-            sortBy: 'created_at',
-            sortOrder: 'desc'
-        };
-    }
-
-    async loadOffers() {
-        try {
-            const response = await fetch('/api/offers/my', {
-                headers: {
-                    'X-Telegram-User-Id': this.getTelegramUserId()
-                }
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-                this.offers = result.offers || [];
-                this.renderOffers();
-            } else {
-                console.error('Ошибка загрузки офферов:', result.error);
-            }
-        } catch (error) {
-            console.error('Ошибка загрузки офферов:', error);
-        }
-    }
-
-    renderOffers() {
-        const container = document.getElementById('offersContainer');
-        if (!container) return;
-
-        if (this.offers.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">📝</div>
-                    <h3>Нет офферов</h3>
-                    <p>Создайте свой первый оффер, чтобы начать привлекать каналы</p>
-                    <a href="/offers/create" class="btn btn-primary">Создать оффер</a>
-                </div>
-            `;
-            return;
-        }
-
-        const filteredOffers = this.filterOffers();
-        
-        container.innerHTML = filteredOffers.map(offer => `
-            <div class="offer-card" data-offer-id="${offer.id}">
-                <div class="offer-header">
-                    <h3 class="offer-title">${offer.title}</h3>
-                    <span class="offer-status status-${offer.status}">${this.getStatusText(offer.status)}</span>
-                </div>
-                
-                <div class="offer-meta">
-                    <span class="offer-budget">${Number(offer.price || offer.budget || 0).toLocaleString()} ${offer.currency || 'RUB'}</span>
-                    <span class="offer-date">${this.formatDate(offer.created_at)}</span>
-                </div>
-                
-                <p class="offer-description">${offer.description || offer.content?.substring(0, 100) + '...'}</p>
-                
-                <div class="offer-stats">
-                    <span class="stat">
-                        <span class="stat-icon">👥</span>
-                        Откликов: ${offer.response_count || 0}
-                    </span>
-                    <span class="stat">
-                        <span class="stat-icon">✅</span>
-                        Принято: ${offer.accepted_count || 0}
-                    </span>
-                </div>
-                
-                <div class="offer-actions">
-                    <button class="btn btn-secondary" onclick="offersListManager.viewOffer(${offer.id})">
-                        Подробнее
-                    </button>
-                    ${offer.status === 'active' ? `
-                        <button class="btn btn-primary" onclick="offersListManager.pauseOffer(${offer.id})">
-                            Приостановить
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        `).join('');
-    }
-
-    filterOffers() {
-        return this.offers.filter(offer => {
-            if (this.filters.status !== 'all' && offer.status !== this.filters.status) {
-                return false;
-            }
-            return true;
-        });
-    }
-
-    getStatusText(status) {
-        const statusTexts = {
-            'active': 'Активен',
-            'paused': 'Приостановлен',
-            'completed': 'Завершен',
-            'cancelled': 'Отменен'
-        };
-        return statusTexts[status] || status;
-    }
-
-    formatDate(dateString) {
-        if (!dateString) return 'Неизвестно';
-        
-        try {
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ru-RU', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
-        } catch {
-            return 'Неизвестно';
-        }
-    }
-
-    async viewOffer(offerId) {
-        window.location.href = `/offers/${offerId}`;
-    }
-
-    async pauseOffer(offerId) {
-        try {
-            const response = await fetch(`/api/offers/${offerId}/status`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Telegram-User-Id': this.getTelegramUserId()
-                },
-                body: JSON.stringify({ status: 'paused' })
-            });
-
-            const result = await response.json();
-            
-            if (result.success) {
-                await this.loadOffers(); // Перезагружаем список
-            } else {
-                alert('Ошибка при изменении статуса оффера');
-            }
-        } catch (error) {
-            console.error('Ошибка:', error);
-            alert('Ошибка при изменении статуса оффера');
-        }
-    }
-
-    getTelegramUserId() {
-        if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-            return window.Telegram.WebApp.initDataUnsafe.user.id;
-        }
-        return localStorage.getItem('test_user_id') || '373086959';
-    }
-}
-
-// Глобальные переменные для доступа из HTML
-let offersManager;
-let offersListManager;
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
+// ===== ИНИЦИАЛИЗАЦИЯ (как в channels) =====
+document.addEventListener('DOMContentLoaded', function() {
     console.log('🎯 Инициализация страницы офферов');
-    
-    // Определяем тип страницы и инициализируем соответствующий менеджер
-    if (document.getElementById('offerForm')) {
-        offersManager = new OffersManager();
-    }
-    
-    if (document.getElementById('offersContainer')) {
-        offersListManager = new OffersListManager();
-        offersListManager.loadOffers();
+
+    // Загружаем офферы по умолчанию (первая вкладка)
+    loadMyOffers();
+
+    // Настройка поиска
+    setupOffersSearch();
+
+    // Инициализация существующего функционала создания офферов
+    if (typeof OffersManager !== 'undefined') {
+        window.offersManager = new OffersManager();
     }
 
-    // Настройка Telegram WebApp
-    if (window.Telegram?.WebApp) {
-        window.Telegram.WebApp.ready();
-        window.Telegram.WebApp.expand();
-    }
+    console.log('✅ Страница офферов инициализирована');
 });
 
-// Экспортируем для использования в других скриптах
+// ===== ДЕЛАЕМ ФУНКЦИИ ГЛОБАЛЬНО ДОСТУПНЫМИ (как в channels) =====
+window.switchTab = switchTab;
+window.loadMyOffers = loadMyOffers;
+window.goBack = goBack;
 window.OffersManager = OffersManager;
-window.OffersListManager = OffersListManager;

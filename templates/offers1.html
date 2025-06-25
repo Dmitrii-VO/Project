@@ -9,20 +9,20 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/offers.css') }}">
-</head>
+    </head>
 <body>
     <div class="container">
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <button class="back-btn" onclick="goBack()">← Назад</button>
-            <div class="hero-content">
-                <span class="hero-icon">🎯</span>
-                <h1 class="hero-title">Создать оффер</h1>
-                <p class="hero-subtitle">Создайте предложение для размещения в Telegram каналах</p>
-            </div>
+    <!-- Hero Section -->
+    <div class="hero-section">
+        <button class="back-btn" onclick="goBack()">← Назад</button>
+        <div class="hero-content">
+            <span class="hero-icon">🎯</span>
+            <h1 class="hero-title">Управление офферами</h1>
+            <p class="hero-subtitle">Создавайте предложения и отслеживайте результаты</p>
         </div>
+    </div>
 
-        <!-- Навигация по табам -->
+    <!-- Навигация по табам -->
     <div class="navigation-grid">
         <div class="nav-card active" data-tab="my-offers" onclick="switchTab('my-offers')">
             <div class="nav-icon">📋</div>
@@ -63,7 +63,9 @@
             </div>
         </div>
     </div>
-        <!-- Tab: Создать оффер -->
+
+
+    <!-- Tab: Создать оффер -->
     <div class="tab-content" id="create-offer">
         <!-- Progress Stepper -->
         <div class="stepper-container">
@@ -273,9 +275,11 @@
             </div>
         </form>
     </div>
-    </div>
+</div>
 <script src="{{ url_for('static', filename='js/offers.js') }}"></script>
-    <script>
+
+<!-- Добавить чипы для выбора -->
+<script>
 document.addEventListener('DOMContentLoaded', function() {
     // Chip selection functionality
     document.querySelectorAll('.chip').forEach(chip => {
@@ -284,6 +288,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-    </script>
+</script>
 </body>
 </html>
