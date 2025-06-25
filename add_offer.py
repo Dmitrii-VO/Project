@@ -262,6 +262,337 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+def delete_offer_by_id(offer_id: int, telegram_user_id: int) -> Dict[str, Any]:
+    """
+    Удаление оффера по ID с проверкой прав доступа
+
+    Args:
+        offer_id: ID оффера для удаления
+        telegram_user_id: Telegram ID пользователя
+
+    Returns:
+        Dict с результатом операции
+    """
+    logger.info(f"🗑️ Удаление оффера {offer_id} пользователем {telegram_user_id}")
+
+    try:
+        # Получаем ID пользователя в БД
+        user = safe_execute_query(
+            'SELECT id FROM users WHERE telegram_id = ?',
+            (telegram_user_id,),
+            fetch_one=True
+        )
+
+        if not user:
+            return {
+                'success': False,
+                'error': 'Пользователь не найден'
+            }
+
+        user_db_id = user['id']
+
+        # Проверяем существование оффера и права доступа
+        offer = safe_execute_query(
+            'SELECT id, created_by, title, status FROM offers WHERE id = ?',
+            (offer_id,),
+            fetch_one=True
+        )
+
+        if not offer:
+            return {
+                'success': False,
+                'error': 'Оффер не найден'
+            }
+
+        # Проверяем права доступа
+        if offer['created_by'] != user_db_id:
+            return {
+                'success': False,
+                'error': 'У вас нет прав для удаления этого оффера'
+            }
+
+        # Проверяем статус оффера
+        if offer['status'] in ['active', 'paused']:
+            logger.warning(f"Попытка удаления активного оффера {offer_id}")
+            return {
+                'success': False,
+                'error': 'Нельзя удалить активный оффер. Сначала завершите или отмените его.'
+            }
+
+        # Начинаем транзакцию для удаления связанных данных
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.execute('BEGIN TRANSACTION')
+
+        try:
+            # Удаляем связанные отклики
+            conn.execute('DELETE FROM offer_responses WHERE offer_id = ?', (offer_id,))
+            logger.info(f"Удалены отклики для оффера {offer_id}")
+
+            # Удаляем сам оффер
+            conn.execute('DELETE FROM offers WHERE id = ?', (offer_id,))
+            logger.info(f"Удален оффер {offer_id}: {offer['title']}")
+
+            conn.commit()
+
+            return {
+                'success': True,
+                'message': f'Оффер "{offer["title"]}" успешно удален',
+                'offer_id': offer_id
+            }
+
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Ошибка при удалении оффера {offer_id}: {e}")
+            return {
+                'success': False,
+                'error': 'Ошибка при удалении оффера'
+            }
+        finally:
+            conn.close()
+
+    except Exception as e:
+        logger.error(f"Общая ошибка удаления оффера {offer_id}: {e}")
+        return {
+            'success': False,
+            'error': 'Внутренняя ошибка при удалении оффера'
+        }
+
+
+def cancel_offer_by_id(offer_id: int, telegram_user_id: int, reason: str = '') -> Dict[str, Any]:
+    """
+    Отмена оффера по ID с проверкой прав доступа
+
+    Args:
+        offer_id: ID оффера для отмены
+        telegram_user_id: Telegram ID пользователя
+        reason: Причина отмены (опционально)
+
+    Returns:
+        Dict с результатом операции
+    """
+    logger.info(f"❌ Отмена оффера {offer_id} пользователем {telegram_user_id}")
+
+    try:
+        # Получаем ID пользователя в БД
+        user = safe_execute_query(
+            'SELECT id FROM users WHERE telegram_id = ?',
+            (telegram_user_id,),
+            fetch_one=True
+        )
+
+        if not user:
+            return {
+                'success': False,
+                'error': 'Пользователь не найден'
+            }
+
+        user_db_id = user['id']
+
+        # Проверяем существование оффера и права доступа
+        offer = safe_execute_query(
+            'SELECT id, created_by, title, status, price FROM offers WHERE id = ?',
+            (offer_id,),
+            fetch_one=True
+        )
+
+        if not offer:
+            return {
+                'success': False,
+                'error': 'Оффер не найден'
+            }
+
+        # Проверяем права доступа
+        if offer['created_by'] != user_db_id:
+            return {
+                'success': False,
+                'error': 'У вас нет прав для отмены этого оффера'
+            }
+
+        # Проверяем текущий статус
+        now = datetime.now().isoformat()
+        update_query = '''
+                       UPDATE offers
+                       SET status     = 'cancelled',
+                           updated_at = ?
+                       WHERE id = ?
+                       '''
+
+        safe_execute_query(update_query, (now, offer_id))
+
+        # Логируем причину отмены отдельно
+        if reason:
+            logger.info(f"Причина отмены: {reason}")
+
+        # Уведомляем владельцев каналов которые откликнулись
+        notify_channels_about_cancellation(offer_id, offer['title'])
+
+        logger.info(f"Оффер {offer_id} успешно отменен")
+
+        return {
+            'success': True,
+            'message': f'Оффер "{offer["title"]}" отменен',
+            'offer_id': offer_id,
+            'new_status': 'cancelled'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка отмены оффера {offer_id}: {e}")
+        return {
+            'success': False,
+            'error': 'Ошибка при отмене оффера'
+        }
+
+
+def update_offer_status_by_id(offer_id: int, telegram_user_id: int, new_status: str, reason: str = '') -> Dict[
+    str, Any]:
+    """
+    Универсальная функция обновления статуса оффера
+
+    Args:
+        offer_id: ID оффера
+        telegram_user_id: Telegram ID пользователя
+        new_status: Новый статус (active, paused, cancelled, completed)
+        reason: Причина изменения статуса
+
+    Returns:
+        Dict с результатом операции
+    """
+    logger.info(f"🔄 Изменение статуса оффера {offer_id} на {new_status}")
+
+    logger.info(f"🔄 Изменение статуса оффера {offer_id} на {new_status} пользователем {telegram_user_id}")
+
+    try:
+        # Получаем ID пользователя в БД
+        logger.info(f"Ищем пользователя с telegram_id: {telegram_user_id}")
+        user = safe_execute_query(
+            'SELECT id FROM users WHERE telegram_id = ?',
+            (telegram_user_id,),
+            fetch_one=True
+        )
+
+        if not user:
+            logger.error(f"Пользователь {telegram_user_id} не найден в БД")
+            return {'success': False, 'error': 'Пользователь не найден'}
+
+        user_db_id = user['id']
+        logger.info(f"Найден пользователь с DB ID: {user_db_id}")
+
+        # Проверяем существование оффера и права доступа
+        logger.info(f"Ищем оффер {offer_id}")
+        offer = safe_execute_query(
+            'SELECT id, created_by, title, status FROM offers WHERE id = ?',
+            (offer_id,),
+            fetch_one=True
+        )
+
+        if not offer:
+            logger.error(f"Оффер {offer_id} не найден")
+            return {'success': False, 'error': 'Оффер не найден'}
+
+        logger.info(f"Найден оффер: ID={offer['id']}, created_by={offer['created_by']}, status={offer['status']}")
+
+        if offer['created_by'] != user_db_id:
+            logger.error(
+                f"Пользователь {user_db_id} не является владельцем оффера {offer_id} (владелец: {offer['created_by']})")
+            return {'success': False, 'error': 'У вас нет прав для изменения этого оффера'}
+
+        current_status = offer['status']
+        logger.info(f"Текущий статус: {current_status}, новый статус: {new_status}")
+
+        # Проверяем допустимость перехода статуса
+        status_transitions = {
+            'active': ['paused', 'cancelled', 'completed'],
+            'paused': ['active', 'cancelled', 'completed'],
+            'cancelled': [],  # Из отмененного нельзя перейти в другой статус
+            'completed': []  # Из завершенного нельзя перейти в другой статус
+        }
+
+        if new_status not in status_transitions.get(current_status, []):
+            logger.error(f"Недопустимый переход статуса: {current_status} -> {new_status}")
+            return {
+                'success': False,
+                'error': f'Нельзя изменить статус с "{current_status}" на "{new_status}"'
+            }
+
+        logger.info(f"Переход статуса {current_status} -> {new_status} разрешен")
+
+        # Обновляем статус
+        now = datetime.now().isoformat()
+        update_query = '''
+                       UPDATE offers
+                       SET status     = ?,
+                           updated_at = ?
+                       WHERE id = ?
+                       '''
+
+        logger.info(f"Выполняем UPDATE запрос с параметрами: status={new_status}, id={offer_id}")
+        safe_execute_query(update_query, (new_status, now, offer_id))
+
+        # Логируем причину изменения отдельно
+        if reason:
+            logger.info(f"Причина изменения статуса: {reason}")
+
+        # Дополнительные действия в зависимости от статуса
+        if new_status == 'cancelled':
+            logger.info(f"Уведомляем об отмене оффера {offer_id}")
+            notify_channels_about_cancellation(offer_id, offer['title'])
+        elif new_status == 'completed':
+            logger.info(f"Уведомляем о завершении оффера {offer_id}")
+            notify_channels_about_completion(offer_id, offer['title'])
+
+        logger.info(f"✅ Статус оффера {offer_id} успешно изменен с {current_status} на {new_status}")
+
+        return {
+            'success': True,
+            'message': f'Статус оффера "{offer["title"]}" изменен на "{new_status}"',
+            'offer_id': offer_id,
+            'old_status': current_status,
+            'new_status': new_status
+        }
+
+    except Exception as e:
+        logger.error(f"❌ ДЕТАЛЬНАЯ ОШИБКА изменения статуса оффера {offer_id}: {e}")
+        logger.error(f"Тип ошибки: {type(e).__name__}")
+        import traceback
+        logger.error(f"Stack trace: {traceback.format_exc()}")
+        return {
+            'success': False,
+            'error': f'Ошибка при изменении статуса оффера: {str(e)}'
+        }
+
+
+def notify_channels_about_cancellation(offer_id: int, offer_title: str):
+    """Уведомление владельцев каналов об отмене оффера"""
+    try:
+        # Получаем список каналов которые откликнулись на оффер
+        responses = safe_execute_query('''
+                                       SELECT DISTINCT or_resp.channel_id, ch.title as channel_title, ch.owner_id
+                                       FROM offer_responses or_resp
+                                                JOIN channels ch ON or_resp.channel_id = ch.id
+                                       WHERE or_resp.offer_id = ?
+                                         AND or_resp.status IN ('pending', 'accepted')
+                                       ''', (offer_id,), fetch_all=True)
+
+        logger.info(f"Уведомляем {len(responses)} владельцев каналов об отмене оффера {offer_id}")
+
+        # Здесь можно добавить отправку уведомлений через Telegram API
+        for response in responses:
+            logger.info(f"Уведомление владельцу канала {response['channel_title']} (ID: {response['owner_id']})")
+
+    except Exception as e:
+        logger.error(f"Ошибка уведомления об отмене оффера {offer_id}: {e}")
+
+
+def notify_channels_about_completion(offer_id: int, offer_title: str):
+    """Уведомление об успешном завершении оффера"""
+    try:
+        logger.info(f"Уведомляем о завершении оффера {offer_id}: {offer_title}")
+        # Здесь можно добавить логику уведомлений
+
+    except Exception as e:
+        logger.error(f"Ошибка уведомления о завершении оффера {offer_id}: {e}")
+
+
 def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
     """Получение офферов пользователя"""
     try:
@@ -583,7 +914,8 @@ def register_offer_routes(app):
 # Экспорт функций для использования в других модулях
 __all__ = [
     'add_offer', 'get_user_offers', 'get_offer_by_id',
-    'get_available_offers', 'register_offer_routes'
+    'get_available_offers', 'cancel_offer_by_id',
+    'update_offer_status_by_id', 'register_offer_routes'
 ]
 
 if __name__ == '__main__':

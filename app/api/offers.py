@@ -322,3 +322,124 @@ def debug_test_offers():
             'error': str(e),
             'traceback': traceback.format_exc()
         })
+
+
+@offers_bp.route('/<int:offer_id>', methods=['DELETE'])
+def delete_offer(offer_id):
+    """Удаление оффера"""
+    try:
+        logger.info(f"Запрос на удаление оффера {offer_id}")
+
+        # Получаем user_id
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
+
+        try:
+            # Импортируем функцию удаления
+            sys.path.insert(0, os.getcwd())
+            from add_offer import delete_offer_by_id
+
+            result = delete_offer_by_id(offer_id, telegram_user_id)
+
+            if result['success']:
+                logger.info(f"Оффер {offer_id} успешно удален пользователем {telegram_user_id}")
+                return jsonify(result), 200
+            else:
+                return jsonify(result), 400
+
+        except ImportError as e:
+            logger.error(f"Ошибка импорта delete_offer_by_id: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Модуль системы офферов недоступен'
+            }), 503
+
+    except Exception as e:
+        logger.error(f"Ошибка удаления оффера {offer_id}: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+
+
+@offers_bp.route('/<int:offer_id>/cancel', methods=['POST'])
+def cancel_offer(offer_id):
+    """Отмена оффера"""
+    try:
+        logger.info(f"Запрос на отмену оффера {offer_id}")
+
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
+
+        data = request.get_json() or {}
+        cancel_reason = data.get('reason', 'Отменено пользователем')
+
+        try:
+            sys.path.insert(0, os.getcwd())
+            from add_offer import cancel_offer_by_id
+
+            result = cancel_offer_by_id(offer_id, telegram_user_id, cancel_reason)
+
+            if result['success']:
+                logger.info(f"Оффер {offer_id} успешно отменен пользователем {telegram_user_id}")
+                return jsonify(result), 200
+            else:
+                return jsonify(result), 400
+
+        except ImportError as e:
+            logger.error(f"Ошибка импорта cancel_offer_by_id: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Модуль системы офферов недоступен'
+            }), 503
+
+    except Exception as e:
+        logger.error(f"Ошибка отмены оффера {offer_id}: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+
+
+@offers_bp.route('/<int:offer_id>/status', methods=['PATCH'])
+def update_offer_status(offer_id):
+    """Обновление статуса оффера"""
+    try:
+        logger.info(f"Запрос на изменение статуса оффера {offer_id}")
+
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
+
+        data = request.get_json()
+        if not data or 'status' not in data:
+            return jsonify({'success': False, 'error': 'Не указан новый статус'}), 400
+
+        new_status = data['status']
+        reason = data.get('reason', '')
+
+        valid_statuses = ['active', 'paused', 'cancelled', 'completed']
+        if new_status not in valid_statuses:
+            return jsonify({
+                'success': False,
+                'error': f'Недопустимый статус. Разрешены: {", ".join(valid_statuses)}'
+            }), 400
+
+        try:
+            sys.path.insert(0, os.getcwd())
+            from add_offer import update_offer_status_by_id
+
+            result = update_offer_status_by_id(offer_id, telegram_user_id, new_status, reason)
+
+            if result['success']:
+                logger.info(f"Статус оффера {offer_id} изменен на {new_status}")
+                return jsonify(result), 200
+            else:
+                return jsonify(result), 400
+
+        except ImportError as e:
+            logger.error(f"Ошибка импорта update_offer_status_by_id: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Модуль системы офферов недоступен'
+            }), 503
+
+    except Exception as e:
+        logger.error(f"Ошибка изменения статуса оффера {offer_id}: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500

@@ -1,32 +1,9 @@
-// app/static/js/offers.js - ИСПРАВЛЕННАЯ ВЕРСИЯ
+// app/static/js/offers.js - ИСПРАВЛЕННАЯ ВЕРСИЯ БЕЗ КОНФЛИКТОВ
 
-// ===== ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК =====
-function switchTab(tabName) {
-    console.log('🔄 Переключение на вкладку:', tabName);
+console.log('📝 Загрузка offers.js - исправленная версия');
 
-    // Убираем активные классы у навигационных карточек
-    document.querySelectorAll('.nav-card').forEach(card => card.classList.remove('active'));
-
-    // Скрываем все контенты вкладок
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-    // Активируем выбранную навигационную карточку
-    const activeCard = document.querySelector(`[data-tab="${tabName}"]`);
-    if (activeCard) {
-        activeCard.classList.add('active');
-    }
-
-    // Показываем соответствующий контент
-    const activeContent = document.getElementById(tabName);
-    if (activeContent) {
-        activeContent.classList.add('active');
-    }
-
-    // Специальные действия для каждой вкладки
-    if (tabName === 'my-offers') {
-        loadMyOffers();
-    }
-}
+// ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
+let offersManager = null;
 
 // ===== ИНИЦИАЛИЗАЦИЯ TELEGRAM WEBAPP =====
 if (window.Telegram && window.Telegram.WebApp) {
@@ -34,57 +11,60 @@ if (window.Telegram && window.Telegram.WebApp) {
     window.Telegram.WebApp.expand();
 }
 
-// ФУНКЦИЯ ОПРЕДЕЛЕНИЯ ПРАВИЛЬНОЙ ЦЕНЫ
-function getOfferPriceInfo(offer) {
-    console.log('💰 Анализ цены для оффера', offer.id, ':', {
-        price: offer.price,
-        budget_total: offer.budget_total,
-        max_price_per_post: offer.max_price_per_post
-    });
+// ===== ФУНКЦИЯ ПОЛУЧЕНИЯ USER ID =====
+function getTelegramUserId() {
+    console.log('🔍 Получение Telegram User ID...');
 
-    let displayPrice = 0;
-    let priceType = '';
-
-    // Приоритет: budget_total > price > max_price_per_post
-    if (offer.budget_total && parseFloat(offer.budget_total) > 0) {
-        displayPrice = offer.budget_total;
-        priceType = 'Общий бюджет';
-    } else if (offer.price && parseFloat(offer.price) > 0) {
-        displayPrice = offer.price;
-        priceType = 'Цена за размещение';
-    } else {
-        displayPrice = 0;
-        priceType = 'Цена не указана';
+    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
+        const user = window.Telegram.WebApp.initDataUnsafe.user;
+        if (user && user.id) {
+            console.log('✅ User ID из Telegram WebApp:', user.id);
+            return user.id.toString();
+        }
     }
 
-    console.log(`💰 Результат для оффера ${offer.id}: ${displayPrice} (${priceType})`);
-
-    return {
-        amount: displayPrice,
-        type: priceType,
-        formatted: formatPrice(displayPrice)
-    };
+    const fallbackId = '373086959';
+    console.log('⚠️ Используем fallback User ID:', fallbackId);
+    return fallbackId;
 }
-// ФУНКЦИЯ ФОРМАТИРОВАНИЯ ЦЕНЫ
-function formatPrice(price) {
-    console.log('💰 Форматируем цену:', price, 'тип:', typeof price);
 
+// ===== ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК =====
+function switchTab(tabName) {
+    console.log('🔄 Переключение на вкладку:', tabName);
+
+    document.querySelectorAll('.nav-card').forEach(card => card.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+    const activeCard = document.querySelector(`[data-tab="${tabName}"]`);
+    if (activeCard) {
+        activeCard.classList.add('active');
+    }
+
+    const activeContent = document.getElementById(tabName);
+    if (activeContent) {
+        activeContent.classList.add('active');
+    }
+
+    if (tabName === 'my-offers') {
+        loadMyOffers();
+    } else if (tabName === 'create-offer') {
+        // Инициализируем OffersManager только при переходе на вкладку создания
+        initializeOffersManager();
+    }
+}
+
+// ===== ФУНКЦИИ ЗАГРУЗКИ И ОТОБРАЖЕНИЯ ОФФЕРОВ =====
+function formatPrice(price) {
     let numericPrice = 0;
 
-    // Преобразуем в число
     if (typeof price === 'string') {
         const cleanPrice = price.replace(/[^0-9.,]/g, '').replace(',', '.');
         numericPrice = parseFloat(cleanPrice) || 0;
     } else if (typeof price === 'number') {
         numericPrice = price;
-    } else {
-        numericPrice = 0;
     }
 
-    // Форматируем с разделителями тысяч
-    if (numericPrice === 0) {
-        return '0';
-    }
+    if (numericPrice === 0) return '0';
 
     return numericPrice.toLocaleString('ru-RU', {
         minimumFractionDigits: 0,
@@ -92,10 +72,8 @@ function formatPrice(price) {
     });
 }
 
-// ФУНКЦИЯ ФОРМАТИРОВАНИЯ ДАТЫ
 function formatDate(dateString) {
     if (!dateString) return 'Не указана';
-
     try {
         const date = new Date(dateString);
         return date.toLocaleDateString('ru-RU', {
@@ -108,7 +86,6 @@ function formatDate(dateString) {
     }
 }
 
-// ИСПРАВЛЕННАЯ ФУНКЦИЯ renderOffers
 function renderOffers(offers) {
     console.log('🎨 Отрисовка офферов:', offers.length);
     const container = document.getElementById('offersGrid');
@@ -124,34 +101,19 @@ function renderOffers(offers) {
     }
 
     let html = '';
-
-    offers.forEach((offer, index) => {
-        console.log(`📋 Оффер ${index + 1}:`, {
-            id: offer.id,
-            title: offer.title,
-            price: offer.price,
-            priceType: typeof offer.price
-        });
-
-        // Безопасное получение данных
+    offers.forEach((offer) => {
         const title = offer.title || 'Без названия';
         const description = offer.description || offer.content || 'Нет описания';
         const rawPrice = offer.price || 0;
         const currency = offer.currency || 'RUB';
         const category = offer.category || 'Не указана';
         const status = offer.status || 'active';
-        const deadline = offer.deadline || 'Не указан';
         const responseCount = offer.response_count || 0;
         const createdAt = offer.created_at || '';
 
-        // ИСПРАВЛЕННОЕ форматирование цены
         const formattedPrice = formatPrice(rawPrice);
         const formattedDate = formatDate(createdAt);
 
-        console.log(`💰 Цена для оффера ${offer.id}: ${rawPrice} -> ${formattedPrice}`);
-
-        // Определяем статус
-        const statusClass = status === 'active' ? 'status-active' : 'status-inactive';
         const statusText = {
             'active': 'Активен',
             'paused': 'Приостановлен',
@@ -159,7 +121,6 @@ function renderOffers(offers) {
             'cancelled': 'Отменен'
         }[status] || 'Неизвестно';
 
-        // Обрезаем описание
         const shortDescription = description.length > 150 ?
             description.substring(0, 150) + '...' : description;
 
@@ -182,10 +143,6 @@ function renderOffers(offers) {
                         <div style="display: flex; justify-content: space-between;">
                             <span style="color: #666;">📁 Категория:</span>
                             <span style="font-weight: 600;">${category}</span>
-                        </div>
-                        <div style="display: flex; justify-content: space-between;">
-                            <span style="color: #666;">📅 Дедлайн:</span>
-                            <span style="font-weight: 600;">${deadline}</span>
                         </div>
                         <div style="display: flex; justify-content: space-between;">
                             <span style="color: #666;">📊 Откликов:</span>
@@ -213,6 +170,22 @@ function renderOffers(offers) {
                     <button onclick="manageResponses(${offer.id})" style="padding: 8px 16px; border: 1px solid #28a745; background: #28a745; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
                         💬 Отклики (${responseCount})
                     </button>` : ''}
+                    ${status === 'active' || status === 'paused' ? `
+                    <button onclick="cancelOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="padding: 8px 16px; border: 1px solid #ffc107; background: #ffc107; color: #212529; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        ❌ Отменить
+                    </button>` : ''}
+                    ${status === 'paused' ? `
+                    <button onclick="resumeOffer(${offer.id}, this)" style="padding: 8px 16px; border: 1px solid #28a745; background: #28a745; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        ▶️ Возобновить
+                    </button>` : ''}
+                    ${status === 'active' ? `
+                    <button onclick="pauseOffer(${offer.id}, this)" style="padding: 8px 16px; border: 1px solid #6c757d; background: #6c757d; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        ⏸️ Приостановить
+                    </button>` : ''}
+                    ${status === 'completed' || status === 'cancelled' ? `
+                    <button onclick="deleteOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="padding: 8px 16px; border: 1px solid #dc3545; background: #dc3545; color: white; border-radius: 6px; cursor: pointer; font-size: 13px;">
+                        🗑️ Удалить
+                    </button>` : ''}
                 </div>
                 
                 <div style="margin-top: 10px; font-size: 12px; color: #666;">
@@ -223,42 +196,9 @@ function renderOffers(offers) {
     });
 
     container.innerHTML = html;
-    console.log('✅ Офферы отрисованы с правильными ценами');
+    console.log('✅ Офферы отрисованы');
 }
 
-// Дополнительные функции
-function editOffer(offerId) {
-    alert(`Редактирование оффера ${offerId} (в разработке)`);
-}
-
-function viewOfferDetails(offerId) {
-    alert(`Детали оффера ${offerId} (в разработке)`);
-}
-
-function manageResponses(offerId) {
-    alert(`Управление откликами для оффера ${offerId} (в разработке)`);
-}
-
-// ===== ФУНКЦИЯ ПОЛУЧЕНИЯ USER ID =====
-function getTelegramUserId() {
-    console.log('🔍 Получение Telegram User ID...');
-    
-    // Пробуем получить из Telegram WebApp
-    if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe) {
-        const user = window.Telegram.WebApp.initDataUnsafe.user;
-        if (user && user.id) {
-            console.log('✅ User ID из Telegram WebApp:', user.id);
-            return user.id.toString();
-        }
-    }
-    
-    // Fallback к основному пользователю
-    const fallbackId = '373086959';
-    console.log('⚠️ Используем fallback User ID:', fallbackId);
-    return fallbackId;
-}
-
-// ===== ЗАГРУЗКА МОИХ ОФФЕРОВ =====
 async function loadMyOffers() {
     console.log('📋 Загрузка моих офферов...');
     const container = document.getElementById('offersGrid');
@@ -269,12 +209,9 @@ async function loadMyOffers() {
     }
 
     try {
-        // Показываем индикатор загрузки
         showOffersLoading();
 
         const userId = getTelegramUserId();
-        console.log('👤 Используем User ID:', userId);
-
         const response = await fetch('/api/offers/my', {
             method: 'GET',
             headers: {
@@ -283,14 +220,11 @@ async function loadMyOffers() {
             }
         });
 
-        console.log('🌐 API Response Status:', response.status);
-        
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
         const result = await response.json();
-        console.log('📦 API Response Data:', result);
 
         if (result.success && result.offers && result.offers.length > 0) {
             console.log('✅ Офферы загружены:', result.offers.length);
@@ -305,7 +239,6 @@ async function loadMyOffers() {
     }
 }
 
-// ===== СОСТОЯНИЯ ЗАГРУЗКИ =====
 function showOffersLoading() {
     const container = document.getElementById('offersGrid');
     if (container) {
@@ -350,59 +283,80 @@ function showOffersError(message) {
     }
 }
 
-// ===== ПОИСК ПО ОФФЕРАМ =====
-function setupOffersSearch() {
-    const searchInput = document.getElementById('offersSearch');
-    
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const searchTerm = this.value.toLowerCase().trim();
-            const offerCards = document.querySelectorAll('.offer-card');
-
-            offerCards.forEach(card => {
-                const title = card.querySelector('.offer-title')?.textContent.toLowerCase() || '';
-                
-                if (title.includes(searchTerm)) {
-                    card.style.display = 'block';
-                } else {
-                    card.style.display = 'none';
-                }
-            });
-        });
-    }
-}
-
-// ===== ФУНКЦИЯ ВОЗВРАТА =====
-function goBack() {
-    if (window.history.length > 1) {
-        window.history.back();
-    } else {
-        window.location.href = '/';
-    }
-}
-
-// ===== КЛАСС ДЛЯ СОЗДАНИЯ ОФФЕРОВ =====
+// ===== КЛАСС ДЛЯ СОЗДАНИЯ ОФФЕРОВ - ИСПРАВЛЕННАЯ ВЕРСИЯ =====
 class OffersManager {
     constructor() {
         this.currentStep = 1;
         this.totalSteps = 4;
         this.formData = {};
-        this.init();
+        this.isInitialized = false;
     }
 
     init() {
+        if (this.isInitialized) {
+            console.log('⚠️ OffersManager уже инициализирован');
+            return;
+        }
+
         console.log('🎯 Инициализация OffersManager');
         this.setupEventListeners();
         this.updateStep(this.currentStep);
+        this.isInitialized = true;
     }
 
     setupEventListeners() {
-        // Кнопки навигации по шагам
-        document.getElementById('nextBtn')?.addEventListener('click', () => this.nextStep());
-        document.getElementById('prevBtn')?.addEventListener('click', () => this.prevStep());
-        document.getElementById('submitBtn')?.addEventListener('click', () => this.submitOffer());
+        console.log('🔗 Настройка обработчиков событий...');
 
-        // Слайдер подписчиков
+        // Проверяем наличие кнопок и привязываем обработчики
+        const nextBtn = document.getElementById('nextBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const submitBtn = document.getElementById('submitBtn');
+
+        if (nextBtn) {
+            console.log('✅ Кнопка "Далее" найдена, привязываем обработчик');
+            nextBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('🔄 Клик по кнопке "Далее"');
+                this.nextStep();
+            });
+        } else {
+            console.error('❌ Кнопка "Далее" не найдена!');
+        }
+
+        if (prevBtn) {
+            console.log('✅ Кнопка "Назад" найдена, привязываем обработчик');
+            prevBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('🔄 Клик по кнопке "Назад"');
+                this.prevStep();
+            });
+        }
+
+        if (submitBtn) {
+            console.log('✅ Кнопка "Создать" найдена, привязываем обработчик');
+            submitBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                console.log('🔄 Клик по кнопке "Создать"');
+                this.submitOffer();
+            });
+        }
+
+        // Настройка чипов
+        this.setupChips();
+
+        // Настройка слайдера подписчиков
+        this.setupSubscribersSlider();
+    }
+
+    setupChips() {
+        document.querySelectorAll('.chip').forEach(chip => {
+            chip.addEventListener('click', function() {
+                this.classList.toggle('selected');
+            });
+        });
+    }
+
+    setupSubscribersSlider() {
         const subscribersRange = document.querySelector('input[name="min_subscribers"]');
         const subscribersValue = document.getElementById('subscribersValue');
 
@@ -439,186 +393,68 @@ class OffersManager {
         if (prevBtn) prevBtn.style.display = step === 1 ? 'none' : 'inline-flex';
         if (nextBtn) nextBtn.style.display = step === this.totalSteps ? 'none' : 'inline-flex';
         if (submitBtn) submitBtn.style.display = step === this.totalSteps ? 'inline-flex' : 'none';
+
+        // Обновляем прогресс-бар
+        const stepperProgress = document.getElementById('stepperProgress');
+        if (stepperProgress) {
+            const progress = ((step - 1) / (this.totalSteps - 1)) * 100;
+            stepperProgress.style.width = progress + '%';
+        }
+
+        // Обновляем предпросмотр на последнем шаге
+        if (step === this.totalSteps) {
+            this.updatePreview();
+        }
+
+        this.currentStep = step;
     }
 
     nextStep() {
+        console.log('➡️ Переход к следующему шагу');
         if (this.currentStep < this.totalSteps) {
-            this.currentStep++;
-            this.updateStep(this.currentStep);
+            this.updateStep(this.currentStep + 1);
         }
     }
 
     prevStep() {
+        console.log('⬅️ Переход к предыдущему шагу');
         if (this.currentStep > 1) {
-            this.currentStep--;
-            this.updateStep(this.currentStep);
+            this.updateStep(this.currentStep - 1);
+        }
+    }
+
+    updatePreview() {
+        console.log('🔍 Обновление предпросмотра');
+
+        const titleInput = document.querySelector('input[name="title"]');
+        const budgetInput = document.querySelector('input[name="budget"]');
+
+        if (titleInput) {
+            const previewTitle = document.getElementById('previewTitle');
+            if (previewTitle) {
+                previewTitle.textContent = titleInput.value || 'Не указано';
+            }
+        }
+
+        if (budgetInput) {
+            const previewBudget = document.getElementById('previewBudget');
+            if (previewBudget) {
+                const budget = budgetInput.value;
+                previewBudget.textContent = budget ? formatPrice(budget) + ' RUB' : 'Не указан';
+            }
+        }
+
+        // Обновляем выбранные тематики
+        const selectedTopics = Array.from(document.querySelectorAll('.chip.selected'))
+            .map(chip => chip.textContent);
+        const previewTopics = document.getElementById('previewTopics');
+        if (previewTopics) {
+            previewTopics.textContent = selectedTopics.length > 0 ? selectedTopics.join(', ') : 'Не выбраны';
         }
     }
 
     async submitOffer() {
-    console.log('📤 Отправка оффера (исправленная версия)...');
-
-    const submitBtn = document.getElementById('submitBtn');
-    const originalText = submitBtn?.textContent;
-
-    try {
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.textContent = '⏳ Создание...';
-        }
-
-        console.log('🔍 Собираем данные формы...');
-
-        // Собираем данные из правильных полей
-        const data = {
-            title: '',
-            description: '',
-            budget_total: 0,
-            price: 0,
-            currency: 'RUB',
-            category: 'general'
-        };
-
-        // Название
-        const titleField = document.querySelector('input[name="title"]');
-        if (titleField && titleField.value) {
-            data.title = titleField.value.trim();
-        } else {
-            data.title = 'Новый оффер';
-        }
-
-        // Описание
-        const descField = document.querySelector('textarea[name="description"]') ||
-                         document.querySelector('input[name="description"]');
-        if (descField && descField.value) {
-            data.description = descField.value.trim();
-        } else {
-            data.description = 'Описание оффера';
-        }
-
-        // ГЛАВНОЕ ИСПРАВЛЕНИЕ: Поле price содержит общий бюджет!
-        const priceField = document.querySelector('input[name="price"]');
-        if (priceField && priceField.value) {
-            const inputValue = parseFloat(priceField.value);
-            console.log(`💰 Найдено в поле price: ${inputValue}`);
-
-            // Определяем что это - бюджет или цена за пост
-            // Если значение большое (>10000), считаем это общим бюджетом
-            if (inputValue >= 10000) {
-                data.budget_total = inputValue;
-                data.price = Math.min(inputValue, 10000); // Устанавливаем разумную цену за пост
-                console.log(`💰 Интерпретируем как общий бюджет: ${data.budget_total}`);
-            } else {
-                data.price = inputValue;
-                data.budget_total = inputValue;
-                console.log(`💰 Интерпретируем как цену за пост: ${data.price}`);
-            }
-        }
-
-        // Дополнительно проверяем поле budget
-        const budgetField = document.querySelector('input[name="budget"]');
-        if (budgetField && budgetField.value) {
-            const budgetValue = parseFloat(budgetField.value);
-            if (budgetValue > 0) {
-                data.budget_total = budgetValue;
-                console.log(`💰 Найден отдельный бюджет: ${data.budget_total}`);
-            }
-        }
-
-        // Категория
-        const categoryField = document.querySelector('select[name="category"]');
-        if (categoryField && categoryField.value) {
-            data.category = categoryField.value;
-        }
-
-        // Дополнительные поля
-        data.content = data.description;
-
-        const audienceField = document.querySelector('input[name="target_audience"]');
-        if (audienceField && audienceField.value) {
-            data.target_audience = audienceField.value.trim();
-        }
-
-        // Валидация
-        if (!data.title || data.title.length < 3) {
-            throw new Error('Название должно содержать минимум 3 символа');
-        }
-
-        if (!data.description || data.description.length < 5) {
-            throw new Error('Описание должно содержать минимум 5 символов');
-        }
-
-        if (!data.budget_total || data.budget_total <= 0) {
-            throw new Error('Укажите корректный бюджет');
-        }
-
-        console.log('🚀 ОТПРАВЛЯЕМ ДАННЫЕ:');
-        console.log(JSON.stringify(data, null, 2));
-
-        const response = await fetch('/api/offers', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-User-Id': getTelegramUserId()
-            },
-            body: JSON.stringify(data)
-        });
-
-        const result = await response.json();
-        console.log('📥 Ответ сервера:', result);
-
-        if (response.ok && result.success) {
-            alert('✅ Оффер успешно создан!');
-
-            // Очищаем форму
-            if (priceField) priceField.value = '';
-            if (titleField) titleField.value = '';
-            if (descField) descField.value = '';
-
-            switchTab('my-offers');
-        } else {
-            throw new Error(result.error || result.errors?.join(', ') || 'Ошибка создания оффера');
-        }
-
-    } catch (error) {
-        console.error('❌ Ошибка создания оффера:', error);
-        alert(`❌ Ошибка: ${error.message}`);
-    } finally {
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
-        }
-    }
-}
-
-    collectFormData() {
-        const form = document.getElementById('offerForm');
-        const formData = new FormData(form);
-        const data = Object.fromEntries(formData.entries());
-
-        // Добавляем выбранные чипы
-        data.categories = Array.from(document.querySelectorAll('.chip.selected'))
-            .map(chip => chip.dataset.value || chip.textContent);
-
-        return data;
-    }
-}
-
-// ===== ИНИЦИАЛИЗАЦИЯ =====
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎯 Инициализация страницы офферов');
-
-    // Загружаем офферы по умолчанию (первая вкладка)
-    loadMyOffers();
-
-    // Настройка поиска
-    setupOffersSearch();
-
-    // Инициализация существующего функционала создания офферов
-    // ПЕРЕОПРЕДЕЛЕНИЕ submitOffer в конце offers.js - тоже замените
-if (typeof OffersManager !== 'undefined') {
-    OffersManager.prototype.submitOffer = async function() {
-        console.log('📤 Отправка оффера (переопределенная версия)...');
+        console.log('📤 Отправка оффера...');
 
         const submitBtn = document.getElementById('submitBtn');
         const originalText = submitBtn?.textContent;
@@ -629,26 +465,55 @@ if (typeof OffersManager !== 'undefined') {
                 submitBtn.textContent = '⏳ Создание...';
             }
 
-            // ПРАВИЛЬНЫЙ сбор данных из поля price
-            const priceField = document.querySelector('input[name="price"]');
-            const titleField = document.querySelector('input[name="title"]');
-            const descField = document.querySelector('textarea[name="description"]') ||
-                             document.querySelector('input[name="description"]');
-
-            const inputValue = priceField ? parseFloat(priceField.value) : 0;
-
+            // Собираем данные формы
             const data = {
-                title: titleField?.value || 'Новый оффер',
-                description: descField?.value || 'Описание оффера',
-                budget_total: inputValue, // Используем введенное значение как общий бюджет
-                price: Math.min(inputValue, 10000), // Разумная цена за пост
+                title: '',
+                description: '',
+                budget_total: 0,
+                price: 0,
                 currency: 'RUB',
                 category: 'general'
             };
 
+            // Название
+            const titleField = document.querySelector('input[name="title"]');
+            if (titleField && titleField.value) {
+                data.title = titleField.value.trim();
+            } else {
+                throw new Error('Укажите название оффера');
+            }
+
+            // Описание
+            const descField = document.querySelector('textarea[name="description"]');
+            if (descField && descField.value) {
+                data.description = descField.value.trim();
+            } else {
+                throw new Error('Укажите описание оффера');
+            }
+
+            // Бюджет
+            const budgetField = document.querySelector('input[name="budget"]');
+            if (budgetField && budgetField.value) {
+                const budgetValue = parseFloat(budgetField.value);
+                if (budgetValue > 0) {
+                    data.budget_total = budgetValue;
+                    data.price = Math.min(budgetValue, 10000);
+                } else {
+                    throw new Error('Укажите корректный бюджет');
+                }
+            } else {
+                throw new Error('Укажите бюджет');
+            }
+
+            // Категория
+            const categoryField = document.querySelector('select[name="category"]');
+            if (categoryField && categoryField.value) {
+                data.category = categoryField.value;
+            }
+
             data.content = data.description;
 
-            console.log('🚀 Отправляем данные (переопределенная версия):', data);
+            console.log('🚀 Отправляемые данные:', data);
 
             const response = await fetch('/api/offers', {
                 method: 'POST',
@@ -663,9 +528,20 @@ if (typeof OffersManager !== 'undefined') {
 
             if (response.ok && result.success) {
                 alert('✅ Оффер успешно создан!');
+
+                // Очищаем форму
+                document.getElementById('offerForm').reset();
+                document.querySelectorAll('.chip.selected').forEach(chip => {
+                    chip.classList.remove('selected');
+                });
+
+                // Возвращаемся к первому шагу
+                this.updateStep(1);
+
+                // Переходим к списку офферов
                 switchTab('my-offers');
             } else {
-                throw new Error(result.error || result.errors?.join(', ') || 'Ошибка создания оффера');
+                throw new Error(result.error || 'Ошибка создания оффера');
             }
 
         } catch (error) {
@@ -677,8 +553,360 @@ if (typeof OffersManager !== 'undefined') {
                 submitBtn.textContent = originalText;
             }
         }
-    };
+    }
 }
+
+// ===== ФУНКЦИЯ ИНИЦИАЛИЗАЦИИ OFFERS MANAGER =====
+function initializeOffersManager() {
+    console.log('🎯 Инициализация менеджера офферов...');
+
+    // Создаем экземпляр только если его еще нет
+    if (!offersManager) {
+        offersManager = new OffersManager();
+    }
+
+    // Небольшая задержка для уверенности что DOM готов
+    setTimeout(() => {
+        offersManager.init();
+    }, 100);
+}
+
+// ===== ПОИСК ПО ОФФЕРАМ =====
+function setupOffersSearch() {
+    const searchInput = document.getElementById('offersSearch');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            const offerCards = document.querySelectorAll('.offer-card');
+
+            offerCards.forEach(card => {
+                const title = card.querySelector('h3')?.textContent.toLowerCase() || '';
+                card.style.display = title.includes(searchTerm) ? 'block' : 'none';
+            });
+        });
+    }
+}
+
+// ===== ДОПОЛНИТЕЛЬНЫЕ ФУНКЦИИ =====
+function editOffer(offerId) {
+    alert(`Редактирование оффера ${offerId} (в разработке)`);
+}
+
+function viewOfferDetails(offerId) {
+    alert(`Детали оффера ${offerId} (в разработке)`);
+}
+
+function goBack() {
+    if (window.history.length > 1) {
+        window.history.back();
+    } else {
+        window.location.href = '/';
+    }
+}
+
+// ===== ФУНКЦИЯ УДАЛЕНИЯ ОФФЕРА =====
+async function deleteOffer(offerId, offerTitle, buttonElement) {
+    console.log('🗑️ Запрос на удаление оффера:', offerId);
+
+    // Показываем подтверждение
+    const confirmMessage = `Вы уверены, что хотите удалить оффер "${offerTitle}"?\n\nЭто действие нельзя отменить.`;
+
+    if (!confirm(confirmMessage)) {
+        console.log('❌ Удаление отменено пользователем');
+        return;
+    }
+
+    const originalText = buttonElement?.textContent;
+
+    try {
+        // Блокируем кнопку
+        if (buttonElement) {
+            buttonElement.disabled = true;
+            buttonElement.textContent = '⏳ Удаление...';
+            buttonElement.style.opacity = '0.6';
+        }
+
+        console.log('🌐 Отправляем запрос на удаление...');
+
+        const response = await fetch(`/api/offers/${offerId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const result = await response.json();
+        console.log('📥 Ответ сервера:', result);
+
+        if (response.ok && result.success) {
+            console.log('✅ Оффер успешно удален');
+
+            // Показываем сообщение об успехе
+            alert(`✅ ${result.message || 'Оффер успешно удален'}`);
+
+            // Убираем карточку из интерфейса с анимацией
+            const offerCard = buttonElement?.closest('.offer-card');
+            if (offerCard) {
+                offerCard.style.transition = 'all 0.3s ease';
+                offerCard.style.transform = 'scale(0.9)';
+                offerCard.style.opacity = '0';
+
+                setTimeout(() => {
+                    offerCard.remove();
+
+                    // Проверяем, остались ли офферы
+                    const remainingOffers = document.querySelectorAll('.offer-card');
+                    if (remainingOffers.length === 0) {
+                        showEmptyOffersState();
+                    }
+                }, 300);
+            }
+
+        } else {
+            throw new Error(result.error || 'Ошибка удаления оффера');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка удаления оффера:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+
+        // Восстанавливаем кнопку
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+            buttonElement.style.opacity = '1';
+        }
+    }
+}
+
+// ===== МАССОВОЕ УДАЛЕНИЕ ОФФЕРОВ =====
+async function deleteMultipleOffers() {
+    console.log('🗑️ Массовое удаление офферов');
+
+    const selectedOffers = document.querySelectorAll('.offer-card input[type="checkbox"]:checked');
+
+    if (selectedOffers.length === 0) {
+        alert('Выберите офферы для удаления');
+        return;
+    }
+
+    const confirmMessage = `Вы уверены, что хотите удалить ${selectedOffers.length} оффер(ов)?\n\nЭто действие нельзя отменить.`;
+
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    let deletedCount = 0;
+    let errorCount = 0;
+
+    for (const checkbox of selectedOffers) {
+        const offerCard = checkbox.closest('.offer-card');
+        const offerId = offerCard?.dataset.offerId;
+
+        if (offerId) {
+            try {
+                const response = await fetch(`/api/offers/${offerId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': getTelegramUserId()
+                    }
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    deletedCount++;
+                    offerCard.remove();
+                } else {
+                    errorCount++;
+                    console.error(`Ошибка удаления оффера ${offerId}:`, result.error);
+                }
+
+            } catch (error) {
+                errorCount++;
+                console.error(`Ошибка удаления оффера ${offerId}:`, error);
+            }
+        }
+    }
+
+    // Показываем результат
+    if (deletedCount > 0) {
+        alert(`✅ Удалено офферов: ${deletedCount}${errorCount > 0 ? `\n❌ Ошибок: ${errorCount}` : ''}`);
+    } else {
+        alert('❌ Не удалось удалить ни одного оффера');
+    }
+
+    // Проверяем, остались ли офферы
+    const remainingOffers = document.querySelectorAll('.offer-card');
+    if (remainingOffers.length === 0) {
+        showEmptyOffersState();
+    }
+}
+
+// ===== ФУНКЦИИ УПРАВЛЕНИЯ СТАТУСОМ ОФФЕРА =====
+
+async function cancelOffer(offerId, offerTitle, buttonElement) {
+    console.log('❌ Запрос на отмену оффера:', offerId);
+
+    // Запрашиваем причину отмены
+    const reason = prompt(`Укажите причину отмены оффера "${offerTitle}" (необязательно):`);
+
+    // Если пользователь нажал "Отмена" в prompt
+    if (reason === null) {
+        console.log('❌ Отмена отменена пользователем');
+        return;
+    }
+
+    // Подтверждение
+    const confirmMessage = `Вы уверены, что хотите отменить оффер "${offerTitle}"?\n\nПосле отмены вы сможете его удалить.`;
+
+    if (!confirm(confirmMessage)) {
+        console.log('❌ Отмена отменена пользователем');
+        return;
+    }
+
+    await updateOfferStatus(offerId, 'cancelled', reason, buttonElement, 'Отмена...');
+}
+
+async function pauseOffer(offerId, buttonElement) {
+    console.log('⏸️ Приостановка оффера:', offerId);
+
+    const reason = prompt('Причина приостановки (необязательно):');
+    if (reason === null) return;
+
+    await updateOfferStatus(offerId, 'paused', reason, buttonElement, 'Приостановка...');
+}
+
+async function resumeOffer(offerId, buttonElement) {
+    console.log('▶️ Возобновление оффера:', offerId);
+
+    await updateOfferStatus(offerId, 'active', 'Возобновлено пользователем', buttonElement, 'Возобновление...');
+}
+
+async function completeOffer(offerId, buttonElement) {
+    console.log('✅ Завершение оффера:', offerId);
+
+    const reason = prompt('Комментарий к завершению (необязательно):');
+    if (reason === null) return;
+
+    if (!confirm('Завершить оффер? После завершения его нельзя будет возобновить.')) {
+        return;
+    }
+
+    await updateOfferStatus(offerId, 'completed', reason, buttonElement, 'Завершение...');
+}
+
+// Универсальная функция обновления статуса
+async function updateOfferStatus(offerId, newStatus, reason, buttonElement, loadingText) {
+    const originalText = buttonElement?.textContent;
+
+    try {
+        // Блокируем кнопку
+        if (buttonElement) {
+            buttonElement.disabled = true;
+            buttonElement.textContent = `⏳ ${loadingText}`;
+            buttonElement.style.opacity = '0.6';
+        }
+
+        console.log(`🔄 Изменение статуса оффера ${offerId} на ${newStatus}`);
+
+        const response = await fetch(`/api/offers/${offerId}/status`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            },
+            body: JSON.stringify({
+                status: newStatus,
+                reason: reason || ''
+            })
+        });
+
+        const result = await response.json();
+        console.log('📥 Ответ сервера:', result);
+
+        if (response.ok && result.success) {
+            console.log(`✅ Статус успешно изменен на ${newStatus}`);
+
+            // Показываем сообщение об успехе
+            alert(`✅ ${result.message}`);
+
+            // Обновляем интерфейс
+            updateOfferCardStatus(offerId, newStatus);
+
+        } else {
+            throw new Error(result.error || `Ошибка изменения статуса на ${newStatus}`);
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка изменения статуса:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+
+        // Восстанавливаем кнопку
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+            buttonElement.style.opacity = '1';
+        }
+    }
+}
+
+// Обновление статуса карточки без перезагрузки
+function updateOfferCardStatus(offerId, newStatus) {
+    const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
+    if (!offerCard) return;
+
+    // Обновляем статус-бейдж
+    const statusBadge = offerCard.querySelector('.offer-header span');
+    if (statusBadge) {
+        const statusTexts = {
+            'active': 'Активен',
+            'paused': 'Приостановлен',
+            'completed': 'Завершен',
+            'cancelled': 'Отменен'
+        };
+
+        const statusColors = {
+            'active': { bg: '#d4edda', color: '#155724' },
+            'paused': { bg: '#fff3cd', color: '#856404' },
+            'completed': { bg: '#d1ecf1', color: '#0c5460' },
+            'cancelled': { bg: '#f8d7da', color: '#721c24' }
+        };
+
+        statusBadge.textContent = statusTexts[newStatus] || newStatus;
+        const colors = statusColors[newStatus] || statusColors['active'];
+        statusBadge.style.background = colors.bg;
+        statusBadge.style.color = colors.color;
+    }
+
+    // Перезагружаем всю страницу для обновления кнопок
+    setTimeout(() => {
+        loadMyOffers();
+    }, 1000);
+}
+
+// Добавляем функции в глобальную область видимости
+window.cancelOffer = cancelOffer;
+window.pauseOffer = pauseOffer;
+window.resumeOffer = resumeOffer;
+window.completeOffer = completeOffer;
+window.updateOfferStatus = updateOfferStatus;
+
+// Добавляем функции в глобальную область видимости
+window.deleteOffer = deleteOffer;
+window.deleteMultipleOffers = deleteMultipleOffers;
+// ===== ОСНОВНАЯ ИНИЦИАЛИЗАЦИЯ =====
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 Инициализация страницы офферов');
+
+    // Загружаем офферы по умолчанию
+    loadMyOffers();
+
+    // Настройка поиска
+    setupOffersSearch();
 
     console.log('✅ Страница офферов инициализирована');
 });
@@ -689,121 +917,7 @@ window.loadMyOffers = loadMyOffers;
 window.goBack = goBack;
 window.OffersManager = OffersManager;
 window.getTelegramUserId = getTelegramUserId;
+window.editOffer = editOffer;
+window.viewOfferDetails = viewOfferDetails;
 
-
-// ИСПРАВЛЕНИЕ ОСНОВНОЙ ФОРМЫ - добавьте в конец offers.js
-
-// ОТЛАДКА ЦЕН - добавьте в конец offers.js
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        const debugBtn = document.createElement('button');
-        debugBtn.textContent = '💰 Отладка цен';
-        debugBtn.style.cssText = 'position: fixed; top: 60px; right: 10px; z-index: 9999; background: #28a745; color: white; border: none; padding: 8px; border-radius: 5px; font-size: 12px;';
-        debugBtn.onclick = function() {
-            console.log('🔍 ОТЛАДКА ЦЕН ОФФЕРОВ');
-            fetch('/api/offers/my', {
-                headers: { 'X-Telegram-User-Id': getTelegramUserId() }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.offers) {
-                    data.offers.forEach((offer, index) => {
-                        console.log(`Оффер ${index + 1}:`);
-                        console.log('  ID:', offer.id);
-                        console.log('  Цена (исходная):', offer.price, typeof offer.price);
-                        console.log('  Цена (форматированная):', formatPrice(offer.price));
-                        console.log('  ---');
-                    });
-                }
-            });
-        };
-        document.body.appendChild(debugBtn);
-    }, 1000);
-});
-
-// КНОПКА ДИАГНОСТИКИ ЦЕН - добавьте в конец offers.js
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        const priceDebugBtn = document.createElement('button');
-        priceDebugBtn.textContent = '🔍 Анализ цен';
-        priceDebugBtn.style.cssText = 'position: fixed; top: 110px; right: 10px; z-index: 9999; background: #dc3545; color: white; border: none; padding: 8px; border-radius: 5px; font-size: 12px;';
-        priceDebugBtn.onclick = function() {
-            console.log('🔍 ДЕТАЛЬНЫЙ АНАЛИЗ ЦЕН ОФФЕРОВ');
-            console.log('=' * 50);
-
-            fetch('/api/offers/my', {
-                headers: { 'X-Telegram-User-Id': getTelegramUserId() }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success && data.offers) {
-                    data.offers.forEach((offer, index) => {
-                        console.log(`\n📋 Оффер ${index + 1} (ID: ${offer.id}):`);
-                        console.log('  Название:', offer.title);
-                        console.log('  price:', offer.price, typeof offer.price);
-                        console.log('  budget_total:', offer.budget_total, typeof offer.budget_total);
-                        console.log('  max_price_per_post:', offer.max_price_per_post, typeof offer.max_price_per_post);
-
-                        const priceInfo = getOfferPriceInfo(offer);
-                        console.log('  → Отображается:', priceInfo.formatted, `(${priceInfo.type})`);
-                        console.log('  ---');
-                    });
-                }
-            });
-        };
-        document.body.appendChild(priceDebugBtn);
-    }, 1000);
-});
-
-// ОТЛАДКА ПОЛЕЙ ФОРМЫ - добавьте в offers.js
-function debugFormFields() {
-    console.log('🔍 ОТЛАДКА ПОЛЕЙ ФОРМЫ');
-    console.log('========================');
-
-    // Находим все поля ввода
-    const allInputs = document.querySelectorAll('input, textarea, select');
-    console.log('📝 Найдено полей:', allInputs.length);
-
-    allInputs.forEach(input => {
-        if (input.name || input.id) {
-            console.log(`Поле: ${input.name || input.id} = "${input.value}" (тип: ${input.type})`);
-        }
-    });
-
-    // Проверяем специфичные поля цены/бюджета
-    const priceFields = [
-        'input[name="price"]',
-        'input[name="budget"]',
-        'input[name="budget_total"]',
-        'input[name="total_budget"]',
-        'input[name="max_price"]',
-        'input[name="max_price_per_post"]',
-        '#offerPrice',
-        '#budget',
-        '#totalBudget'
-    ];
-
-    console.log('\n💰 ПОЛЯ ЦЕНЫ/БЮДЖЕТА:');
-    priceFields.forEach(selector => {
-        const field = document.querySelector(selector);
-        if (field) {
-            console.log(`${selector}: "${field.value}" (name: ${field.name})`);
-        }
-    });
-
-    return true;
-}
-
-// КНОПКА ПРОВЕРКИ ФОРМЫ
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(() => {
-        const formDebugBtn = document.createElement('button');
-        formDebugBtn.textContent = '🔍 Проверка формы';
-        formDebugBtn.style.cssText = 'position: fixed; top: 160px; right: 10px; z-index: 9999; background: #6f42c1; color: white; border: none; padding: 8px; border-radius: 5px; font-size: 12px;';
-        formDebugBtn.onclick = function() {
-            console.log('🔍 ПРОВЕРКА ФОРМЫ СОЗДАНИЯ ОФФЕРА');
-            debugFormFields();
-        };
-        document.body.appendChild(formDebugBtn);
-    }, 1000);
-});
+console.log('✅ offers.js загружен успешно');

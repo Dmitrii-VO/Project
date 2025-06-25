@@ -939,6 +939,10 @@ def main():
         logger.error(f"❌ Критическая ошибка: {e}")
         sys.exit(1)
 
+@app.route('/diagnostic-offers')
+def diagnostic_offers():
+    return render_template('diagnostic_offers.html')
+
 
 @app.route('/test-static')
 def test_static():
