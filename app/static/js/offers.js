@@ -364,7 +364,7 @@ class OffersManager {
             subscribersRange.addEventListener('input', function() {
                 const value = parseInt(this.value);
                 subscribersValue.textContent = value >= 1000000 ? '1M+' :
-                                              value >= 1000 ? Math.round(value/1000) + 'K' :
+                                              value >= 1 ? Math.round(value/1000) + 'K' :
                                               value.toString();
             });
         }
@@ -751,16 +751,7 @@ async function deleteMultipleOffers() {
 async function cancelOffer(offerId, offerTitle, buttonElement) {
     console.log('❌ Запрос на отмену оффера:', offerId);
 
-    // Запрашиваем причину отмены
-    const reason = prompt(`Укажите причину отмены оффера "${offerTitle}" (необязательно):`);
-
-    // Если пользователь нажал "Отмена" в prompt
-    if (reason === null) {
-        console.log('❌ Отмена отменена пользователем');
-        return;
-    }
-
-    // Подтверждение
+    // Только подтверждение без запроса причины
     const confirmMessage = `Вы уверены, что хотите отменить оффер "${offerTitle}"?\n\nПосле отмены вы сможете его удалить.`;
 
     if (!confirm(confirmMessage)) {
@@ -768,16 +759,14 @@ async function cancelOffer(offerId, offerTitle, buttonElement) {
         return;
     }
 
-    await updateOfferStatus(offerId, 'cancelled', reason, buttonElement, 'Отмена...');
+    await updateOfferStatus(offerId, 'cancelled', 'Отменено пользователем', buttonElement, 'Отмена...');
 }
 
 async function pauseOffer(offerId, buttonElement) {
     console.log('⏸️ Приостановка оффера:', offerId);
 
-    const reason = prompt('Причина приостановки (необязательно):');
-    if (reason === null) return;
-
-    await updateOfferStatus(offerId, 'paused', reason, buttonElement, 'Приостановка...');
+    // Приостанавливаем без запроса причины
+    await updateOfferStatus(offerId, 'paused', 'Приостановлено пользователем', buttonElement, 'Приостановка...');
 }
 
 async function resumeOffer(offerId, buttonElement) {
@@ -789,14 +778,11 @@ async function resumeOffer(offerId, buttonElement) {
 async function completeOffer(offerId, buttonElement) {
     console.log('✅ Завершение оффера:', offerId);
 
-    const reason = prompt('Комментарий к завершению (необязательно):');
-    if (reason === null) return;
-
     if (!confirm('Завершить оффер? После завершения его нельзя будет возобновить.')) {
         return;
     }
 
-    await updateOfferStatus(offerId, 'completed', reason, buttonElement, 'Завершение...');
+    await updateOfferStatus(offerId, 'completed', 'Завершено пользователем', buttonElement, 'Завершение...');
 }
 
 // Универсальная функция обновления статуса
