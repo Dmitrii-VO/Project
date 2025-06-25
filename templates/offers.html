@@ -17,264 +17,331 @@
             <button class="back-btn" onclick="goBack()">← Назад</button>
             <div class="hero-content">
                 <span class="hero-icon">🎯</span>
-                <h1 class="hero-title">Создать оффер</h1>
-                <p class="hero-subtitle">Создайте предложение для размещения в Telegram каналах</p>
+                <h1 class="hero-title">Управление офферами</h1>
+                <p class="hero-subtitle">Создавайте предложения и ищите подходящие офферы</p>
             </div>
         </div>
 
         <!-- Навигация по табам -->
-    <div class="navigation-grid">
-        <div class="nav-card active" data-tab="my-offers" onclick="switchTab('my-offers')">
-            <div class="nav-icon">📋</div>
-            <div class="nav-content">
-                <h3>Мои офферы</h3>
-                <p>Список созданных вами офферов</p>
+        <div class="navigation-grid">
+            <div class="nav-card active" data-tab="my-offers" onclick="switchTab('my-offers')">
+                <div class="nav-icon">📋</div>
+                <div class="nav-content">
+                    <h3>Мои офферы</h3>
+                    <p>Список созданных вами офферов</p>
+                </div>
+            </div>
+            <div class="nav-card" data-tab="find-offer" onclick="switchTab('find-offer')">
+                <div class="nav-icon">🔍</div>
+                <div class="nav-content">
+                    <h3>Найти оффер</h3>
+                    <p>Поиск предложений от рекламодателей</p>
+                </div>
+            </div>
+            <div class="nav-card" data-tab="create-offer" onclick="switchTab('create-offer')">
+                <div class="nav-icon">➕</div>
+                <div class="nav-content">
+                    <h3>Создать оффер</h3>
+                    <p>Новое рекламное предложение</p>
+                </div>
             </div>
         </div>
 
-        <div class="nav-card" data-tab="create-offer" onclick="switchTab('create-offer')">
-            <div class="nav-icon">➕</div>
-            <div class="nav-content">
-                <h3>Создать оффер</h3>
-                <p>Новое рекламное предложение</p>
-            </div>
-        </div>
-    </div>
         <!-- Tab: Мои офферы -->
-    <div class="tab-content active" id="my-offers">
-        <!-- Action Bar -->
-        <div class="action-bar">
-            <div class="search-container">
-                <div class="search-icon">🔍</div>
-                <input type="text" class="search-input" placeholder="Поиск по офферам..." id="offersSearch">
+        <div class="tab-content active" id="my-offers">
+            <div class="action-bar">
+                <div class="search-container">
+                    <div class="search-icon">🔍</div>
+                    <input type="text" class="search-input" placeholder="Поиск по офферам..." id="offersSearch">
+                </div>
+            </div>
+
+            <div class="stats-grid" id="offersGrid">
+                <div class="empty-state" id="emptyOffersState">
+                    <div class="stat-icon">📝</div>
+                    <h3>Нет созданных офферов</h3>
+                    <p>Создайте свой первый оффер для привлечения каналов</p>
+                    <button class="btn btn-primary" onclick="switchTab('create-offer')">
+                        ➕ Создать оффер
+                    </button>
+                </div>
             </div>
         </div>
 
-        <!-- Список офферов -->
-        <div class="stats-grid" id="offersGrid">
-            <!-- Пустое состояние -->
-            <div class="empty-state" id="emptyOffersState">
-                <div class="stat-icon">📝</div>
-                <h3>Нет созданных офферов</h3>
-                <p>Создайте свой первый оффер для привлечения каналов</p>
-                <button class="btn btn-primary" onclick="switchTab('create-offer')">
-                    ➕ Создать оффер
-                </button>
+        <!-- Tab: Найти оффер -->
+        <div class="tab-content" id="find-offer">
+            <div class="action-bar">
+                <div class="search-container">
+                    <div class="search-icon">🔍</div>
+                    <input type="text" class="search-input" placeholder="Поиск по названию, категории..." id="findOffersSearch">
+                </div>
+            </div>
+
+            <!-- Фильтры -->
+            <div class="form-container">
+                <div style="padding: 20px; border-bottom: 1px solid var(--border-color);">
+                    <h3 style="margin-bottom: 16px; font-size: 18px;">🎯 Фильтры поиска</h3>
+                    <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <div class="form-group">
+                            <label class="form-label">Категория:</label>
+                            <select class="form-select" id="findCategoryFilter">
+                                <option value="">Все категории</option>
+                                <option value="tech">Технологии</option>
+                                <option value="finance">Финансы</option>
+                                <option value="lifestyle">Стиль жизни</option>
+                                <option value="education">Образование</option>
+                                <option value="business">Бизнес</option>
+                                <option value="entertainment">Развлечения</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Минимальный бюджет:</label>
+                            <input type="number" class="form-input" id="findBudgetMin" placeholder="от 1000" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Максимальный бюджет:</label>
+                            <input type="number" class="form-input" id="findBudgetMax" placeholder="до 100000" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Мин. подписчики:</label>
+                            <input type="number" class="form-input" id="findMinSubscribers" placeholder="1000" min="0">
+                        </div>
+                    </div>
+                    <div style="margin-top: 16px; display: flex; gap: 12px;">
+                        <button class="btn btn-primary" onclick="applyFindFilters()" style="flex: 0 0 auto;">
+                            🔍 Применить фильтры
+                        </button>
+                        <button class="btn btn-secondary" onclick="clearFindFilters()" style="flex: 0 0 auto;">
+                            🗑️ Очистить
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Результаты поиска -->
+            <div id="findOffersGrid" class="offers-grid">
+                <!-- Доступные офферы будут загружены здесь -->
+            </div>
+
+            <!-- Загрузка -->
+            <div id="findOffersLoading" class="loading-state" style="display: none; text-align: center; padding: 40px;">
+                <div class="loading-spinner"></div>
+                <p>Поиск офферов...</p>
             </div>
         </div>
-    </div>
+
         <!-- Tab: Создать оффер -->
-    <div class="tab-content" id="create-offer">
-        <!-- Progress Stepper -->
-        <div class="stepper-container">
-            <div class="stepper">
-                <div class="stepper-progress" id="stepperProgress"></div>
-                <div class="step active" data-step="1">
-                    <div class="step-circle">1</div>
-                    <div class="step-label">Основная информация</div>
-                </div>
-                <div class="step" data-step="2">
-                    <div class="step-circle">2</div>
-                    <div class="step-label">Настройки размещения</div>
-                </div>
-                <div class="step" data-step="3">
-                    <div class="step-circle">3</div>
-                    <div class="step-label">Бюджет и тематика</div>
-                </div>
-                <div class="step" data-step="4">
-                    <div class="step-circle">4</div>
-                    <div class="step-label">Подтверждение</div>
+        <div class="tab-content" id="create-offer">
+            <!-- Progress Stepper -->
+            <div class="stepper-container">
+                <div class="stepper">
+                    <div class="stepper-progress" id="stepperProgress"></div>
+                    <div class="step active" data-step="1">
+                        <div class="step-circle">1</div>
+                        <div class="step-label">Основная информация</div>
+                    </div>
+                    <div class="step" data-step="2">
+                        <div class="step-circle">2</div>
+                        <div class="step-label">Настройки размещения</div>
+                    </div>
+                    <div class="step" data-step="3">
+                        <div class="step-circle">3</div>
+                        <div class="step-label">Бюджет и тематика</div>
+                    </div>
+                    <div class="step" data-step="4">
+                        <div class="step-circle">4</div>
+                        <div class="step-label">Подтверждение</div>
+                    </div>
                 </div>
             </div>
+
+            <form id="offerForm" class="form-container">
+                <!-- Шаг 1: Основная информация -->
+                <div class="form-step active" data-step="1">
+                    <div class="step-title">Основная информация</div>
+                    <div class="step-description">Расскажите о вашем рекламном предложении</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Название оффера <span class="required">*</span></label>
+                        <input type="text" class="form-input" name="title" placeholder="Например: Реклама IT-курсов для начинающих" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Описание предложения <span class="required">*</span></label>
+                        <textarea class="form-input form-textarea" name="description" placeholder="Опишите детали вашего предложения, целевую аудиторию и ожидаемые результаты..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Тип рекламного контента</label>
+                        <select class="form-input form-select" name="content_type">
+                            <option value="">Выберите тип контента</option>
+                            <option value="text">Текстовый пост</option>
+                            <option value="image">Пост с изображением</option>
+                            <option value="video">Видео контент</option>
+                            <option value="link">Ссылка с превью</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Текст рекламного сообщения</label>
+                        <textarea class="form-input form-textarea" name="ad_text" placeholder="Введите текст рекламного сообщения, который будет размещен в каналах..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Шаг 2: Настройки размещения -->
+                <div class="form-step" data-step="2">
+                    <div class="step-title">Настройки размещения</div>
+                    <div class="step-description">Определите параметры размещения вашей рекламы</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Целевая аудитория</label>
+                        <div class="chip-container">
+                            <div class="chip" data-value="18-25">18-25 лет</div>
+                            <div class="chip" data-value="26-35">26-35 лет</div>
+                            <div class="chip" data-value="36-45">36-45 лет</div>
+                            <div class="chip" data-value="46+">46+ лет</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">География размещения</label>
+                        <select class="form-input form-select" name="geography">
+                            <option value="">Выберите географию</option>
+                            <option value="russia">Россия</option>
+                            <option value="cis">СНГ</option>
+                            <option value="europe">Европа</option>
+                            <option value="world">Весь мир</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Минимальное количество подписчиков канала</label>
+                        <div class="range-container">
+                            <div class="range-values">
+                                <span>1</span>
+                                <span id="subscribersValue">50K</span>
+                                <span>1M+</span>
+                            </div>
+                            <input type="range" class="range-slider" name="min_subscribers" min="1000" max="1000000" value="50000" step="1000">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Время размещения</label>
+                        <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
+                            <div>
+                                <label class="form-label">Дата начала</label>
+                                <input type="date" class="form-input" name="start_date">
+                            </div>
+                            <div>
+                                <label class="form-label">Дата окончания</label>
+                                <input type="date" class="form-input" name="end_date">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Шаг 3: Бюджет и тематика -->
+                <div class="form-step" data-step="3">
+                    <div class="step-title">Бюджет и тематика</div>
+                    <div class="step-description">Установите бюджет и выберите подходящие тематики каналов</div>
+
+                    <div class="form-group">
+                        <label class="form-label">Общий бюджет <span class="required">*</span></label>
+                        <div class="input-group">
+                            <span class="input-prefix">₽</span>
+                            <input type="number" class="form-input" name="budget" placeholder="50000" min="1000" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Максимальная цена за размещение</label>
+                        <div class="input-group">
+                            <span class="input-prefix">₽</span>
+                            <input type="number" class="form-input" name="max_price" placeholder="5000" min="100">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Тематики каналов</label>
+                        <div class="chip-container">
+                            <div class="chip" data-value="tech">Технологии</div>
+                            <div class="chip" data-value="business">Бизнес</div>
+                            <div class="chip" data-value="education">Образование</div>
+                            <div class="chip" data-value="lifestyle">Lifestyle</div>
+                            <div class="chip" data-value="finance">Финансы</div>
+                            <div class="chip" data-value="health">Здоровье</div>
+                            <div class="chip" data-value="travel">Путешествия</div>
+                            <div class="chip" data-value="food">Еда</div>
+                            <div class="chip" data-value="entertainment">Развлечения</div>
+                            <div class="chip" data-value="sport">Спорт</div>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <span>💡</span>
+                        <div>
+                            <strong>Совет:</strong> Выберите 2-4 тематики для лучшего таргетинга.
+                            Слишком широкий выбор может снизить эффективность рекламы.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Шаг 4: Подтверждение -->
+                <div class="form-step" data-step="4">
+                    <div class="step-title">Подтверждение оффера</div>
+                    <div class="step-description">Проверьте все данные перед публикацией</div>
+
+                    <div class="preview-card">
+                        <div class="preview-title">Сводка по офферу</div>
+                        <div class="preview-item">
+                            <span class="preview-label">Название:</span>
+                            <span class="preview-value" id="previewTitle">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Бюджет:</span>
+                            <span class="preview-value" id="previewBudget">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Тематики:</span>
+                            <span class="preview-value" id="previewTopics">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">Целевая аудитория:</span>
+                            <span class="preview-value" id="previewAudience">-</span>
+                        </div>
+                        <div class="preview-item">
+                            <span class="preview-label">География:</span>
+                            <span class="preview-value" id="previewGeography">-</span>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-success">
+                        <span>✅</span>
+                        <div>
+                            <strong>Готово к публикации!</strong><br>
+                            После создания оффера, владельцы подходящих каналов получат уведомления
+                            и смогут откликнуться на ваше предложение.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Form Actions -->
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
+                        ← Назад
+                    </button>
+                    <button type="button" class="btn btn-primary" id="nextBtn">
+                        Далее →
+                    </button>
+                    <button type="submit" class="btn btn-primary" id="submitBtn" style="display: none;">
+                        🚀 Создать оффер
+                    </button>
+                </div>
+            </form>
         </div>
-
-        <form id="offerForm" class="form-container">
-            <!-- Шаг 1: Основная информация -->
-            <div class="form-step active" data-step="1">
-                <div class="step-title">Основная информация</div>
-                <div class="step-description">Расскажите о вашем рекламном предложении</div>
-
-                <div class="form-group">
-                    <label class="form-label">Название оффера <span class="required">*</span></label>
-                    <input type="text" class="form-input" name="title" placeholder="Например: Реклама IT-курсов для начинающих" required>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Описание предложения <span class="required">*</span></label>
-                    <textarea class="form-input form-textarea" name="description" placeholder="Опишите детали вашего предложения, целевую аудиторию и ожидаемые результаты..." required></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Тип рекламного контента</label>
-                    <select class="form-input form-select" name="content_type">
-                        <option value="">Выберите тип контента</option>
-                        <option value="text">Текстовый пост</option>
-                        <option value="image">Пост с изображением</option>
-                        <option value="video">Видео контент</option>
-                        <option value="link">Ссылка с превью</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Текст рекламного сообщения</label>
-                    <textarea class="form-input form-textarea" name="ad_text" placeholder="Введите текст рекламного сообщения, который будет размещен в каналах..."></textarea>
-                </div>
-            </div>
-
-            <!-- Шаг 2: Настройки размещения -->
-            <div class="form-step" data-step="2">
-                <div class="step-title">Настройки размещения</div>
-                <div class="step-description">Определите параметры размещения вашей рекламы</div>
-
-                <div class="form-group">
-                    <label class="form-label">Целевая аудитория</label>
-                    <div class="chip-container">
-                        <div class="chip" data-value="18-25">18-25 лет</div>
-                        <div class="chip" data-value="26-35">26-35 лет</div>
-                        <div class="chip" data-value="36-45">36-45 лет</div>
-                        <div class="chip" data-value="46+">46+ лет</div>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">География размещения</label>
-                    <select class="form-input form-select" name="geography">
-                        <option value="">Выберите географию</option>
-                        <option value="russia">Россия</option>
-                        <option value="cis">СНГ</option>
-                        <option value="europe">Европа</option>
-                        <option value="world">Весь мир</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Минимальное количество подписчиков канала</label>
-                    <div class="range-container">
-                        <div class="range-values">
-                            <span>1</span>
-                            <span id="subscribersValue">50K</span>
-                            <span>1M+</span>
-                        </div>
-                        <input type="range" class="range-slider" name="min_subscribers" min="1000" max="1000000" value="50000" step="1000">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Время размещения</label>
-                    <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 16px;">
-                        <div>
-                            <label class="form-label">Дата начала</label>
-                            <input type="date" class="form-input" name="start_date">
-                        </div>
-                        <div>
-                            <label class="form-label">Дата окончания</label>
-                            <input type="date" class="form-input" name="end_date">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Шаг 3: Бюджет и тематика -->
-            <div class="form-step" data-step="3">
-                <div class="step-title">Бюджет и тематика</div>
-                <div class="step-description">Установите бюджет и выберите подходящие тематики каналов</div>
-
-                <div class="form-group">
-                    <label class="form-label">Общий бюджет <span class="required">*</span></label>
-                    <div class="input-group">
-                        <span class="input-prefix">₽</span>
-                        <input type="number" class="form-input" name="budget" placeholder="50000" min="1000" required>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Максимальная цена за размещение</label>
-                    <div class="input-group">
-                        <span class="input-prefix">₽</span>
-                        <input type="number" class="form-input" name="max_price" placeholder="5000" min="100">
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label class="form-label">Тематики каналов</label>
-                    <div class="chip-container">
-                        <div class="chip" data-value="tech">Технологии</div>
-                        <div class="chip" data-value="business">Бизнес</div>
-                        <div class="chip" data-value="education">Образование</div>
-                        <div class="chip" data-value="lifestyle">Lifestyle</div>
-                        <div class="chip" data-value="finance">Финансы</div>
-                        <div class="chip" data-value="health">Здоровье</div>
-                        <div class="chip" data-value="travel">Путешествия</div>
-                        <div class="chip" data-value="food">Еда</div>
-                        <div class="chip" data-value="entertainment">Развлечения</div>
-                        <div class="chip" data-value="sport">Спорт</div>
-                    </div>
-                </div>
-
-                <div class="alert alert-info">
-                    <span>💡</span>
-                    <div>
-                        <strong>Совет:</strong> Выберите 2-4 тематики для лучшего таргетинга.
-                        Слишком широкий выбор может снизить эффективность рекламы.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Шаг 4: Подтверждение -->
-            <div class="form-step" data-step="4">
-                <div class="step-title">Подтверждение оффера</div>
-                <div class="step-description">Проверьте все данные перед публикацией</div>
-
-                <div class="preview-card">
-                    <div class="preview-title">Сводка по офферу</div>
-                    <div class="preview-item">
-                        <span class="preview-label">Название:</span>
-                        <span class="preview-value" id="previewTitle">-</span>
-                    </div>
-                    <div class="preview-item">
-                        <span class="preview-label">Бюджет:</span>
-                        <span class="preview-value" id="previewBudget">-</span>
-                    </div>
-                    <div class="preview-item">
-                        <span class="preview-label">Тематики:</span>
-                        <span class="preview-value" id="previewTopics">-</span>
-                    </div>
-                    <div class="preview-item">
-                        <span class="preview-label">Целевая аудитория:</span>
-                        <span class="preview-value" id="previewAudience">-</span>
-                    </div>
-                    <div class="preview-item">
-                        <span class="preview-label">География:</span>
-                        <span class="preview-value" id="previewGeography">-</span>
-                    </div>
-                </div>
-
-                <div class="alert alert-success">
-                    <span>✅</span>
-                    <div>
-                        <strong>Готово к публикации!</strong><br>
-                        После создания оффера, владельцы подходящих каналов получат уведомления
-                        и смогут откликнуться на ваше предложение.
-                    </div>
-                </div>
-            </div>
-
-            <!-- Form Actions -->
-             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
-                    ← Назад
-                </button>
-                <button type="button" class="btn btn-primary" id="nextBtn">
-                    Далее →
-                </button>
-                <button type="submit" class="btn btn-primary" id="submitBtn" style="display: none;">
-                    🚀 Создать оффер
-                </button>
-            </div>
-        </form>
     </div>
-    </div>
-<script src="{{ url_for('static', filename='js/offers.js') }}"></script>
 
+    <script src="{{ url_for('static', filename='js/offers.js') }}"></script>
 </body>
 </html>

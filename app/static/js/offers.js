@@ -785,6 +785,234 @@ async function completeOffer(offerId, buttonElement) {
     await updateOfferStatus(offerId, 'completed', 'Завершено пользователем', buttonElement, 'Завершение...');
 }
 
+// ===== ФУНКЦИИ ПОИСКА ОФФЕРОВ =====
+function applyFindFilters() {
+    console.log('🔍 Применение фильтров поиска...');
+
+    const filters = {
+        search: document.getElementById('findOffersSearch')?.value.trim() || '',
+        category: document.getElementById('findCategoryFilter')?.value || '',
+        min_budget: parseFloat(document.getElementById('findBudgetMin')?.value) || null,
+        max_budget: parseFloat(document.getElementById('findBudgetMax')?.value) || null,
+        min_subscribers: parseInt(document.getElementById('findMinSubscribers')?.value) || null
+    };
+
+    // Убираем пустые значения
+    Object.keys(filters).forEach(key => {
+        if (filters[key] === null || filters[key] === '') {
+            delete filters[key];
+        }
+    });
+
+    console.log('🎯 Фильтры:', filters);
+    loadAvailableOffers(filters);
+}
+
+function clearFindFilters() {
+    console.log('🗑️ Очистка фильтров...');
+
+    document.getElementById('findOffersSearch').value = '';
+    document.getElementById('findCategoryFilter').value = '';
+    document.getElementById('findBudgetMin').value = '';
+    document.getElementById('findBudgetMax').value = '';
+    document.getElementById('findMinSubscribers').value = '';
+
+    // Загружаем все офферы без фильтров
+    loadAvailableOffers({});
+}
+
+async function loadAvailableOffers(filters = {}) {
+    console.log('📥 Загрузка доступных офферов с фильтрами:', filters);
+
+    const container = document.getElementById('findOffersGrid');
+    const loading = document.getElementById('findOffersLoading');
+
+    if (!container || !loading) {
+        console.error('❌ Контейнеры для поиска не найдены');
+        return;
+    }
+
+    // Показываем загрузку
+    loading.style.display = 'block';
+    container.innerHTML = '';
+
+    try {
+        // Формируем URL с параметрами
+        const params = new URLSearchParams();
+        Object.keys(filters).forEach(key => {
+            if (filters[key] !== null && filters[key] !== '') {
+                params.append(key, filters[key]);
+            }
+        });
+
+        const url = `/api/offers/available${params.toString() ? '?' + params.toString() : ''}`;
+        console.log('🌐 URL запроса:', url);
+
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            console.log('✅ Загружено доступных офферов:', result.offers?.length || 0);
+            renderAvailableOffers(result.offers || []);
+        } else {
+            throw new Error(result.error || 'Ошибка загрузки офферов');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка загрузки доступных офферов:', error);
+        showFindOffersError('Ошибка загрузки офферов: ' + error.message);
+    } finally {
+        loading.style.display = 'none';
+    }
+}
+
+function renderAvailableOffers(offers) {
+    console.log('🎨 Отрисовка доступных офферов:', offers.length);
+    const container = document.getElementById('findOffersGrid');
+
+    if (!container) {
+        console.error('❌ Контейнер findOffersGrid не найден');
+        return;
+    }
+
+    if (!offers || offers.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon" style="font-size: 48px; margin-bottom: 16px;">🎯</div>
+                <h3>Офферы не найдены</h3>
+                <p>Попробуйте изменить критерии поиска или очистить фильтры</p>
+                <button class="btn btn-primary" onclick="clearFindFilters()">
+                    🗑️ Очистить фильтры
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    let html = '';
+    offers.forEach((offer) => {
+        const title = offer.title || 'Без названия';
+        const description = offer.description || offer.content || 'Нет описания';
+        const price = formatPrice(offer.price || 0);
+        const currency = offer.currency || 'RUB';
+        const category = offer.category || 'Не указана';
+        const minSubscribers = offer.min_subscribers || 0;
+        const maxSubscribers = offer.max_subscribers || 'Без ограничений';
+        const createdAt = formatDate(offer.created_at);
+
+        const shortDescription = description.length > 200 ?
+            description.substring(0, 200) + '...' : description;
+
+        html += `
+            <div class="offer-card" data-offer-id="${offer.id}" style="cursor: pointer;" onclick="showOfferDetails(${offer.id})">
+                <div class="offer-header">
+                    <h3 style="margin: 0; color: #333; font-size: 18px; font-weight: 600; flex: 1;">${title}</h3>
+                    <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #d4edda; color: #155724; margin-left: 12px;">
+                        Активен
+                    </span>
+                </div>
+                
+                <div style="margin: 12px 0; color: #666; font-size: 14px; line-height: 1.5;">
+                    ${shortDescription}
+                </div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
+                    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                        <div style="font-size: 12px; color: #888;">
+                            💰 <strong style="color: #333;">${price} ${currency}</strong>
+                        </div>
+                        <div style="font-size: 12px; color: #888;">
+                            📂 <strong style="color: #333;">${category}</strong>
+                        </div>
+                        <div style="font-size: 12px; color: #888;">
+                            👥 <strong style="color: #333;">${minSubscribers}${maxSubscribers !== 'Без ограничений' ? '-' + maxSubscribers : '+'}</strong>
+                        </div>
+                        <div style="font-size: 12px; color: #888;">
+                            📅 <strong style="color: #333;">${createdAt}</strong>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" style="padding: 8px 16px; font-size: 12px; margin-left: 12px;" onclick="event.stopPropagation(); acceptOffer(${offer.id})">
+                        ✅ Принять
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function showFindOffersError(message) {
+    const container = document.getElementById('findOffersGrid');
+    if (container) {
+        container.innerHTML = `
+            <div class="error-state">
+                <div class="error-icon" style="font-size: 48px; margin-bottom: 16px;">❌</div>
+                <h3>Ошибка загрузки</h3>
+                <p>${message}</p>
+                <button class="btn btn-outline" onclick="loadAvailableOffers()">
+                    🔄 Попробовать снова
+                </button>
+            </div>
+        `;
+    }
+}
+
+function showOfferDetails(offerId) {
+    console.log('📋 Показ деталей оффера:', offerId);
+    // TODO: Можно добавить модальное окно или переход на страницу деталей
+    alert(`Детали оффера #${offerId}\n\nЗдесь будет подробная информация об оффере.`);
+}
+
+function acceptOffer(offerId) {
+    console.log('✅ Принятие оффера:', offerId);
+
+    if (confirm('Вы хотите принять этот оффер?')) {
+        // TODO: Реализовать API для принятия оффера
+        alert(`Оффер #${offerId} принят!\n\nФункционал в разработке.`);
+    }
+}
+
+
+
+
+
+
+// Обновляем функцию switchTab для загрузки офферов при переходе на вкладку поиска
+const originalSwitchTab = window.switchTab;
+window.switchTab = function(tabName) {
+    originalSwitchTab(tabName);
+
+    if (tabName === 'find-offer') {
+        // Загружаем доступные офферы при первом переходе на вкладку
+        setTimeout(() => {
+            loadAvailableOffers({});
+        }, 100);
+    }
+};
+
+// Настройка поиска в реальном времени для вкладки поиска
+document.addEventListener('DOMContentLoaded', function() {
+    const findSearchInput = document.getElementById('findOffersSearch');
+    if (findSearchInput) {
+        findSearchInput.addEventListener('input', function() {
+            // Debounce для поиска
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(() => {
+                applyFindFilters();
+            }, 500);
+        });
+    }
+});
+
 // Универсальная функция обновления статуса
 async function updateOfferStatus(offerId, newStatus, reason, buttonElement, loadingText) {
     const originalText = buttonElement?.textContent;
