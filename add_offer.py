@@ -1,4 +1,4 @@
-# add_offer.py - Система создания офферов (продуктивная версия)
+# add_offer_fixed.py - Исправленная система создания офферов
 import sqlite3
 import json
 import logging
@@ -8,10 +8,10 @@ import os
 
 try:
     from flask import request, jsonify
+
     FLASK_AVAILABLE = True
 except ImportError:
     FLASK_AVAILABLE = False
-    # Заглушки для случая, когда Flask недоступен
     request = None
     jsonify = None
 
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 # Путь к базе данных
 DATABASE_PATH = 'telegram_mini_app.db'
 
+
 def get_db_connection():
     """Получение подключения к SQLite"""
     try:
@@ -31,6 +32,7 @@ def get_db_connection():
         return conn
     except Exception as e:
         raise Exception(f"Ошибка подключения к SQLite: {e}")
+
 
 def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
     """Безопасное выполнение SQL запросов"""
@@ -60,6 +62,7 @@ def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, 
             conn.close()
         raise
 
+
 def validate_offer_data(data: Dict[str, Any]) -> List[str]:
     """Валидация данных оффера"""
     errors = []
@@ -68,7 +71,7 @@ def validate_offer_data(data: Dict[str, Any]) -> List[str]:
     if not data.get('title', '').strip():
         errors.append('Название оффера обязательно')
 
-    if not data.get('content', '').strip():
+    if not data.get('description', '').strip() and not data.get('content', '').strip():
         errors.append('Описание оффера обязательно')
 
     if not data.get('price') or float(data.get('price', 0)) <= 0:
@@ -76,39 +79,37 @@ def validate_offer_data(data: Dict[str, Any]) -> List[str]:
 
     # Проверка длины полей
     title = data.get('title', '').strip()
-    if len(title) < 10 or len(title) > 200:
-        errors.append('Название должно быть от 10 до 200 символов')
-
-    content = data.get('content', '').strip()
-    if len(content) < 50 or len(content) > 2000:
-        errors.append('Описание должно быть от 50 до 2000 символов')
+    if len(title) < 5 or len(title) > 200:
+        errors.append('Название должно быть от 5 до 200 символов')
 
     # Проверка цены
     try:
         price = float(data.get('price', 0))
-        if price < 100 or price > 1000000:
-            errors.append('Цена должна быть от 100 до 1,000,000')
+        if price < 10 or price > 1000000:
+            errors.append('Цена должна быть от 10 до 1,000,000 рублей')
     except (ValueError, TypeError):
         errors.append('Некорректная цена')
 
     # Проверка валюты
-    currency = data.get('currency', '').upper()
-    if currency not in ['RUB', 'USD', 'EUR']:
-        errors.append('Валюта должна быть RUB, USD или EUR')
+    currency = data.get('currency', 'RUB').upper()
+    allowed_currencies = ['RUB', 'USD', 'EUR']
+    if currency not in allowed_currencies:
+        errors.append(f'Валюта должна быть одной из: {", ".join(allowed_currencies)}')
 
     # Проверка категории
-    category = data.get('category', '').strip()
+    category = data.get('category', 'general')
     allowed_categories = [
-        'marketing', 'tech', 'education', 'entertainment',
-        'business', 'crypto', 'gaming', 'lifestyle', 'other'
+        'general', 'tech', 'finance', 'lifestyle', 'education',
+        'entertainment', 'business', 'health', 'sports', 'travel', 'other'
     ]
     if category not in allowed_categories:
-        errors.append('Некорректная категория')
+        errors.append(f'Категория должна быть одной из: {", ".join(allowed_categories)}')
 
     return errors
 
+
 def ensure_user_exists(user_id: int, username: str = None, first_name: str = None) -> int:
-    """Обеспечение существования пользователя в базе"""
+    """Убеждаемся что пользователь существует в БД"""
     user = safe_execute_query(
         'SELECT id FROM users WHERE telegram_id = ?',
         (user_id,),
@@ -118,20 +119,20 @@ def ensure_user_exists(user_id: int, username: str = None, first_name: str = Non
     if not user:
         # Создаем нового пользователя
         user_db_id = safe_execute_query('''
-            INSERT INTO users (telegram_id, username, first_name, is_admin, created_at) 
-            VALUES (?, ?, ?, ?, ?)
-        ''', (
-            user_id,
-            username or f'user_{user_id}',
-            first_name or 'User',
-            False,
-            datetime.now().isoformat()
-        ))
+                                        INSERT INTO users (telegram_id, username, first_name, created_at)
+                                        VALUES (?, ?, ?, ?)
+                                        ''', (
+                                            user_id,
+                                            username or f'user_{user_id}',
+                                            first_name or 'User',
+                                            datetime.now().isoformat()
+                                        ))
 
         logger.info(f"Создан новый пользователь: {user_id}")
         return user_db_id
 
     return user['id']
+
 
 def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -145,6 +146,8 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
         Dict с результатом операции
     """
     try:
+        logger.info(f"Создание оффера пользователем {user_id}: {offer_data}")
+
         # Валидация данных
         errors = validate_offer_data(offer_data)
         if errors:
@@ -162,10 +165,18 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
 
         # Подготовка данных для вставки
         title = offer_data['title'].strip()
-        content = offer_data['content'].strip()
+        description = offer_data.get('description', '').strip()
+        content = offer_data.get('content', '').strip()
+
+        # Если нет description, создаем из content
+        if not description and content:
+            description = content[:200] + "..." if len(content) > 200 else content
+        elif not description:
+            description = title  # Fallback к title
+
         price = float(offer_data['price'])
-        currency = offer_data['currency'].upper()
-        category = offer_data['category'].strip()
+        currency = offer_data.get('currency', 'RUB').upper()
+        category = offer_data.get('category', 'general')
 
         # Дополнительные параметры
         target_audience = offer_data.get('target_audience', '').strip()
@@ -177,69 +188,79 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
             'contact_info': offer_data.get('contact_info', ''),
             'preferred_channels': offer_data.get('preferred_channels', []),
             'blacklist_channels': offer_data.get('blacklist_channels', []),
-            'min_subscribers': offer_data.get('min_subscribers', 1),
-            'max_subscribers': offer_data.get('max_subscribers', 100000000),
             'geo_targeting': offer_data.get('geo_targeting', []),
             'age_targeting': offer_data.get('age_targeting', ''),
             'posting_time': offer_data.get('posting_time', ''),
-            'additional_requirements': offer_data.get('additional_requirements', '')
+            'additional_requirements': offer_data.get('additional_requirements', ''),
+            'created_via': 'web_interface',
+            'category': category
         }
 
-        # Правильный расчет даты истечения
+        # Расчет дат
         current_time = datetime.now()
+        deadline_date = (current_time + timedelta(days=duration_days)).date()
         expires_at = current_time + timedelta(days=duration_days)
 
+        # Параметры подписчиков
+        min_subscribers = int(offer_data.get('min_subscribers', 1))
+        max_subscribers = int(offer_data.get('max_subscribers', 100000000))
+        budget_total = float(offer_data.get('budget_total', price))
+
         # Вставка оффера в базу данных
-        metadata['category'] = category
-
-        # Создаем description из первых 200 символов content
-        description = content[:200] + "..." if len(content) > 200 else content
-
-        # Рассчитываем deadline вместо expires_at
-        deadline_date = (current_time + timedelta(days=duration_days)).date()
-
         offer_id = safe_execute_query('''
-            INSERT INTO offers (
-                created_by, title, description, content, price, currency,
-                target_audience, requirements, deadline, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            user_db_id,
-            title,
-            description,
-            content,
-            price,
-            currency,
-            target_audience,
-            requirements,
-            deadline_date.isoformat(),
-            'active'
-        ))
+                                      INSERT INTO offers (created_by, title, description, content, price, currency,
+                                                          target_audience, requirements, deadline, status, category,
+                                                          metadata, budget_total, expires_at, duration_days,
+                                                          min_subscribers, max_subscribers)
+                                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                      ''', (
+                                          user_db_id,
+                                          title,
+                                          description,
+                                          content,
+                                          price,
+                                          currency,
+                                          target_audience,
+                                          requirements,
+                                          deadline_date.isoformat(),
+                                          'active',
+                                          category,
+                                          json.dumps(metadata, ensure_ascii=False),
+                                          budget_total,
+                                          expires_at.isoformat(),
+                                          duration_days,
+                                          min_subscribers,
+                                          max_subscribers
+                                      ))
 
         logger.info(f"Создан новый оффер {offer_id} пользователем {user_id}")
 
         # Получаем созданный оффер для возврата
         created_offer = safe_execute_query('''
-            SELECT o.*, u.username, u.first_name
-            FROM offers o
-            JOIN users u ON o.created_by = u.id
-            WHERE o.id = ?
-        ''', (offer_id,), fetch_one=True)
+                                           SELECT o.*, u.username, u.first_name
+                                           FROM offers o
+                                                    JOIN users u ON o.created_by = u.id
+                                           WHERE o.id = ?
+                                           ''', (offer_id,), fetch_one=True)
 
         return {
             'success': True,
             'offer_id': offer_id,
             'offer': created_offer,
             'message': 'Оффер успешно создан',
-            'deadline': deadline_date.strftime('%d.%m.%Y')
+            'deadline': deadline_date.strftime('%d.%m.%Y'),
+            'expires_at': expires_at.isoformat()
         }
 
     except Exception as e:
         logger.error(f"Ошибка создания оффера: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'success': False,
             'error': f'Ошибка создания оффера: {str(e)}'
         }
+
 
 def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
     """Получение офферов пользователя"""
@@ -252,6 +273,7 @@ def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
         )
 
         if not user:
+            logger.warning(f"Пользователь {user_id} не найден")
             return []
 
         user_db_id = user['id']
@@ -259,190 +281,215 @@ def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
         # Формируем запрос
         if status:
             query = '''
-                SELECT o.*, 
-                       COUNT(DISTINCT or_resp.id) as response_count,
-                       COUNT(DISTINCT CASE WHEN or_resp.status = 'accepted' THEN or_resp.id END) as accepted_count
-                FROM offers o
-                LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-                WHERE o.created_by = ? AND o.status = ?
-                GROUP BY o.id
-                ORDER BY o.created_at DESC
-            '''
+                    SELECT o.*,
+                           COUNT(DISTINCT or_resp.id)                                                as response_count,
+                           COUNT(DISTINCT CASE WHEN or_resp.status = 'accepted' THEN or_resp.id END) as accepted_count
+                    FROM offers o
+                             LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
+                    WHERE o.created_by = ? \
+                      AND o.status = ?
+                    GROUP BY o.id
+                    ORDER BY o.created_at DESC \
+                    '''
             params = (user_db_id, status)
         else:
             query = '''
-                SELECT o.*, 
-                       COUNT(DISTINCT or_resp.id) as response_count,
-                       COUNT(DISTINCT CASE WHEN or_resp.status = 'accepted' THEN or_resp.id END) as accepted_count
-                FROM offers o
-                LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-                WHERE o.created_by = ?
-                GROUP BY o.id
-                ORDER BY o.created_at DESC
-            '''
+                    SELECT o.*,
+                           COUNT(DISTINCT or_resp.id)                                                as response_count,
+                           COUNT(DISTINCT CASE WHEN or_resp.status = 'accepted' THEN or_resp.id END) as accepted_count
+                    FROM offers o
+                             LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
+                    WHERE o.created_by = ?
+                    GROUP BY o.id
+                    ORDER BY o.created_at DESC \
+                    '''
             params = (user_db_id,)
 
         offers = safe_execute_query(query, params, fetch_all=True)
 
-        # Обогащаем данными
+        # Форматируем данные для фронтенда
+        formatted_offers = []
         for offer in offers:
-            if offer.get('metadata'):
-                try:
-                    offer['metadata'] = json.loads(offer['metadata'])
-                    # Извлекаем category из metadata для совместимости
-                    if 'category' in offer['metadata']:
-                        offer['category'] = offer['metadata']['category']
-                    else:
-                        offer['category'] = 'other'
-                except:
-                    offer['metadata'] = {}
-                    offer['category'] = 'other'
-            else:
-                offer['category'] = 'other'
+            # Парсим метаданные
+            try:
+                metadata = json.loads(offer.get('metadata', '{}'))
+            except:
+                metadata = {}
 
-            # Добавляем форматированные даты
-            if offer.get('created_at'):
-                try:
-                    created_at = datetime.fromisoformat(offer['created_at'])
-                    offer['created_at_formatted'] = created_at.strftime('%d.%m.%Y %H:%M')
-                except:
-                    offer['created_at_formatted'] = 'Неизвестно'
+            formatted_offer = {
+                'id': offer['id'],
+                'title': offer['title'],
+                'description': offer['description'],
+                'content': offer['content'],
+                'price': float(offer['price']),
+                'currency': offer['currency'],
+                'category': offer['category'],
+                'status': offer['status'],
+                'target_audience': offer.get('target_audience', ''),
+                'requirements': offer.get('requirements', ''),
+                'deadline': offer.get('deadline', ''),
+                'created_at': offer['created_at'],
+                'updated_at': offer['updated_at'],
+                'response_count': offer.get('response_count', 0),
+                'accepted_count': offer.get('accepted_count', 0),
+                'budget_total': float(offer.get('budget_total', 0)),
+                'duration_days': offer.get('duration_days', 30),
+                'min_subscribers': offer.get('min_subscribers', 1),
+                'max_subscribers': offer.get('max_subscribers', 100000000),
+                'metadata': metadata
+            }
+            formatted_offers.append(formatted_offer)
 
-            if offer.get('deadline'):
-                try:
-                    deadline_date = datetime.fromisoformat(offer['deadline']).date()
-                    offer['deadline_formatted'] = deadline_date.strftime('%d.%m.%Y')
-                    offer['is_expired'] = deadline_date < datetime.now().date()
-
-                    if not offer['is_expired']:
-                        days_left = (deadline_date - datetime.now().date()).days
-                        offer['days_left'] = max(0, days_left)
-                    else:
-                        offer['days_left'] = 0
-                except:
-                    offer['deadline_formatted'] = 'Неизвестно'
-                    offer['is_expired'] = False
-                    offer['days_left'] = 0
-
-        return offers
+        logger.info(f"Получено {len(formatted_offers)} офферов для пользователя {user_id}")
+        return formatted_offers
 
     except Exception as e:
-        logger.error(f"Ошибка получения офферов пользователя: {e}")
+        logger.error(f"Ошибка получения офферов пользователя {user_id}: {e}")
         return []
 
-def update_offer_status(offer_id: int, status: str, user_id: int = None) -> bool:
-    """Обновление статуса оффера"""
-    try:
-        allowed_statuses = ['active', 'paused', 'completed', 'cancelled']
-        if status not in allowed_statuses:
-            return False
-
-        if user_id:
-            # Проверяем права на изменение
-            user = safe_execute_query(
-                'SELECT id FROM users WHERE telegram_id = ?',
-                (user_id,),
-                fetch_one=True
-            )
-
-            if not user:
-                return False
-
-            # Проверяем принадлежность оффера
-            query = '''
-                UPDATE offers 
-                SET status = ?, updated_at = ?
-                WHERE id = ? AND created_by = ?
-            '''
-            params = (status, datetime.now().isoformat(), offer_id, user['id'])
-        else:
-            query = '''
-                UPDATE offers 
-                SET status = ?, updated_at = ?
-                WHERE id = ?
-            '''
-            params = (status, datetime.now().isoformat(), offer_id)
-
-        safe_execute_query(query, params)
-        logger.info(f"Статус оффера {offer_id} изменен на {status}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Ошибка обновления статуса оффера: {e}")
-        return False
 
 def get_offer_by_id(offer_id: int, include_responses: bool = False) -> Optional[Dict[str, Any]]:
     """Получение оффера по ID"""
     try:
-        # Основные данные оффера
         offer = safe_execute_query('''
-            SELECT o.*, u.username, u.first_name, u.telegram_id
-            FROM offers o
-            JOIN users u ON o.created_by = u.id
-            WHERE o.id = ?
-        ''', (offer_id,), fetch_one=True)
+                                   SELECT o.*, u.username as creator_username, u.first_name as creator_name
+                                   FROM offers o
+                                            JOIN users u ON o.created_by = u.id
+                                   WHERE o.id = ?
+                                   ''', (offer_id,), fetch_one=True)
 
         if not offer:
             return None
 
         # Парсим метаданные
-        if offer.get('metadata'):
-            try:
-                offer['metadata'] = json.loads(offer['metadata'])
-                # Извлекаем category из metadata
-                if 'category' in offer['metadata']:
-                    offer['category'] = offer['metadata']['category']
-                else:
-                    offer['category'] = 'other'
-            except:
-                offer['metadata'] = {}
-                offer['category'] = 'other'
-        else:
-            offer['category'] = 'other'
+        try:
+            metadata = json.loads(offer.get('metadata', '{}'))
+        except:
+            metadata = {}
 
-        # Форматируем даты
-        if offer.get('created_at'):
-            try:
-                created_at = datetime.fromisoformat(offer['created_at'])
-                offer['created_at_formatted'] = created_at.strftime('%d.%m.%Y %H:%M')
-            except:
-                offer['created_at_formatted'] = 'Неизвестно'
+        formatted_offer = {
+            'id': offer['id'],
+            'title': offer['title'],
+            'description': offer['description'],
+            'content': offer['content'],
+            'price': float(offer['price']),
+            'currency': offer['currency'],
+            'category': offer['category'],
+            'status': offer['status'],
+            'target_audience': offer.get('target_audience', ''),
+            'requirements': offer.get('requirements', ''),
+            'deadline': offer.get('deadline', ''),
+            'created_at': offer['created_at'],
+            'updated_at': offer['updated_at'],
+            'creator_username': offer.get('creator_username', ''),
+            'creator_name': offer.get('creator_name', ''),
+            'budget_total': float(offer.get('budget_total', 0)),
+            'duration_days': offer.get('duration_days', 30),
+            'min_subscribers': offer.get('min_subscribers', 1),
+            'max_subscribers': offer.get('max_subscribers', 100000000),
+            'metadata': metadata
+        }
 
-        if offer.get('deadline'):
-            try:
-                deadline_date = datetime.fromisoformat(offer['deadline']).date()
-                offer['deadline_formatted'] = deadline_date.strftime('%d.%m.%Y')
-                offer['is_expired'] = deadline_date < datetime.now().date()
-
-                if not offer['is_expired']:
-                    days_left = (deadline_date - datetime.now().date()).days
-                    offer['days_left'] = max(0, days_left)
-                else:
-                    offer['days_left'] = 0
-            except:
-                offer['deadline_formatted'] = 'Неизвестно'
-                offer['is_expired'] = False
-                offer['days_left'] = 0
-
-        # Если нужны ответы на оффер
+        # Добавляем отклики если требуется
         if include_responses:
             responses = safe_execute_query('''
-                SELECT or_resp.*, c.title as channel_title, c.username as channel_username,
-                       c.subscriber_count, u.username as responder_username
-                FROM offer_responses or_resp
-                JOIN channels c ON or_resp.channel_id = c.id
-                JOIN users u ON c.owner_id = u.id
-                WHERE or_resp.offer_id = ?
-                ORDER BY or_resp.created_at DESC
-            ''', (offer_id,), fetch_all=True)
+                                           SELECT or_resp.*,
+                                                  c.title    as channel_title,
+                                                  c.username as channel_username,
+                                                  c.subscriber_count,
+                                                  u.username as responder_username
+                                           FROM offer_responses or_resp
+                                                    JOIN channels c ON or_resp.channel_id = c.id
+                                                    JOIN users u ON c.owner_id = u.id
+                                           WHERE or_resp.offer_id = ?
+                                           ORDER BY or_resp.created_at DESC
+                                           ''', (offer_id,), fetch_all=True)
 
-            offer['responses'] = responses or []
+            formatted_offer['responses'] = responses or []
 
-        return offer
+        return formatted_offer
 
     except Exception as e:
         logger.error(f"Ошибка получения оффера {offer_id}: {e}")
         return None
+
+
+def get_available_offers(filters: Dict[str, Any] = None) -> List[Dict[str, Any]]:
+    """Получение доступных офферов для владельцев каналов"""
+    try:
+        filters = filters or {}
+
+        # Базовый запрос для активных офферов
+        query = '''
+                SELECT o.*, \
+                       u.username                 as creator_username, \
+                       u.first_name               as creator_name,
+                       COUNT(DISTINCT or_resp.id) as response_count
+                FROM offers o
+                         JOIN users u ON o.created_by = u.id
+                         LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
+                WHERE o.status = 'active' \
+                '''
+        params = []
+
+        # Добавляем фильтры
+        if filters.get('category'):
+            query += ' AND o.category = ?'
+            params.append(filters['category'])
+
+        if filters.get('min_budget'):
+            query += ' AND o.price >= ?'
+            params.append(float(filters['min_budget']))
+
+        if filters.get('max_budget'):
+            query += ' AND o.price <= ?'
+            params.append(float(filters['max_budget']))
+
+        # Группировка и сортировка
+        query += '''
+            GROUP BY o.id
+            ORDER BY o.created_at DESC
+            LIMIT ?
+        '''
+        limit = int(filters.get('limit', 50))
+        params.append(limit)
+
+        offers = safe_execute_query(query, tuple(params), fetch_all=True)
+
+        # Форматируем для фронтенда
+        formatted_offers = []
+        for offer in offers:
+            try:
+                metadata = json.loads(offer.get('metadata', '{}'))
+            except:
+                metadata = {}
+
+            formatted_offer = {
+                'id': offer['id'],
+                'title': offer['title'],
+                'description': offer['description'],
+                'price': float(offer['price']),
+                'currency': offer['currency'],
+                'category': offer['category'],
+                'target_audience': offer.get('target_audience', ''),
+                'requirements': offer.get('requirements', ''),
+                'deadline': offer.get('deadline', ''),
+                'created_at': offer['created_at'],
+                'creator_username': offer.get('creator_username', ''),
+                'creator_name': offer.get('creator_name', ''),
+                'response_count': offer.get('response_count', 0),
+                'min_subscribers': offer.get('min_subscribers', 1),
+                'max_subscribers': offer.get('max_subscribers', 100000000),
+                'metadata': metadata
+            }
+            formatted_offers.append(formatted_offer)
+
+        return formatted_offers
+
+    except Exception as e:
+        logger.error(f"Ошибка получения доступных офферов: {e}")
+        return []
+
 
 # Flask маршруты для интеграции с основным приложением
 def register_offer_routes(app):
@@ -504,29 +551,67 @@ def register_offer_routes(app):
                 return jsonify({'success': True, 'offer': offer})
             else:
                 return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+
         except Exception as e:
-            logger.error(f"Ошибка получения оффера {offer_id}: {e}")
+            logger.error(f"Ошибка получения оффера: {e}")
             return jsonify({'success': False, 'error': 'Ошибка получения оффера'}), 500
 
-    @app.route('/api/offers/<int:offer_id>/status', methods=['PUT'])
-    def api_update_offer_status(offer_id):
-        """API для обновления статуса оффера"""
+    @app.route('/api/offers/available', methods=['GET'])
+    def api_get_available_offers():
+        """API для получения доступных офферов"""
         try:
-            data = request.get_json()
-            if not data or 'status' not in data:
-                return jsonify({'success': False, 'error': 'Статус обязателен'}), 400
+            filters = {
+                'category': request.args.get('category'),
+                'min_budget': request.args.get('min_budget', type=float),
+                'max_budget': request.args.get('max_budget', type=float),
+                'limit': request.args.get('limit', 50, type=int)
+            }
 
-            user_id = data.get('user_id') or request.headers.get('X-Telegram-User-Id')
-            if user_id:
-                user_id = int(user_id)
+            # Убираем None значения
+            filters = {k: v for k, v in filters.items() if v is not None}
 
-            success = update_offer_status(offer_id, data['status'], user_id)
-
-            if success:
-                return jsonify({'success': True, 'message': 'Статус обновлен'})
-            else:
-                return jsonify({'success': False, 'error': 'Не удалось обновить статус'}), 400
+            offers = get_available_offers(filters)
+            return jsonify({'success': True, 'offers': offers, 'count': len(offers)})
 
         except Exception as e:
-            logger.error(f"Ошибка обновления статуса оффера: {e}")
-            return jsonify({'success': False, 'error': 'Ошибка обновления статуса'}), 500
+            logger.error(f"Ошибка получения доступных офферов: {e}")
+            return jsonify({'success': False, 'error': 'Ошибка получения офферов'}), 500
+
+    print("✅ Маршруты офферов зарегистрированы")
+
+
+# Экспорт функций для использования в других модулях
+__all__ = [
+    'add_offer', 'get_user_offers', 'get_offer_by_id',
+    'get_available_offers', 'register_offer_routes'
+]
+
+if __name__ == '__main__':
+    # Тестирование функций
+    print("🧪 Тестирование модуля add_offer")
+
+    # Тест создания оффера
+    test_data = {
+        'title': 'Тестовый оффер из модуля',
+        'description': 'Описание тестового оффера',
+        'content': 'Полное содержание тестового оффера',
+        'price': 1500,
+        'currency': 'RUB',
+        'category': 'tech',
+        'target_audience': 'IT специалисты',
+        'requirements': 'Размещение в течение недели',
+        'duration_days': 14
+    }
+
+    result = add_offer(373086959, test_data)
+    print(f"Результат создания: {result}")
+
+    if result['success']:
+        # Тест получения офферов
+        offers = get_user_offers(373086959)
+        print(f"Найдено офферов: {len(offers)}")
+
+        # Тест получения по ID
+        if offers:
+            offer_detail = get_offer_by_id(offers[0]['id'], True)
+            print(f"Детали оффера: {offer_detail is not None}")

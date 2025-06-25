@@ -285,5 +285,77 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
     </script>
+
+<!-- ТЕСТОВАЯ ФОРМА -->
+<div class="test-form-section" style="margin: 20px; padding: 20px; border: 2px solid #007bff; background: #f8f9fa;">
+    <h3>🧪 Быстрый тест создания оффера</h3>
+
+    <form id="quickTestForm">
+        <div style="margin-bottom: 15px;">
+            <label>Название:</label>
+            <input type="text" name="title" value="Тестовый оффер из формы" required style="width: 100%; padding: 8px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label>Описание:</label>
+            <textarea name="description" required style="width: 100%; padding: 8px;">Описание тестового оффера через форму</textarea>
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label>Цена:</label>
+            <input type="number" name="price" value="2500" required style="width: 100%; padding: 8px;">
+        </div>
+
+        <div style="margin-bottom: 15px;">
+            <label>Категория:</label>
+            <select name="category" style="width: 100%; padding: 8px;">
+                <option value="general">Общее</option>
+                <option value="tech">Технологии</option>
+                <option value="business">Бизнес</option>
+            </select>
+        </div>
+
+        <button type="button" onclick="testQuickForm()" style="background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px;">
+            🚀 Быстрый тест
+        </button>
+    </form>
+</div>
+
+<script>
+async function testQuickForm() {
+    console.log('🧪 Быстрый тест создания оффера');
+
+    const form = document.getElementById('quickTestForm');
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    console.log('📦 Данные для отправки:', data);
+
+    try {
+        const response = await fetch('/api/offers', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': '373086959'
+            },
+            body: JSON.stringify(data)
+        });
+
+        console.log('📡 Статус:', response.status);
+        const result = await response.json();
+        console.log('📥 Ответ:', result);
+
+        if (result.success) {
+            alert('✅ Тест успешен! Оффер создан.');
+            loadMyOffers(); // Обновляем список
+        } else {
+            alert('❌ Ошибка: ' + (result.error || result.errors?.join(', ') || 'Неизвестная ошибка'));
+        }
+    } catch (error) {
+        console.error('❌ Ошибка теста:', error);
+        alert('❌ Ошибка: ' + error.message);
+    }
+}
+</script>
 </body>
 </html>

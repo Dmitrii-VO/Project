@@ -1,4 +1,28 @@
-# app/api/offers.py - Исправленная версия для отображения офферов
+#!/usr/bin/env python3
+"""
+Быстрое исправление API для отображения офферов
+"""
+
+import os
+import shutil
+from datetime import datetime
+
+def backup_and_fix_api():
+    """Создаем резервную копию и исправляем API"""
+    
+    print("🔧 БЫСТРОЕ ИСПРАВЛЕНИЕ API")
+    print("-" * 40)
+    
+    # Создаем резервную копию
+    try:
+        backup_file = f'app/api/offers_backup_fix_{datetime.now().strftime("%H%M%S")}.py'
+        shutil.copy2('app/api/offers.py', backup_file)
+        print(f"✅ Резервная копия: {backup_file}")
+    except Exception as e:
+        print(f"⚠️ Не удалось создать резервную копию: {e}")
+    
+    # Исправленный API код
+    fixed_api = '''# app/api/offers.py - Исправленная версия для отображения офферов
 from datetime import datetime
 
 from flask import Blueprint, request, jsonify
@@ -322,3 +346,38 @@ def debug_test_offers():
             'error': str(e),
             'traceback': traceback.format_exc()
         })
+'''
+
+    # Записываем исправленный файл
+    try:
+        with open('app/api/offers.py', 'w', encoding='utf-8') as f:
+            f.write(fixed_api)
+        
+        print("✅ API исправлен!")
+        print("✅ Добавлено подробное логирование")
+        print("✅ Исправлен импорт add_offer")
+        print("✅ Добавлены debug маршруты")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Ошибка записи: {e}")
+        return False
+
+def main():
+    """Главная функция"""
+    print("🚀 БЫСТРОЕ ИСПРАВЛЕНИЕ ПРОБЛЕМЫ С ОФФЕРАМИ")
+    print("=" * 50)
+    
+    if backup_and_fix_api():
+        print("\n🎉 ИСПРАВЛЕНИЕ ПРИМЕНЕНО!")
+        print("\n📋 СЛЕДУЮЩИЕ ШАГИ:")
+        print("1. Перезапустите сервер: Ctrl+C, затем python working_app.py")
+        print("2. Обновите страницу в браузере (F5)")
+        print("3. Проверьте консоль браузера")
+        print("4. Для отладки: http://localhost:5000/api/offers/debug/test")
+    else:
+        print("\n❌ ИСПРАВЛЕНИЕ НЕ УДАЛОСЬ")
+
+if __name__ == '__main__':
+    main()

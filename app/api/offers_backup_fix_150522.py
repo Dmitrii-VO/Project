@@ -1,12 +1,10 @@
-# app/api/offers.py - Исправленная версия для отображения офферов
+# app/api/offers.py - Исправленная версия без auth_service
 from datetime import datetime
 
 from flask import Blueprint, request, jsonify
 from app.models.database import db_manager
 from app.config.settings import Config
 import logging
-import os
-import sys
 
 logger = logging.getLogger(__name__)
 offers_bp = Blueprint('offers', __name__)
@@ -20,7 +18,7 @@ def get_user_id_from_request():
             return int(user_id)
         except (ValueError, TypeError):
             pass
-    
+
     # Пробуем получить из JSON данных
     data = request.get_json() or {}
     user_id = data.get('user_id') or data.get('telegram_user_id')
@@ -29,15 +27,16 @@ def get_user_id_from_request():
             return int(user_id)
         except (ValueError, TypeError):
             pass
-    
+
     # Fallback к основному пользователю из .env
+    import os
     fallback_id = os.environ.get('YOUR_TELEGRAM_ID')
     if fallback_id:
         try:
             return int(fallback_id)
         except (ValueError, TypeError):
             pass
-    
+
     return None
 
 @offers_bp.route('', methods=['POST'])
@@ -60,8 +59,6 @@ def create_offer():
 
         # Импортируем функцию создания оффера
         try:
-            # Добавляем путь к корню проекта
-            sys.path.insert(0, os.getcwd())
             from add_offer import add_offer
             result = add_offer(telegram_user_id, data)
 
@@ -85,74 +82,49 @@ def create_offer():
 
 @offers_bp.route('/my', methods=['GET'])
 def get_my_offers():
-    """Получение моих офферов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Получение моих офферов"""
     try:
-        logger.info("Запрос на получение моих офферов")
-        
+        # Проверяем что система включена
+        offers_enabled = getattr(Config, 'OFFERS_SYSTEM_ENABLED', True)
+        if not offers_enabled:
+            return jsonify({'success': False, 'error': 'Система офферов отключена'}), 503
+
         # Получаем user_id
         telegram_user_id = get_user_id_from_request()
-        logger.info(f"Определен user_id: {telegram_user_id}")
-        
         if not telegram_user_id:
-            return jsonify({
-                'success': False, 
-                'error': 'Не удалось определить пользователя',
-                'debug_headers': dict(request.headers),
-                'debug_env': os.environ.get('YOUR_TELEGRAM_ID')
-            }), 400
+            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
 
         status = request.args.get('status')
-        logger.info(f"Фильтр по статусу: {status}")
 
         try:
-            # Добавляем путь к корню проекта
-            sys.path.insert(0, os.getcwd())
             from add_offer import get_user_offers
-            
-            logger.info("Вызываем get_user_offers")
             offers = get_user_offers(telegram_user_id, status)
-            logger.info(f"Получено офферов: {len(offers)}")
-            
-            return jsonify({
-                'success': True, 
-                'offers': offers, 
-                'count': len(offers),
-                'user_id': telegram_user_id
-            })
+            return jsonify({'success': True, 'offers': offers, 'count': len(offers)})
 
         except ImportError as e:
             logger.error(f"Ошибка импорта get_user_offers: {e}")
             return jsonify({
                 'success': False,
-                'error': f'Модуль системы офферов недоступен: {str(e)}'
+                'error': 'Модуль системы офферов недоступен'
             }), 503
-        except Exception as e:
-            logger.error(f"Ошибка в get_user_offers: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': f'Ошибка получения офферов: {str(e)}'
-            }), 500
 
     except Exception as e:
-        logger.error(f"Общая ошибка в get_my_offers: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            'success': False, 
-            'error': f'Внутренняя ошибка сервера: {str(e)}'
-        }), 500
+        logger.error(f"Ошибка получения офферов: {e}")
+        return jsonify({'success': False, 'error': 'Ошибка получения офферов'}), 500
 
 
 @offers_bp.route('/detail/<int:offer_id>', methods=['GET'])
 def get_offer_detail(offer_id):
     """Получение детальной информации об оффере"""
     try:
+        # Проверяем что система включена
+        offers_enabled = getattr(Config, 'OFFERS_SYSTEM_ENABLED', True)
+        if not offers_enabled:
+            return jsonify({'success': False, 'error': 'Система офферов отключена'}), 503
+
         include_responses = request.args.get('include_responses', 'false').lower() == 'true'
 
         try:
-            sys.path.insert(0, os.getcwd())
             from add_offer import get_offer_by_id
             offer = get_offer_by_id(offer_id, include_responses)
 
@@ -256,12 +228,11 @@ def get_available_offers():
             'max_budget': max_budget,
             'limit': limit
         }
-        
+
         # Убираем None значения
         filters = {k: v for k, v in filters.items() if v is not None}
 
         try:
-            sys.path.insert(0, os.getcwd())
             from add_offer import get_available_offers
             offers = get_available_offers(filters)
             return jsonify({'success': True, 'offers': offers, 'count': len(offers)})
@@ -278,47 +249,18 @@ def get_available_offers():
         return jsonify({'success': False, 'error': 'Ошибка получения офферов'}), 500
 
 # Дополнительные маршруты для отладки
-@offers_bp.route('/debug/user', methods=['GET', 'POST'])
+@offers_bp.route('/debug/user', methods=['GET'])
 def debug_current_user():
     """Отладочный маршрут для проверки текущего пользователя"""
     try:
         user_id = get_user_id_from_request()
-        
+
         return jsonify({
             'success': True,
             'user_id': user_id,
             'headers': dict(request.headers),
-            'method': request.method,
-            'args': dict(request.args),
-            'env_telegram_id': os.environ.get('YOUR_TELEGRAM_ID')
+            'method': request.method
         })
-        
+
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
-
-@offers_bp.route('/debug/test', methods=['GET'])
-def debug_test_offers():
-    """Тестовый маршрут для проверки получения офферов"""
-    try:
-        # Прямой запрос к БД
-        user_id = 373086959  # Ваш ID
-        
-        sys.path.insert(0, os.getcwd())
-        from add_offer import get_user_offers
-        
-        offers = get_user_offers(user_id)
-        
-        return jsonify({
-            'success': True,
-            'test_user_id': user_id,
-            'offers_count': len(offers),
-            'offers': offers[:3]  # Первые 3 для проверки
-        })
-        
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'success': False, 
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
