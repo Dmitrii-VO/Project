@@ -104,14 +104,16 @@ function renderOffers(offers) {
     offers.forEach((offer) => {
         const title = offer.title || 'Без названия';
         const description = offer.description || offer.content || 'Нет описания';
-        const rawPrice = offer.price || 0;
+
+        // Показываем общий бюджет для "Мои офферы"
+        const displayPrice = offer.budget_total || offer.price || 0;
         const currency = offer.currency || 'RUB';
         const category = offer.category || 'general';
         const status = offer.status || 'active';
         const responseCount = offer.response_count || 0;
         const createdAt = offer.created_at || '';
 
-        const formattedPrice = formatPrice(rawPrice);
+        const formattedPrice = formatPrice(displayPrice);
         const formattedDate = formatDate(createdAt);
 
         const statusText = {
@@ -121,7 +123,7 @@ function renderOffers(offers) {
             'cancelled': 'Отменен'
         }[status] || 'Неизвестно';
 
-        // Сокращаем описание еще больше
+        // Сокращаем описание
         const shortDescription = description.length > 80 ?
             description.substring(0, 80) + '...' : description;
 
@@ -147,17 +149,18 @@ function renderOffers(offers) {
                         border-radius: 12px; 
                         font-size: 10px; 
                         font-weight: 500; 
-                        background: ${status === 'active' ? '#d4edda' : '#f8d7da'}; 
-                        color: ${status === 'active' ? '#155724' : '#721c24'};
+                        background: ${status === 'active' ? '#d4edda' : status === 'paused' ? '#fff3cd' : status === 'completed' ? '#d1ecf1' : '#f8d7da'}; 
+                        color: ${status === 'active' ? '#155724' : status === 'paused' ? '#856404' : status === 'completed' ? '#0c5460' : '#721c24'};
                         white-space: nowrap;
                         margin-left: 8px;
                     ">${statusText}</span>
                 </div>
                 
-                <!-- Цена крупно -->
+                <!-- Общий бюджет крупно -->
                 <div style="margin-bottom: 8px;">
                     <span style="font-size: 18px; font-weight: bold; color: #667eea;">${formattedPrice}</span>
                     <span style="font-size: 12px; color: #718096; margin-left: 4px;">${currency}</span>
+                    <div style="font-size: 10px; color: #a0aec0;">общий бюджет</div>
                 </div>
                 
                 <!-- Краткая информация в 2 колонки -->
@@ -187,8 +190,9 @@ function renderOffers(offers) {
                     color: #4a5568;
                 ">${shortDescription}</div>
                 
-                <!-- Компактные кнопки -->
+                <!-- Компактные кнопки - ИСПРАВЛЕННАЯ ЛОГИКА -->
                 <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                    <!-- Кнопка "Подробнее" всегда показывается -->
                     <button onclick="viewOfferDetails(${offer.id})" style="
                         padding: 4px 8px; 
                         border: 1px solid #667eea; 
@@ -200,6 +204,7 @@ function renderOffers(offers) {
                         flex: 1;
                     ">👁️ Подробнее</button>
                     
+                    <!-- Кнопка "Отклики" если есть отклики -->
                     ${responseCount > 0 ? `
                     <button onclick="manageResponses(${offer.id})" style="
                         padding: 4px 8px; 
@@ -212,17 +217,68 @@ function renderOffers(offers) {
                         flex: 1;
                     ">💬 ${responseCount}</button>` : ''}
                     
-                    ${status === 'active' || status === 'paused' ? `
-                    <button onclick="cancelOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="
-                        padding: 4px 8px; 
-                        border: 1px solid #ed8936; 
-                        background: #ed8936; 
-                        color: white; 
-                        border-radius: 4px; 
-                        cursor: pointer; 
-                        font-size: 10px;
-                        flex: 1;
-                    ">❌</button>` : ''}
+                    <!-- Кнопки управления в зависимости от статуса -->
+                    ${status === 'active' ? `
+                        <!-- Для активных: Приостановить и Отменить -->
+                        <button onclick="pauseOffer(${offer.id}, this)" style="
+                            padding: 4px 8px; 
+                            border: 1px solid #ed8936; 
+                            background: #ed8936; 
+                            color: white; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 10px;
+                            flex: 1;
+                        ">⏸️ Пауза</button>
+                        <button onclick="cancelOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="
+                            padding: 4px 8px; 
+                            border: 1px solid #e53e3e; 
+                            background: #e53e3e; 
+                            color: white; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 10px;
+                            flex: 1;
+                        ">❌ Отменить</button>
+                    ` : ''}
+                    
+                    ${status === 'paused' ? `
+                        <!-- Для приостановленных: Возобновить и Отменить -->
+                        <button onclick="resumeOffer(${offer.id}, this)" style="
+                            padding: 4px 8px; 
+                            border: 1px solid #48bb78; 
+                            background: #48bb78; 
+                            color: white; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 10px;
+                            flex: 1;
+                        ">▶️ Возобновить</button>
+                        <button onclick="cancelOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="
+                            padding: 4px 8px; 
+                            border: 1px solid #e53e3e; 
+                            background: #e53e3e; 
+                            color: white; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 10px;
+                            flex: 1;
+                        ">❌ Отменить</button>
+                    ` : ''}
+                    
+                    ${status === 'cancelled' || status === 'completed' ? `
+                        <!-- Для завершенных/отмененных: Удалить -->
+                        <button onclick="deleteOffer(${offer.id}, '${title.replace(/'/g, "\\'")}', this)" style="
+                            padding: 4px 8px; 
+                            border: 1px solid #e53e3e; 
+                            background: #e53e3e; 
+                            color: white; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 10px;
+                            flex: 2;
+                        ">🗑️ Удалить</button>
+                    ` : ''}
                 </div>
                 
                 <!-- ID внизу мелким шрифтом -->
