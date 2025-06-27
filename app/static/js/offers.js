@@ -2435,6 +2435,9 @@ function showContractsTab() {
 async function loadUserContracts() {
     console.log('📋 Загрузка контрактов пользователя...');
 
+    // Показываем состояние загрузки
+    showContractsLoading();
+
     try {
         const response = await fetch('/api/offers/contracts', {
             method: 'GET',
@@ -2446,17 +2449,68 @@ async function loadUserContracts() {
 
         const result = await response.json();
 
-        if (result.success && result.contracts) {
-            renderUserContracts(result.contracts); // предполагаемая функция отрисовки
+        if (result.success) {
+            console.log('✅ Контракты загружены:', result.contracts?.length || 0);
+
+            // Обновляем статистику
+            updateContractsStats(result.contracts || []);
+
+            // Отрисовываем контракты
+            renderContracts(result.contracts || []);
         } else {
-            console.warn('⚠️ Контракты не найдены или ошибка в ответе:', result);
+            throw new Error(result.error || 'Ошибка загрузки контрактов');
         }
 
     } catch (error) {
         console.error('❌ Ошибка загрузки контрактов:', error);
+        showContractsError('Ошибка загрузки контрактов: ' + error.message);
+    } finally {
+        hideContractsLoading();
     }
 }
 
+function showContractsLoading() {
+    const loading = document.getElementById('contractsLoading');
+    const grid = document.getElementById('contractsGrid');
+
+    if (loading) {
+        loading.style.display = 'block';
+    }
+    if (grid) {
+        grid.innerHTML = '';
+    }
+}
+
+function hideContractsLoading() {
+    const loading = document.getElementById('contractsLoading');
+    if (loading) {
+        loading.style.display = 'none';
+    }
+}
+
+function updateContractsStats(contracts) {
+    // Подсчитываем статистику
+    const activeCount = contracts.filter(c => ['active', 'verification', 'monitoring'].includes(c.status)).length;
+    const completedCount = contracts.filter(c => c.status === 'completed').length;
+    const totalEarnings = contracts
+        .filter(c => c.status === 'completed' && c.role === 'publisher')
+        .reduce((sum, c) => sum + (c.price || 0), 0);
+
+    // Обновляем элементы статистики
+    const activeElement = document.getElementById('activeContractsCount');
+    const completedElement = document.getElementById('completedContractsCount');
+    const earningsElement = document.getElementById('totalEarningsAmount');
+
+    if (activeElement) {
+        activeElement.textContent = activeCount;
+    }
+    if (completedElement) {
+        completedElement.textContent = completedCount;
+    }
+    if (earningsElement) {
+        earningsElement.textContent = formatPrice(totalEarnings) + ' ₽';
+    }
+}
 
 
 // ===== ОБНОВЛЕНИЕ СУЩЕСТВУЮЩИХ ФУНКЦИЙ =====
