@@ -81,20 +81,6 @@ function formatPrice(price) {
     });
 }
 
-function formatDate(dateString) {
-    if (!dateString) return 'Не указана';
-    try {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-        });
-    } catch (e) {
-        return dateString;
-    }
-}
-
 function renderOffers(offers) {
     console.log('🎨 Отрисовка офферов:', offers.length);
     const container = document.getElementById('offersGrid');
@@ -1212,19 +1198,6 @@ function renderAvailableOffers(offers) {
     container.innerHTML = html;
 }
 
-// Функция для форматирования чисел (например, 1000 -> 1K)
-function formatNumber(num) {
-    if (!num || num === 0) return '0';
-
-    if (num >= 1000000) {
-        return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-    }
-    if (num >= 1000) {
-        return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
-    }
-    return num.toString();
-}
-
 function showFindOffersError(message) {
     const container = document.getElementById('findOffersGrid');
     if (container) {
@@ -1240,8 +1213,6 @@ function showFindOffersError(message) {
         `;
     }
 }
-
-// Добавьте эти функции в offers.js
 
 // ===== ФУНКЦИИ РАБОТЫ С ОТКЛИКАМИ =====
 
@@ -1443,12 +1414,6 @@ async function submitOfferResponse(offerId) {
     }
 }
 
-function closeResponseModal() {
-    const modal = document.querySelector('div[style*="position: fixed"]');
-    if (modal) {
-        modal.remove();
-    }
-}
 
 // ===== ФУНКЦИИ УПРАВЛЕНИЯ ОТКЛИКАМИ (для авторов офферов) =====
 
@@ -1478,165 +1443,266 @@ async function manageResponses(offerId) {
     }
 }
 
-function showResponsesModal(offerId, responses) {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
-    `;
+async function showResponsesModal(offer) {
+    console.log('📋 Показываем отклики для оффера:', offer.id);
 
-    let responsesHtml = '';
+    try {
+        // Загружаем отклики
+        const response = await fetch(`/api/offers/${offer.id}/responses`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
 
-    if (responses.length === 0) {
-        responsesHtml = `
-            <div style="text-align: center; padding: 40px; color: #718096;">
-                <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
-                <h3>Пока нет откликов</h3>
-                <p>Когда владельцы каналов откликнутся на ваш оффер, они появятся здесь</p>
+        const result = await response.json();
+
+        if (!result.success) {
+            throw new Error(result.error || 'Ошибка загрузки откликов');
+        }
+
+        const responses = result.responses || [];
+
+        // Создаем модальное окно
+        const modal = document.createElement('div');
+        modal.id = 'responsesModal';
+        modal.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: flex; align-items: center;
+            justify-content: center; z-index: 1000; padding: 20px;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background: white; border-radius: 12px; padding: 24px;
+                max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #2d3748; font-size: 20px;">
+                        💬 Отклики на оффер "${offer.title}"
+                    </h3>
+                    <button onclick="closeResponsesModal()" style="
+                        background: none; border: none; font-size: 24px; 
+                        cursor: pointer; color: #666;
+                    ">&times;</button>
+                </div>
+                
+                <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <h4 style="margin: 0 0 4px 0; color: #2d3748;">📊 Статистика</h4>
+                            <p style="margin: 0; color: #718096; font-size: 14px;">
+                                Всего откликов: <strong>${responses.length}</strong>
+                            </p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 12px; color: #718096;">Статусы:</div>
+                            <div style="font-size: 14px;">
+                                ${getResponsesStatusSummary(responses)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="responsesList">
+                    ${responses.length > 0 ? renderResponsesList(responses) : renderEmptyResponses()}
+                </div>
             </div>
         `;
-    } else {
-        responses.forEach(response => {
-            const statusColor = {
-                'pending': '#ed8936',
-                'accepted': '#48bb78',
-                'rejected': '#e53e3e'
-            }[response.status] || '#718096';
 
-            const statusText = {
-                'pending': 'На рассмотрении',
-                'accepted': 'Принят',
-                'rejected': 'Отклонен'
-            }[response.status] || response.status;
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
 
-            const createdDate = formatDate(response.created_at);
-
-            responsesHtml += `
-                <div style="
-                    border: 1px solid #e2e8f0;
-                    border-radius: 8px;
-                    padding: 16px;
-                    margin-bottom: 16px;
-                    background: white;
-                ">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                        <h4 style="margin: 0; color: #2d3748; font-size: 16px;">${response.user_name}</h4>
-                        <span style="
-                            padding: 4px 8px;
-                            border-radius: 12px;
-                            font-size: 12px;
-                            font-weight: 500;
-                            background: ${statusColor}20;
-                            color: ${statusColor};
-                        ">${statusText}</span>
-                    </div>
-                    
-                    <div style="margin-bottom: 12px;">
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 14px;">
-                            <div><strong>Канал:</strong> ${response.channel_title}</div>
-                            <div><strong>Username:</strong> @${response.channel_username}</div>
-                            <div><strong>Подписчики:</strong> ${formatNumber(response.channel_subscribers)}</div>
-                            <div><strong>Дата:</strong> ${createdDate}</div>
-                        </div>
-                    </div>
-                    
-                    ${response.message ? `
-                        <div style="
-                            background: #f7fafc;
-                            padding: 12px;
-                            border-radius: 6px;
-                            margin-bottom: 12px;
-                            font-size: 14px;
-                            line-height: 1.4;
-                        ">
-                            <strong>Сообщение:</strong><br>
-                            ${response.message}
-                        </div>
-                    ` : ''}
-                    
-                    ${response.status === 'pending' ? `
-                        <div style="display: flex; gap: 8px;">
-                            <button onclick="updateResponseStatus(${response.id}, 'accepted')" style="
-                                flex: 1;
-                                padding: 8px 12px;
-                                border: none;
-                                background: #48bb78;
-                                color: white;
-                                border-radius: 6px;
-                                font-size: 14px;
-                                font-weight: 600;
-                                cursor: pointer;
-                            ">✅ Принять</button>
-                            
-                            <button onclick="updateResponseStatus(${response.id}, 'rejected')" style="
-                                flex: 1;
-                                padding: 8px 12px;
-                                border: none;
-                                background: #e53e3e;
-                                color: white;
-                                border-radius: 6px;
-                                font-size: 14px;
-                                font-weight: 600;
-                                cursor: pointer;
-                            ">❌ Отклонить</button>
-                        </div>
-                    ` : ''}
-                </div>
-            `;
-        });
+    } catch (error) {
+        console.error('❌ Ошибка загрузки откликов:', error);
+        alert('Ошибка загрузки откликов. Попробуйте позже.');
     }
+}
 
-    modal.innerHTML = `
-        <div style="
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            max-width: 600px;
-            width: 90%;
-            max-height: 80vh;
-            overflow-y: auto;
+function renderResponsesList(responses) {
+    return responses.map(response => `
+        <div class="response-card" style="
+            border: 2px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px;
+            background: white; transition: all 0.2s;
         ">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h3 style="margin: 0; color: #2d3748; font-size: 20px;">💬 Отклики на оффер</h3>
-                <button onclick="closeResponsesModal()" style="
-                    background: none;
-                    border: none;
-                    font-size: 24px;
-                    cursor: pointer;
-                    color: #718096;
-                ">×</button>
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div style="flex: 1;">
+                    <h5 style="margin: 0 0 4px 0; color: #2d3748; font-size: 16px;">
+                        📺 ${response.channel_title || 'Канал без названия'}
+                    </h5>
+                    <div style="display: flex; gap: 16px; font-size: 14px; color: #718096;">
+                        <span>👤 ${response.channel_owner_name || 'Владелец'}</span>
+                        <span>@${response.channel_username || 'username'}</span>
+                        <span>👥 ${formatNumber(response.channel_subscribers || 0)} подписчиков</span>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div style="
+                        display: inline-block; padding: 4px 12px; border-radius: 20px;
+                        font-size: 12px; font-weight: 600; text-transform: uppercase;
+                        ${getStatusStyle(response.status)}
+                    ">
+                        ${getStatusText(response.status)}
+                    </div>
+                    <div style="font-size: 12px; color: #718096; margin-top: 4px;">
+                        ${formatDate(response.created_at)}
+                    </div>
+                </div>
             </div>
-            
-            <div style="margin-bottom: 16px; padding: 12px; background: #ebf8ff; border-radius: 8px; font-size: 14px;">
-                📊 <strong>Всего откликов:</strong> ${responses.length}
+
+            ${response.message ? `
+                <div style="
+                    background: #f7fafc; padding: 12px; border-radius: 6px; margin: 12px 0;
+                    border-left: 4px solid #4299e1;
+                ">
+                    <div style="font-size: 12px; color: #4299e1; font-weight: 600; margin-bottom: 4px;">
+                        💬 СООБЩЕНИЕ ОТ ВЛАДЕЛЬЦА КАНАЛА:
+                    </div>
+                    <div style="font-size: 14px; color: #2d3748; line-height: 1.4;">
+                        ${response.message}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${response.channel_description ? `
+                <div style="font-size: 14px; color: #718096; margin: 8px 0;">
+                    <strong>Описание канала:</strong> ${response.channel_description}
+                </div>
+            ` : ''}
+
+            <div style="display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end;">
+                ${response.status === 'pending' ? `
+                    <button onclick="respondToResponse('${response.id}', 'accepted')" style="
+                        padding: 8px 16px; background: #48bb78; color: white;
+                        border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+                    ">✅ Принять</button>
+                    <button onclick="respondToResponse('${response.id}', 'rejected')" style="
+                        padding: 8px 16px; background: #f56565; color: white;
+                        border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+                    ">❌ Отклонить</button>
+                ` : ''}
+                
+                <button onclick="showResponseDetails('${response.id}')" style="
+                    padding: 8px 16px; background: #4299e1; color: white;
+                    border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+                ">👁️ Подробнее</button>
+                
+                ${response.channel_username ? `
+                    <a href="https://t.me/${response.channel_username}" target="_blank" style="
+                        padding: 8px 16px; background: #805ad5; color: white;
+                        border: none; border-radius: 6px; cursor: pointer; font-size: 14px;
+                        text-decoration: none; display: inline-block;
+                    ">📱 Открыть канал</a>
+                ` : ''}
             </div>
-            
-            ${responsesHtml}
+        </div>
+    `).join('');
+}
+
+function renderEmptyResponses() {
+    return `
+        <div style="text-align: center; padding: 40px 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+            <h4 style="margin: 0 0 8px 0; color: #2d3748;">Пока нет откликов</h4>
+            <p style="margin: 0; color: #718096;">
+                Владельцы каналов получили уведомления о вашем оффере.
+                Отклики начнут поступать в ближайшее время.
+            </p>
         </div>
     `;
+}
 
-    // Закрытие по клику вне модального окна
-    modal.addEventListener('click', (e) => {
-        if (e.target === modal) {
+function getResponsesStatusSummary(responses) {
+    const statusCounts = responses.reduce((acc, response) => {
+        acc[response.status] = (acc[response.status] || 0) + 1;
+        return acc;
+    }, {});
+
+    const statusLabels = {
+        'pending': '⏳ На рассмотрении',
+        'accepted': '✅ Принятые',
+        'rejected': '❌ Отклонённые',
+        'interested': '👀 Заинтересованные'
+    };
+
+    return Object.entries(statusCounts)
+        .map(([status, count]) => `${statusLabels[status] || status}: ${count}`)
+        .join('<br>');
+}
+
+function getStatusStyle(status) {
+    const styles = {
+        'pending': 'background: #fed7d7; color: #c53030;',
+        'accepted': 'background: #c6f6d5; color: #2f855a;',
+        'rejected': 'background: #fed7d7; color: #c53030;',
+        'interested': 'background: #bee3f8; color: #2b6cb0;'
+    };
+    return styles[status] || 'background: #e2e8f0; color: #4a5568;';
+}
+
+
+function getStatusText(status) {
+    const texts = {
+        'pending': 'На рассмотрении',
+        'accepted': 'Принят',
+        'rejected': 'Отклонён',
+        'interested': 'Заинтересован'
+    };
+    return texts[status] || status;
+}
+
+async function respondToResponse(responseId, action) {
+    try {
+        const response = await fetch(`/api/offers/responses/${responseId}/${action}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showNotification('success', `✅ Отклик ${action === 'accepted' ? 'принят' : 'отклонён'}`);
+
+            // Обновляем модальное окно
             closeResponsesModal();
-        }
-    });
+            // Здесь можно перезагрузить модальное окно или обновить конкретный элемент
 
-    document.body.appendChild(modal);
+        } else {
+            throw new Error(result.error || 'Ошибка обработки отклика');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка обработки отклика:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    }
 }
 
 function closeResponsesModal() {
-    const modal = document.querySelector('div[style*="position: fixed"]');
+    const modal = document.getElementById('responsesModal');
     if (modal) {
         modal.remove();
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function formatDate(dateString) {
+    if (!dateString) return 'Недавно';
+
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    } catch {
+        return 'Недавно';
     }
 }
 
@@ -1677,7 +1743,8 @@ function renderContracts(contracts) {
             'completed': '#48bb78',
             'cancelled': '#e53e3e',
             'expired': '#a0aec0',
-            'violation': '#e53e3e'
+            'violation': '#e53e3e',
+            'verification_failed': '#e53e3e'
         };
 
         const statusTexts = {
@@ -1687,7 +1754,8 @@ function renderContracts(contracts) {
             'completed': 'Завершен',
             'cancelled': 'Отменен',
             'expired': 'Просрочен',
-            'violation': 'Нарушение'
+            'violation': 'Нарушение',
+            'verification_failed': 'Проверка не пройдена'
         };
 
         const statusColor = statusColors[contract.status] || '#718096';
@@ -1761,6 +1829,15 @@ function renderContracts(contracts) {
                         </div>
                     </div>
                 ` : ''}
+
+                ${contract.status === 'verification_failed' ? `
+                    <div style="background: #fed7d7; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
+                        <div style="font-size: 12px; color: #c53030;">❌ Причина:</div>
+                        <div style="font-size: 14px; font-weight: 600; color: #c53030;">
+                            ${contract.verification_details || 'Размещение не соответствует требованиям'}
+                        </div>
+                    </div>
+                ` : ''}
                 
                 <!-- Кнопки действий -->
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
@@ -1790,6 +1867,19 @@ function renderContracts(contracts) {
                         ">📤 Подать заявку</button>
                     ` : ''}
                     
+                    ${contract.status === 'active' && isPublisher ? `
+                        <button onclick="event.stopPropagation(); showContractInstructions(${JSON.stringify(contract).replace(/"/g, '&quot;')})" style="
+                            padding: 8px 12px;
+                            border: 1px solid #3182ce;
+                            background: #3182ce;
+                            color: white;
+                            border-radius: 6px;
+                            font-size: 12px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">📋 Как размещать</button>
+                    ` : ''}
+                    
                     ${['active', 'verification'].includes(contract.status) ? `
                         <button onclick="event.stopPropagation(); cancelContract('${contract.id}')" style="
                             padding: 8px 12px;
@@ -1800,7 +1890,20 @@ function renderContracts(contracts) {
                             font-size: 12px;
                             font-weight: 600;
                             cursor: pointer;
-                        ">❌</button>
+                        ">❌ Отменить</button>
+                    ` : ''}
+
+                    ${contract.status === 'verification_failed' ? `
+                        <button onclick="event.stopPropagation(); deleteFailedContract('${contract.id}', '${contract.offer_title.replace(/'/g, "\\'")}', this)" style="
+                            padding: 8px 12px;
+                            border: 1px solid #e53e3e;
+                            background: #e53e3e;
+                            color: white;
+                            border-radius: 6px;
+                            font-size: 12px;
+                            font-weight: 600;
+                            cursor: pointer;
+                        ">🗑️ Удалить</button>
                     ` : ''}
                 </div>
             </div>
@@ -1808,6 +1911,87 @@ function renderContracts(contracts) {
     });
 
     container.innerHTML = html;
+}
+
+// Функция удаления неудачных контрактов
+async function deleteFailedContract(contractId, offerTitle, buttonElement) {
+    console.log('🗑️ Запрос на удаление неудачного контракта:', contractId);
+
+    // Показываем подтверждение
+    const confirmMessage = `Удалить контракт "${offerTitle}"?\n\nКонтракт не прошел проверку размещения и может быть удален.\nЭто действие нельзя отменить.`;
+
+    if (!confirm(confirmMessage)) {
+        console.log('❌ Удаление отменено пользователем');
+        return;
+    }
+
+    const originalText = buttonElement?.textContent;
+
+    try {
+        // Блокируем кнопку
+        if (buttonElement) {
+            buttonElement.disabled = true;
+            buttonElement.textContent = '⏳ Удаление...';
+            buttonElement.style.opacity = '0.6';
+        }
+
+        console.log('🌐 Отправляем запрос на удаление контракта...');
+
+        const response = await fetch(`/api/offers/contracts/${contractId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const result = await response.json();
+        console.log('📥 Ответ сервера:', result);
+
+        if (result.success) {
+            console.log('✅ Контракт успешно удален');
+
+            // Показываем уведомление
+            if (typeof showNotification === 'function') {
+                showNotification('success', `✅ ${result.message}`);
+            } else {
+                alert(`✅ ${result.message}`);
+            }
+
+            // Перезагружаем список контрактов
+            if (typeof loadUserContracts === 'function') {
+                loadUserContracts();
+            } else {
+                // Убираем элемент из DOM если функция недоступна
+                const contractCard = buttonElement.closest('.contract-card, [data-contract-id]');
+                if (contractCard) {
+                    contractCard.style.transition = 'opacity 0.3s ease';
+                    contractCard.style.opacity = '0';
+                    setTimeout(() => contractCard.remove(), 300);
+                }
+            }
+
+        } else {
+            throw new Error(result.error || 'Ошибка удаления контракта');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка удаления контракта:', error);
+
+        // Восстанавливаем кнопку
+        if (buttonElement) {
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+            buttonElement.style.opacity = '1';
+        }
+
+        // Показываем ошибку
+        if (typeof showNotification === 'function') {
+            showNotification('error', `❌ Ошибка: ${error.message}`);
+        } else {
+            alert(`❌ Ошибка удаления: ${error.message}`);
+        }
+    }
 }
 
 function showContractsError(message) {
@@ -2512,6 +2696,84 @@ function updateContractsStats(contracts) {
     }
 }
 
+// Добавить в app/static/js/offers.js функцию для показа инструкций
+
+function showContractInstructions(contract) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.8); display: flex; align-items: center;
+        justify-content: center; z-index: 1001; padding: 20px;
+    `;
+
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 100%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #333;">📋 Как подтвердить размещение</h3>
+                <button onclick="this.closest('div[style*=\"z-index\"]').remove()" 
+                        style="background: none; border: none; font-size: 24px; cursor: pointer;">×</button>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 16px;">
+                    <h4 style="margin: 0 0 12px 0; color: #495057;">🎯 Контракт: ${contract.offer_title}</h4>
+                    <p style="margin: 0; color: #6c757d;">💰 Сумма: ${contract.price} RUB</p>
+                    <p style="margin: 4px 0 0 0; color: #6c757d;">📺 Канал: ${contract.channel_title}</p>
+                </div>
+                
+                <h4 style="color: #333; margin-bottom: 12px;">Пошаговая инструкция:</h4>
+                <ol style="padding-left: 20px; line-height: 1.6; color: #555;">
+                    <li style="margin-bottom: 8px;"><strong>Разместите рекламу</strong> в своём канале согласно требованиям оффера</li>
+                    <li style="margin-bottom: 8px;"><strong>Перейдите к нашему боту:</strong> 
+                        <a href="https://t.me/bot_username" target="_blank" style="color: #007bff;">@your_bot_username</a>
+                    </li>
+                    <li style="margin-bottom: 8px;"><strong>Переслать пост с рекламой</strong> боту (нажмите "Forward" на сообщении)</li>
+                    <li><strong>Дождитесь автоматического подтверждения</strong> - обычно это занимает несколько секунд</li>
+                </ol>
+                
+                <div style="background: #e3f2fd; padding: 12px; border-radius: 6px; margin-top: 16px;">
+                    <p style="margin: 0; font-size: 14px; color: #1565c0;">
+                        💡 <strong>Важно:</strong> Бот автоматически найдёт ваш контракт и проверит размещение. 
+                        После успешной проверки начнётся мониторинг на ${contract.monitoring_duration || 7} дней.
+                    </p>
+                </div>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button onclick="this.closest('div[style*=\"z-index\"]').remove()" 
+                        style="padding: 10px 20px; border: 1px solid #ddd; background: white; border-radius: 6px; cursor: pointer;">
+                    Закрыть
+                </button>
+                <button onclick="window.open('https://t.me/your_bot_username', '_blank')" 
+                        style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                    🤖 Открыть бота
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+// Добавить кнопку "Как подтвердить размещение" в интерфейс контрактов
+function addContractInstructionsButton(contractElement, contract) {
+    if (contract.status === 'active' && contract.role === 'publisher') {
+        const instructionsBtn = document.createElement('button');
+        instructionsBtn.innerHTML = '📋 Как подтвердить размещение';
+        instructionsBtn.style.cssText = `
+            background: #17a2b8; color: white; border: none; 
+            padding: 8px 16px; border-radius: 6px; cursor: pointer;
+            margin-top: 8px; font-size: 14px;
+        `;
+        instructionsBtn.onclick = () => showContractInstructions(contract);
+
+        contractElement.querySelector('.contract-actions')?.appendChild(instructionsBtn);
+    }
+}
+
+// Модифицировать функцию renderContracts для добавления кнопок инструкций
+// Найти в существующем коде место создания элементов контракта и добавить:
+// addContractInstructionsButton(contractElement, contract);
 
 // ===== ОБНОВЛЕНИЕ СУЩЕСТВУЮЩИХ ФУНКЦИЙ =====
 
@@ -2703,6 +2965,281 @@ function updateOfferCardStatus(offerId, newStatus) {
         loadMyOffers();
     }, 1000);
 }
+
+async function showResponseModal(offer) {
+    console.log('📝 Показываем форму отклика для оффера:', offer.id);
+
+    try {
+        // Сначала загружаем верифицированные каналы пользователя
+        const channelsResponse = await fetch('/api/channels/my?verified=true', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        const channelsResult = await channelsResponse.json();
+
+        if (!channelsResult.success || !channelsResult.channels || channelsResult.channels.length === 0) {
+            // Нет верифицированных каналов
+            showNoChannelsModal();
+            return;
+        }
+
+        const verifiedChannels = channelsResult.channels;
+
+        // Создаем модальное окно
+        const modal = document.createElement('div');
+        modal.id = 'responseModal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        `;
+
+        modal.innerHTML = `
+            <div style="
+                background: white;
+                border-radius: 12px;
+                padding: 24px;
+                max-width: 500px;
+                width: 90%;
+                max-height: 80vh;
+                overflow-y: auto;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #2d3748; font-size: 20px;">📝 Отклик на оффер</h3>
+                    <button onclick="closeResponseModal()" style="
+                        background: none; border: none; font-size: 24px; 
+                        cursor: pointer; color: #666;
+                    ">&times;</button>
+                </div>
+                
+                <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                    <h4 style="margin: 0 0 8px 0; color: #2d3748;">🎯 ${offer.title}</h4>
+                    <p style="margin: 0; color: #718096; font-size: 14px;">
+                        💰 Бюджет: ${offer.total_budget || 'Не указан'} RUB
+                    </p>
+                </div>
+                
+                <form id="responseForm">
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">
+                            Выберите канал <span style="color: #e53e3e;">*</span>
+                        </label>
+                        <select id="selectedChannel" required style="
+                            width: 100%;
+                            padding: 12px;
+                            border: 2px solid #e2e8f0;
+                            border-radius: 6px;
+                            font-size: 16px;
+                            background: white;
+                        ">
+                            <option value="">-- Выберите канал --</option>
+                            ${verifiedChannels.map(channel => `
+                                <option value="${channel.id}" data-channel='${JSON.stringify(channel)}'>
+                                    ${channel.title} (@${channel.username}) - ${formatNumber(channel.subscriber_count)} подписчиков
+                                </option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <div id="channelPreview" style="display: none; margin-bottom: 20px; padding: 16px; background: #e6fffa; border-radius: 8px; border-left: 4px solid #38b2ac;">
+                        <h5 style="margin: 0 0 8px 0; color: #2c7a7b;">📺 Выбранный канал:</h5>
+                        <div id="channelDetails"></div>
+                    </div>
+                    
+                    <div style="margin-bottom: 20px;">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">
+                            Сообщение рекламодателю
+                        </label>
+                        <textarea id="responseMessage" style="
+                            width: 100%;
+                            min-height: 100px;
+                            padding: 12px;
+                            border: 2px solid #e2e8f0;
+                            border-radius: 6px;
+                            font-size: 16px;
+                            resize: vertical;
+                            font-family: inherit;
+                        " placeholder="Расскажите о своём канале, предложите варианты размещения..."></textarea>
+                        <div style="font-size: 12px; color: #718096; margin-top: 4px;">
+                            Опишите преимущества вашего канала и условия размещения
+                        </div>
+                    </div>
+                    
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button type="button" onclick="closeResponseModal()" style="
+                            padding: 12px 24px;
+                            border: 2px solid #e2e8f0;
+                            background: white;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 16px;
+                        ">Отмена</button>
+                        <button type="submit" id="submitResponseBtn" style="
+                            padding: 12px 24px;
+                            background: #3182ce;
+                            color: white;
+                            border: none;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-size: 16px;
+                            font-weight: 600;
+                        ">Отправить отклик</button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        document.body.style.overflow = 'hidden';
+
+        // Обработчик выбора канала
+        document.getElementById('selectedChannel').addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const preview = document.getElementById('channelPreview');
+            const details = document.getElementById('channelDetails');
+
+            if (selectedOption.value) {
+                const channelData = JSON.parse(selectedOption.getAttribute('data-channel'));
+
+                details.innerHTML = `
+                    <div style="font-size: 14px; color: #2c7a7b;">
+                        <strong>${channelData.title}</strong><br>
+                        Username: @${channelData.username}<br>
+                        Подписчики: ${formatNumber(channelData.subscriber_count)}<br>
+                        Категория: ${channelData.category || 'Не указана'}<br>
+                        ${channelData.description ? `Описание: ${channelData.description}` : ''}
+                    </div>
+                `;
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+            }
+        });
+
+        // Обработчик формы
+        document.getElementById('responseForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            await submitResponse(offer.id);
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка загрузки каналов:', error);
+        alert('Ошибка загрузки каналов. Попробуйте позже.');
+    }
+}
+
+function showNoChannelsModal() {
+    const modal = document.createElement('div');
+    modal.id = 'responseModal';
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.5); display: flex; align-items: center;
+        justify-content: center; z-index: 1000;
+    `;
+
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%; text-align: center;">
+            <div style="font-size: 48px; margin-bottom: 16px;">📺</div>
+            <h3 style="margin: 0 0 16px 0; color: #2d3748;">Нет верифицированных каналов</h3>
+            <p style="margin: 0 0 20px 0; color: #718096;">
+                Для отклика на офферы нужно добавить и верифицировать хотя бы один канал.
+            </p>
+            <div style="display: flex; gap: 12px; justify-content: center;">
+                <button onclick="closeResponseModal()" style="
+                    padding: 10px 20px; border: 2px solid #e2e8f0; background: white;
+                    border-radius: 6px; cursor: pointer;
+                ">Закрыть</button>
+                <button onclick="window.location.href='/channels'" style="
+                    padding: 10px 20px; background: #3182ce; color: white;
+                    border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
+                ">Добавить канал</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+async function submitResponse(offerId) {
+    const submitBtn = document.getElementById('submitResponseBtn');
+    const originalText = submitBtn.textContent;
+
+    try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Отправка...';
+
+        const selectedChannelElement = document.getElementById('selectedChannel');
+        const selectedOption = selectedChannelElement.options[selectedChannelElement.selectedIndex];
+
+        if (!selectedOption.value) {
+            throw new Error('Выберите канал');
+        }
+
+        const channelData = JSON.parse(selectedOption.getAttribute('data-channel'));
+        const message = document.getElementById('responseMessage').value.trim();
+
+        const response = await fetch(`/api/offers/${offerId}/respond`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            },
+            body: JSON.stringify({
+                channel_id: channelData.id,
+                channel_title: channelData.title,
+                channel_username: channelData.username,
+                channel_subscribers: channelData.subscriber_count,
+                message: message
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            closeResponseModal();
+            showNotification('success', '✅ Отклик отправлен! Рекламодатель получил уведомление.');
+
+            // Обновляем список офферов если находимся на соответствующей странице
+            if (typeof loadOffers === 'function') {
+                loadOffers();
+            }
+        } else {
+            throw new Error(result.error || 'Ошибка отправки отклика');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка отправки отклика:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+}
+
+function closeResponseModal() {
+    const modal = document.getElementById('responseModal');
+    if (modal) {
+        modal.remove();
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function formatNumber(num) {
+    if (!num) return '0';
+    return new Intl.NumberFormat('ru-RU').format(num);
+}
+
 
 // Добавляем функции в глобальную область видимости
 window.cancelOffer = cancelOffer;
