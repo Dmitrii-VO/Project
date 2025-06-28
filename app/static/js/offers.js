@@ -29,6 +29,8 @@ function getTelegramUserId() {
 }
 
 // ===== ФУНКЦИЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК =====
+// В функции switchTab добавьте автоматическую загрузку контрактов:
+
 function switchTab(tabName) {
     console.log('🔄 Переключение на вкладку:', tabName);
 
@@ -55,9 +57,14 @@ function switchTab(tabName) {
             loadAvailableOffers({});
         }, 100);
     } else if (tabName === 'contracts') {
-        // Новая вкладка контрактов
+        // ОБНОВЛЕНО: Автоматическая загрузка контрактов
+        console.log('📋 Переключение на вкладку контрактов');
         setTimeout(() => {
-            loadUserContracts();
+            if (typeof loadUserContracts === 'function') {
+                loadUserContracts();
+            } else {
+                console.error('❌ Функция loadUserContracts не найдена');
+            }
         }, 100);
     }
 }
@@ -1719,26 +1726,26 @@ function renderSimpleResponsesList(responses) {
                 ` : ''}
 
                 <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    ${status === 'pending' ? `
-                        <button onclick="respondToResponse('${response.id}', 'accepted')" style="
-                            padding: 6px 12px; 
-                            background: #48bb78; 
-                            color: white;
-                            border: none; 
-                            border-radius: 4px; 
-                            cursor: pointer; 
-                            font-size: 12px;
-                        ">✅ Принять</button>
-                        <button onclick="respondToResponse('${response.id}', 'rejected')" style="
-                            padding: 6px 12px; 
-                            background: #f56565; 
-                            color: white;
-                            border: none; 
-                            border-radius: 4px; 
-                            cursor: pointer; 
-                            font-size: 12px;
-                        ">❌ Отклонить</button>
-                    ` : ''}
+                            ${status === 'pending' ? `
+                                <button onclick="respondToResponse('${response.id}', 'accepted')" style="
+                                    padding: 6px 12px; 
+                                    background: #48bb78; 
+                                    color: white;
+                                    border: none; 
+                                    border-radius: 4px; 
+                                    cursor: pointer; 
+                                    font-size: 12px;
+                                ">✅ Принять</button>
+                                <button onclick="respondToResponse('${response.id}', 'rejected')" style="
+                                    padding: 6px 12px; 
+                                    background: #f56565; 
+                                    color: white;
+                                    border: none; 
+                                    border-radius: 4px; 
+                                    cursor: pointer; 
+                                    font-size: 12px;
+                                ">❌ Отклонить</button>
+                            ` : ''}
                 </div>
             </div>
         `;
@@ -1884,23 +1891,72 @@ function getStatusText(status) {
 }
 
 async function respondToResponse(responseId, action) {
+    console.log(`📝 Обработка отклика ${responseId} - действие: ${action}`);
+
     try {
-        const response = await fetch(`/api/offers/responses/${responseId}/${action}`, {
-            method: 'POST',
+        let message = '';
+
+        // Если отклоняем, спрашиваем причину
+        if (action === 'rejected') {
+            message = prompt('Причина отклонения (необязательно):') || '';
+        }
+
+        // Используем правильный endpoint с PATCH методом
+        const response = await fetch(`/api/offers/responses/${responseId}/status`, {
+            method: 'PATCH',
             headers: {
                 'Content-Type': 'application/json',
                 'X-Telegram-User-Id': getTelegramUserId()
-            }
+            },
+            body: JSON.stringify({
+                status: action,  // 'accepted' или 'rejected'
+                message: message
+            })
         });
 
+        console.log('📥 Ответ сервера:', response.status, response.statusText);
         const result = await response.json();
+        console.log('📋 Результат:', result);
 
         if (result.success) {
-            showNotification('success', `✅ Отклик ${action === 'accepted' ? 'принят' : 'отклонён'}`);
+            // Показываем уведомление об успехе
+            const actionText = action === 'accepted' ? 'принят' : 'отклонён';
 
-            // Обновляем модальное окно
+            if (typeof showNotification === 'function') {
+                showNotification('success', `✅ Отклик ${actionText}`);
+            } else {
+                alert(`✅ Отклик ${actionText}`);
+            }
+
+            // НОВОЕ: Если отклик принят, показываем информацию о контракте
+            if (action === 'accepted') {
+                let alertMessage = '✅ Отклик принят!\n\n';
+
+                if (result.contract_created && result.contract_id) {
+                    alertMessage += `📋 Контракт ${result.contract_id} создан автоматически.\n`;
+                    alertMessage += 'Обе стороны получили уведомления с деталями выполнения.\n\n';
+                    alertMessage += '💡 Контракт доступен в разделе "Контракты".';
+                } else {
+                    alertMessage += 'Контракт создан автоматически.\nУчастники получили уведомления с деталями выполнения.';
+                }
+
+                alert(alertMessage);
+
+                // Автоматически переключаемся на вкладку контрактов через 2 секунды
+                setTimeout(() => {
+                    if (confirm('Перейти в раздел "Контракты" для просмотра деталей?')) {
+                        switchTab('contracts');
+                    }
+                }, 1000);
+            }
+
+            // Закрываем модальное окно с откликами
             closeResponsesModal();
-            // Здесь можно перезагрузить модальное окно или обновить конкретный элемент
+
+            // Перезагружаем список офферов для обновления счетчиков
+            if (typeof loadMyOffers === 'function') {
+                setTimeout(() => loadMyOffers(), 500);
+            }
 
         } else {
             throw new Error(result.error || 'Ошибка обработки отклика');
@@ -1908,7 +1964,12 @@ async function respondToResponse(responseId, action) {
 
     } catch (error) {
         console.error('❌ Ошибка обработки отклика:', error);
-        alert(`❌ Ошибка: ${error.message}`);
+
+        if (typeof showNotification === 'function') {
+            showNotification('error', `❌ Ошибка: ${error.message}`);
+        } else {
+            alert(`❌ Ошибка: ${error.message}`);
+        }
     }
 }
 

@@ -1114,29 +1114,46 @@ def get_offer_responses(offer_id, user_id=None):
 
 
 def update_response_status(response_id, new_status, user_id, message=""):
-    """Обновление статуса отклика (принять/отклонить)"""
+    """Обновление статуса отклика (принять/отклонить) с автоматическим созданием контракта"""
     try:
+        logger.info(f"📝 Обновление статуса отклика {response_id} на {new_status}")
+
         conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         # Проверяем права доступа
         cursor.execute('''
-                       SELECT or_resp.*, o.created_by, u.telegram_id as author_telegram_id
+                       SELECT or_resp.*,
+                              o.created_by,
+                              o.title       as offer_title,
+                              o.price       as offer_price,
+                              o.budget_total,
+                              u.telegram_id as author_telegram_id,
+                              ch.title      as channel_title,
+                              ch.username   as channel_username,
+                              ch.owner_id   as channel_owner_id
                        FROM offer_responses or_resp
                                 JOIN offers o ON or_resp.offer_id = o.id
                                 JOIN users u ON o.created_by = u.id
+                                LEFT JOIN channels ch ON or_resp.channel_id = ch.id
                        WHERE or_resp.id = ?
                        ''', (response_id,))
 
         response_row = cursor.fetchone()
         if not response_row:
+            conn.close()
             return {'success': False, 'error': 'Отклик не найден'}
 
         if response_row['author_telegram_id'] != user_id:
+            conn.close()
             return {'success': False, 'error': 'Нет прав для изменения статуса'}
 
-        # Обновляем статус
+        if response_row['status'] != 'pending':
+            conn.close()
+            return {'success': False, 'error': 'Отклик уже обработан'}
+
+        # Обновляем статус отклика
         cursor.execute('''
                        UPDATE offer_responses
                        SET status        = ?,
@@ -1145,21 +1162,126 @@ def update_response_status(response_id, new_status, user_id, message=""):
                        WHERE id = ?
                        ''', (new_status, datetime.now().isoformat(), message, response_id))
 
+        # Если отклик принят, создаем контракт автоматически
+        contract_id = None
+        if new_status == 'accepted':
+            logger.info(f"✅ Отклик принят, создаем контракт для response_id: {response_id}")
+
+            # Отклоняем остальные отклики как 'rejected'
+            cursor.execute('''
+                           UPDATE offer_responses
+                           SET status        = 'rejected',
+                               updated_at    = ?,
+                               admin_message = 'Автоматически отклонен (выбран другой канал)'
+                           WHERE offer_id = ?
+                             AND id != ? 
+                             AND status = 'pending'
+                           ''', (datetime.now().isoformat(), response_row['offer_id'], response_id))
+
+            # ИСПРАВЛЕНО: Оставляем статус оффера как 'active' вместо 'in_progress'
+            # Добавляем метаданные о том, что у оффера есть принятый отклик
+            cursor.execute('''
+                           UPDATE offers
+                           SET updated_at = ?
+                           WHERE id = ?
+                           ''', (datetime.now().isoformat(), response_row['offer_id']))
+
+            logger.info(f"✅ Оффер {response_row['offer_id']} обновлен (статус остается 'active')")
+
+            # Генерируем уникальный ID контракта
+            import hashlib
+            import time
+            contract_id = hashlib.md5(f"{response_id}_{time.time()}".encode()).hexdigest()[:12].upper()
+
+            # Вычисляем дедлайны
+            placement_deadline = datetime.now() + timedelta(hours=24)  # 24 часа на размещение
+            monitoring_duration = 7  # 7 дней мониторинга
+            monitoring_end = placement_deadline + timedelta(days=monitoring_duration)
+
+            # Определяем цену (используем цену оффера или budget_total)
+            price = response_row['offer_price'] or response_row['budget_total'] or 1000
+
+            # Определяем publisher_id
+            if not response_row['channel_owner_id']:
+                # Если channel_owner_id отсутствует, пытаемся найти пользователя по user_id отклика
+                cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (response_row['user_id'],))
+                user_row = cursor.fetchone()
+                publisher_id = user_row['id'] if user_row else response_row['user_id']
+                logger.warning(f"⚠️ channel_owner_id отсутствует, используем user_id: {publisher_id}")
+            else:
+                publisher_id = response_row['channel_owner_id']
+
+            # Создаем контракт в таблице contracts
+            try:
+                cursor.execute('''
+                               INSERT INTO contracts (id, response_id, offer_id, advertiser_id, publisher_id,
+                                                      price, status, placement_deadline, monitoring_duration,
+                                                      monitoring_end, post_requirements, created_at, updated_at)
+                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                               ''', (
+                                   contract_id,
+                                   response_id,
+                                   response_row['offer_id'],
+                                   response_row['created_by'],  # advertiser_id
+                                   publisher_id,  # publisher_id
+                                   price,
+                                   'active',
+                                   placement_deadline.isoformat(),
+                                   monitoring_duration,
+                                   monitoring_end.isoformat(),
+                                   'Согласно условиям оффера',
+                                   datetime.now().isoformat(),
+                                   datetime.now().isoformat()
+                               ))
+
+                logger.info(f"✅ Создан контракт {contract_id} для отклика {response_id}")
+
+            except Exception as contract_error:
+                logger.error(f"❌ Ошибка создания контракта: {contract_error}")
+                # Контракт не создался, но отклик уже принят - это не критично
+                contract_id = None
+
         conn.commit()
         conn.close()
 
-        # Отправляем уведомление отвечающему
-        send_response_notification(response_id, new_status)
+        # Отправляем уведомления
+        try:
+            send_response_notification(response_id, new_status)
+        except Exception as notification_error:
+            logger.warning(f"⚠️ Ошибка отправки уведомления об отклике: {notification_error}")
 
-        logger.info(f"Статус отклика {response_id} изменен на {new_status}")
+        # Если создан контракт, отправляем уведомления о контракте
+        if contract_id:
+            try:
+                send_contract_notification(contract_id, 'created')
+                logger.info(f"📧 Отправлены уведомления о создании контракта {contract_id}")
+            except Exception as contract_notification_error:
+                logger.warning(f"⚠️ Ошибка отправки уведомления о контракте: {contract_notification_error}")
 
-        return {
+        action_text = 'принят' if new_status == 'accepted' else 'отклонён'
+        success_message = f'Отклик {action_text}. Пользователь получил уведомление.'
+
+        if contract_id:
+            success_message += f' Создан контракт {contract_id}.'
+
+        logger.info(f"✅ Статус отклика {response_id} изменен на {new_status}")
+
+        result = {
             'success': True,
-            'message': f'Отклик {new_status}. Пользователь получил уведомление.'
+            'message': success_message
         }
 
+        # Добавляем информацию о контракте если он создан
+        if contract_id:
+            result['contract_id'] = contract_id
+            result['contract_created'] = True
+
+        return result
+
     except Exception as e:
-        logger.error(f"Ошибка обновления статуса отклика: {e}")
+        logger.error(f"❌ Ошибка обновления статуса отклика: {e}")
+        import traceback
+        traceback.print_exc()
         return {'success': False, 'error': str(e)}
 
 # Заменить/дополнить функцию verify_placement() в add_offer.py
@@ -2637,6 +2759,7 @@ def register_offer_routes(app):
 
             # Создаем оффер
             result = add_offer(user_id, data)
+            print(f"DEBUG: Результат add_offer: {result}")
             print(f"DEBUG: Результат add_offer: {result}")
             if result['success']:
                 return jsonify(result), 201
