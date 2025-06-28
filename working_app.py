@@ -113,6 +113,7 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
+# === НАСТРОЙКА TELEGRAM WEBHOOK ===
 def setup_telegram_webhook():
     """Настройка webhook для Telegram бота"""
     import requests
@@ -121,24 +122,17 @@ def setup_telegram_webhook():
     webhook_url = f"{AppConfig.WEBAPP_URL}/api/channels/webhook"
 
     try:
-        # Устанавливаем webhook с расширенными разрешениями
+        # Устанавливаем webhook
         url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
         response = requests.post(url, json={
             'url': webhook_url,
-            'allowed_updates': [
-                'channel_post',  # Сообщения в каналах
-                'message',  # Личные сообщения боту (включая пересылки)
-                'edited_message',  # Отредактированные сообщения
-                'edited_channel_post'  # Отредактированные сообщения каналов
-            ],
-            'drop_pending_updates': False  # Не удаляем ожидающие обновления
+            'allowed_updates': ['channel_post', 'message']
         })
 
         if response.status_code == 200:
             result = response.json()
             if result.get('ok'):
                 logger.info(f"✅ Webhook установлен: {webhook_url}")
-                logger.info(f"📥 Разрешенные обновления: channel_post, message, edited_message, edited_channel_post")
             else:
                 logger.error(f"❌ Ошибка установки webhook: {result.get('description')}")
         else:
@@ -146,36 +140,6 @@ def setup_telegram_webhook():
 
     except Exception as e:
         logger.error(f"❌ Ошибка настройки webhook: {e}")
-
-
-# Также добавить функцию для проверки статуса webhook:
-def check_webhook_status():
-    """Проверка статуса webhook"""
-    try:
-        import requests
-
-        bot_token = AppConfig.BOT_TOKEN
-        if not bot_token:
-            return False
-
-        url = f"https://api.telegram.org/bot{bot_token}/getWebhookInfo"
-        response = requests.get(url, timeout=10)
-
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('ok'):
-                webhook_info = result.get('result', {})
-                logger.info(f"📊 Webhook статус:")
-                logger.info(f"   URL: {webhook_info.get('url', 'Не установлен')}")
-                logger.info(f"   Ожидающих обновлений: {webhook_info.get('pending_update_count', 0)}")
-                logger.info(f"   Последняя ошибка: {webhook_info.get('last_error_message', 'Нет ошибок')}")
-                return True
-
-        return False
-
-    except Exception as e:
-        logger.error(f"Ошибка проверки webhook: {e}")
-        return False
 
 # === СОЗДАНИЕ ПРИЛОЖЕНИЯ ===
 def create_app() -> Flask:
@@ -216,80 +180,59 @@ def init_database(app: Flask) -> None:
 
 
 # === РЕГИСТРАЦИЯ BLUEPRINTS ===
-# ЗАМЕНИТЬ функцию register_blueprints в working_app.py
-
 def register_blueprints(app: Flask) -> None:
-    """Регистрация всех Blueprint'ов с отладкой"""
+    """Регистрация всех Blueprint'ов с использованием исправленной системы"""
 
     blueprints_registered = 0
 
     try:
-        print("📦 Начинаем регистрацию Blueprint'ов...")
+        # Пробуем использовать app.routers, но БЕЗ проблемного channel_router
+        print("📦 Регистрация Blueprint'ов...")
 
         # Ручная регистрация только работающих Blueprint'ов
         blueprint_modules = [
-            ('app.routers.main_router', 'main_bp', ''),
+            ('app.api.channel_analyzer', 'analyzer_bp', '/api/analyzer'),
+            ('app.routers.main_router', 'main_bp', ''),  # Основные страницы без префикса
             ('app.routers.api_router', 'api_bp', '/api'),
-            ('app.api.channels', 'channels_bp', '/api/channels'),
-            ('app.api.offers', 'offers_bp', '/api/offers'),  # ← ВАЖНО!
             ('app.routers.analytics_router', 'analytics_bp', '/api/analytics'),
             ('app.routers.payment_router', 'payment_bp', '/api/payments'),
         ]
 
         for module_name, blueprint_name, url_prefix in blueprint_modules:
             try:
-                print(f"📋 Загружаем {blueprint_name} из {module_name}...")
-
                 module = __import__(module_name, fromlist=[blueprint_name])
                 blueprint = getattr(module, blueprint_name)
                 app.register_blueprint(blueprint, url_prefix=url_prefix)
                 blueprints_registered += 1
-
                 prefix_display = url_prefix if url_prefix else "/"
-                print(f"✅ {blueprint_name} зарегистрирован: {prefix_display}")
                 logger.debug(f"✅ Blueprint зарегистрирован: {blueprint_name} -> {prefix_display}")
 
-            except ImportError as e:
-                print(f"❌ Не удалось импортировать {module_name}: {e}")
+            except (ImportError, AttributeError) as e:
                 logger.warning(f"⚠️ Не удалось загрузить {module_name}: {e}")
 
-            except AttributeError as e:
-                print(f"❌ Blueprint {blueprint_name} не найден в {module_name}: {e}")
-                logger.warning(f"Blueprint not found: {blueprint_name} in {module_name}")
-
-            except Exception as e:
-                print(f"❌ Ошибка регистрации {blueprint_name}: {e}")
-                logger.error(f"Registration error for {blueprint_name}: {e}")
-
-        print(f"📦 Итого зарегистрировано Blueprint'ов: {blueprints_registered}")
         logger.info(f"📦 Зарегистрировано Blueprint'ов: {blueprints_registered}")
 
-        # Отладочная проверка маршрутов
-        print("\n🔍 ПРОВЕРЯЕМ ЗАРЕГИСТРИРОВАННЫЕ МАРШРУТЫ:")
-        offers_routes = []
-        for rule in app.url_map.iter_rules():
-            if '/api/offers' in rule.rule:
-                methods = ','.join(rule.methods - {'HEAD', 'OPTIONS'})
-                offers_routes.append(f"{rule.rule} [{methods}]")
-                print(f"✅ {rule.rule:40} {methods:15}")
-
-        if offers_routes:
-            print(f"📋 Найдено {len(offers_routes)} маршрутов для /api/offers")
-        else:
-            print("❌ Маршруты /api/offers НЕ найдены!")
-
-        # Проверяем Blueprint'ы
-        print(f"\n📦 Зарегистрированные Blueprint'ы: {list(app.blueprints.keys())}")
-
-        if 'offers' in app.blueprints:
-            print("✅ offers_bp найден в app.blueprints")
-        else:
-            print("❌ offers_bp НЕ найден в app.blueprints!")
-
     except Exception as e:
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
         logger.error(f"❌ Критическая ошибка регистрации Blueprint'ов: {e}")
         raise
+
+    # Регистрируем исправленный channels_bp из app.api.channels
+    try:
+        from app.api.channels import channels_bp
+        app.register_blueprint(channels_bp, url_prefix='/api/channels')
+        logger.info("✅ channels_bp зарегистрирован на /api/channels")
+    except Exception as e:
+        logger.error(f"❌ Ошибка регистрации channels_bp: {e}")
+        # Не поднимаем исключение, просто логируем ошибку
+
+    # Регистрируем offers_bp из app.api.offers
+    try:
+        from app.api.offers import offers_bp
+        app.register_blueprint(offers_bp, url_prefix='/api/offers')
+        logger.info("✅ offers_bp зарегистрирован на /api/offers")
+    except Exception as e:
+        logger.error(f"❌ Ошибка регистрации offers_bp: {e}")
+        # Не поднимаем исключение, просто логируем ошибку
 
 # Инициализируем анализатор каналов с токеном бота
 try:
@@ -1016,121 +959,6 @@ def test_static():
         'working_dir': os.getcwd(),
         'project_root': PROJECT_ROOT
     })
-
-
-# ЗАМЕНИТЬ предыдущий отладочный код в working_app.py на этот:
-
-@app.route('/debug/offers-test', methods=['GET'])
-def debug_offers_test():
-    """Тестирование доступности offers blueprint"""
-    try:
-        # Проверяем импорт
-        from app.api.offers import offers_bp
-
-        # Проверяем зарегистрированные маршруты в основном приложении
-        offers_routes = []
-        all_routes = []
-
-        for rule in app.url_map.iter_rules():
-            route_info = {
-                'rule': rule.rule,
-                'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
-                'endpoint': rule.endpoint
-            }
-
-            all_routes.append(route_info)
-
-            # Ищем маршруты offers
-            if '/api/offers' in rule.rule:
-                offers_routes.append(route_info)
-
-        # Проверяем есть ли Blueprint в зарегистрированных
-        blueprint_registered = 'offers' in app.blueprints
-
-        return jsonify({
-            'blueprint_imported': True,
-            'blueprint_name': offers_bp.name,
-            'blueprint_registered': blueprint_registered,
-            'registered_blueprints': list(app.blueprints.keys()),
-            'offers_routes_count': len(offers_routes),
-            'offers_routes': offers_routes,
-            'has_contracts_route': any('/contracts' in r['rule'] for r in offers_routes),
-            'total_routes': len(all_routes),
-            'search_for_contracts': [r for r in all_routes if 'contract' in r['rule'].lower()]
-        })
-
-    except ImportError as e:
-        return jsonify({
-            'blueprint_imported': False,
-            'import_error': str(e),
-            'error_type': 'ImportError'
-        })
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'blueprint_imported': False,
-            'error': str(e),
-            'error_type': type(e).__name__,
-            'traceback': traceback.format_exc()
-        })
-
-
-# ТАКЖЕ ДОБАВИТЬ проверку импорта при запуске:
-
-@app.route('/debug/import-test', methods=['GET'])
-def debug_import_test():
-    """Тестирование импорта offers модуля"""
-    try:
-        # Проверяем пошаговый импорт
-        import sys
-        import os
-
-        results = {}
-
-        # 1. Проверяем путь
-        results['current_dir'] = os.getcwd()
-        results['sys_path'] = sys.path[:3]  # Первые 3 пути
-
-        # 2. Проверяем существование файлов
-        offers_file = os.path.join('app', 'api', 'offers.py')
-        results['offers_file_exists'] = os.path.exists(offers_file)
-
-        # 3. Пробуем импортировать модуль
-        try:
-            import app.api.offers
-            results['module_import'] = 'success'
-        except Exception as e:
-            results['module_import'] = f'failed: {str(e)}'
-
-        # 4. Пробуем импортировать Blueprint
-        try:
-            from app.api.offers import offers_bp
-            results['blueprint_import'] = 'success'
-            results['blueprint_name'] = offers_bp.name
-
-            # 5. Проверяем функции в Blueprint
-            blueprint_rules = []
-            if hasattr(offers_bp, 'deferred_functions'):
-                results['deferred_functions_count'] = len(offers_bp.deferred_functions)
-
-                # Ищем функцию get_user_contracts
-                for func in offers_bp.deferred_functions:
-                    if hasattr(func, '__name__'):
-                        blueprint_rules.append(func.__name__)
-
-                results['blueprint_functions'] = blueprint_rules
-                results['has_contracts_function'] = 'get_user_contracts' in str(offers_bp.deferred_functions)
-
-        except Exception as e:
-            results['blueprint_import'] = f'failed: {str(e)}'
-
-        return jsonify(results)
-
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'error_type': type(e).__name__
-        })
 
 if __name__ == '__main__':
     main()

@@ -736,21 +736,15 @@ def telegram_webhook():
 
                     welcome_message = """👋 <b>Добро пожаловать!</b>
 
-Я помогу вам верифицировать ваши Telegram каналы и проверять размещение рекламы.
+                    Я помогу вам верифицировать ваши Telegram каналы.
 
-<b>Возможности:</b>
-🔍 <b>Верификация каналов:</b>
-1️⃣ Добавьте канал в Mini App
-2️⃣ Получите код верификации
-3️⃣ Опубликуйте код в вашем канале
-4️⃣ Переслать сообщение с кодом мне
+                    <b>Как это работает:</b>
+                    1️⃣ Добавьте канал в Mini App
+                    2️⃣ Получите код верификации
+                    3️⃣ Опубликуйте код в вашем канале
+                    4️⃣ Переслать сообщение с кодом мне
 
-📋 <b>Проверка контрактов:</b>
-1️⃣ Разместите рекламу согласно контракту
-2️⃣ Переслать сообщение с рекламой мне
-3️⃣ Получите автоматическое подтверждение
-
-После успешной обработки вы получите уведомление прямо здесь!"""
+                    После успешной верификации вы получите уведомление прямо здесь!"""
 
                     # Создаем клавиатуру для приветствия
                     welcome_keyboard = {
@@ -775,7 +769,7 @@ def telegram_webhook():
                 except:
                     pass
 
-            # Проверка пересланных сообщений (ОБЪЕДИНЁННАЯ ЛОГИКА)
+            # Проверка пересланных сообщений
             elif 'forward_from_chat' in message:
                 forward_chat = message['forward_from_chat']
 
@@ -785,161 +779,69 @@ def telegram_webhook():
                     chat_username = forward_chat.get('username', '').lower()
                     from_user_id = str(message['from']['id'])
 
-                    # Получаем ID и текст пересылаемого сообщения
-                    forward_message_id = message.get('forward_from_message_id')
+                    # Получаем текст пересланного сообщения
                     forward_text = message.get('text', '')
 
-                    logger.info(f"📩 Пересылка из @{chat_username} (ID: {forward_message_id}): {forward_text[:50]}...")
+                    logger.info(f"📩 Пересланное сообщение из @{chat_username}: {forward_text[:50]}...")
 
                     conn = get_db_connection()
                     cursor = conn.cursor()
 
-                    try:
-                        # Находим пользователя
-                        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (from_user_id,))
-                        user_data = cursor.fetchone()
+                    # Ищем канал с кодом верификации в пересланном тексте
+                    cursor.execute("""
+                        SELECT c.id, c.title, c.verification_code, c.username
+                        FROM channels c
+                        JOIN users u ON c.owner_id = u.id
+                        WHERE u.telegram_id = ?
+                        AND c.is_verified = 0
+                        AND c.verification_code IS NOT NULL
+                    """, (from_user_id,))
 
-                        if not user_data:
-                            logger.warning(f"Пользователь {from_user_id} не найден")
-                            conn.close()
-                            return jsonify({'ok': True})
+                    channels = cursor.fetchall()
 
-                        user_db_id = user_data['id']
+                    # Проверяем каждый канал пользователя
+                    for channel in channels:
+                        # Проверяем, есть ли код верификации в тексте
+                        if channel['verification_code'] in forward_text:
+                            # И совпадает ли username канала
+                            if (channel['username'].lower() == chat_username or
+                                    channel['username'].lower() == f'@{chat_username}' or
+                                    channel['telegram_id'] == chat_id):
 
-                        # ПЕРВЫЙ ПРИОРИТЕТ: Проверяем активные контракты
-                        cursor.execute("""
-                                       SELECT c.id,
-                                              c.offer_id,
-                                              c.status,
-                                              o.title as offer_title,
-                                              or_resp.channel_username,
-                                              or_resp.channel_title
-                                       FROM contracts c
-                                                JOIN offers o ON c.offer_id = o.id
-                                                JOIN offer_responses or_resp ON c.response_id = or_resp.id
-                                       WHERE c.publisher_id = ?
-                                         AND c.status = 'active'
-                                         AND (LOWER(or_resp.channel_username) = ? OR
-                                              LOWER(or_resp.channel_username) = ?)
-                                       ORDER BY c.created_at DESC LIMIT 1
-                                       """, (user_db_id, chat_username, f"@{chat_username}"))
+                                # Верифицируем канал
+                                cursor.execute("""
+                                    UPDATE channels
+                                    SET is_verified = 1,
+                                        verified_at = ?,
+                                        status = 'verified',
+                                        telegram_id = ?
+                                    WHERE id = ?
+                                """, (datetime.now().isoformat(), chat_id, channel['id']))
 
-                        contract_data = cursor.fetchone()
+                                conn.commit()
+                                logger.info(f"✅ Канал '{channel['title']}' верифицирован!")
 
-                        if contract_data:
-                            # НАЙДЕН АКТИВНЫЙ КОНТРАКТ - обрабатываем как проверку размещения
-                            contract_id = contract_data['id']
-                            offer_title = contract_data['offer_title']
+                                # Отправляем уведомление ПОЛЬЗОВАТЕЛЮ В БОТ
+                                try:
+                                    import requests
+                                    bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
+                                    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
-                            logger.info(f"🎯 Найден контракт {contract_id} для проверки размещения")
+                                    success_message = f"""✅ <b>Канал успешно верифицирован!</b>
 
-                            # Формируем URL поста
-                            if chat_username:
-                                post_url = f"https://t.me/{chat_username}/{forward_message_id}"
-                            else:
-                                post_url = f"https://t.me/c/{chat_id.replace('-100', '')}/{forward_message_id}"
+                                    📺 <b>Канал:</b> {channel['title']}
+                                    🔗 <b>Username:</b> @{channel['username']}
+                                    📅 <b>Дата:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}
 
-                            # Обновляем контракт с данными о размещении
-                            cursor.execute("""
-                                           UPDATE contracts
-                                           SET post_url     = ?,
-                                               post_id      = ?,
-                                               status       = 'verification',
-                                               submitted_at = CURRENT_TIMESTAMP
-                                           WHERE id = ?
-                                           """, (post_url, str(forward_message_id), contract_id))
+                                    Теперь вы можете:
+                                    - Получать предложения от рекламодателей
+                                    - Устанавливать цены за размещение
+                                    - Просматривать статистику канала
 
-                            conn.commit()
-                            conn.close()
+                                    Перейдите в <a href="https://t.me/miniappsmatchbot/start?startapp=channels">Mini App</a> для управления каналом."""
 
-                            # Запускаем проверку размещения
-                            try:
-                                import sys
-                                sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-                                from add_offer import verify_placement
-
-                                verification_result = verify_placement(contract_id)
-
-                                if verification_result.get('success'):
-                                    success_message = f"""✅ <b>Размещение принято!</b>
-
-🎯 <b>Оффер:</b> {offer_title}
-📺 <b>Канал:</b> {contract_data['channel_title']}
-🔗 <b>Пост:</b> {post_url}
-
-{verification_result.get('message', 'Проверка пройдена успешно. Начат мониторинг.')}
-
-🔍 <b>Что дальше:</b>
-Размещение будет отслеживаться в течение указанного периода. Не удаляйте пост до завершения мониторинга!"""
-
-                                    send_telegram_message(from_user_id, success_message)
-
-                                else:
-                                    error_message = f"""❌ <b>Проблема с размещением</b>
-
-🎯 <b>Оффер:</b> {offer_title}
-📺 <b>Канал:</b> {contract_data['channel_title']}
-❌ <b>Причина:</b> {verification_result.get('message', 'Размещение не соответствует требованиям')}
-
-🔄 <b>Что делать:</b>
-1. Исправьте размещение согласно требованиям
-2. Пришлите исправленное сообщение заново
-3. Проверьте детали контракта в приложении"""
-
-                                    send_telegram_message(from_user_id, error_message)
-
-                            except Exception as e:
-                                logger.error(f"Ошибка проверки размещения: {e}")
-                                error_message = f"""⚠️ <b>Техническая ошибка</b>
-
-🎯 <b>Оффер:</b> {offer_title}
-❌ Произошла ошибка при проверке размещения.
-
-Пожалуйста, обратитесь в поддержку или попробуйте позже."""
-
-                                send_telegram_message(from_user_id, error_message)
-
-                            # Завершаем обработку - это был контракт
-                            return jsonify({'ok': True})
-
-                        # КОНТРАКТ НЕ НАЙДЕН - проверяем верификацию каналов
-                        logger.info("🔍 Контракт не найден, проверяем верификацию каналов")
-
-                        # Ищем каналы с кодом верификации в пересланном тексте
-                        cursor.execute("""
-                                       SELECT c.id, c.title, c.verification_code, c.username, c.created_at
-                                       FROM channels c
-                                                JOIN users u ON c.owner_id = u.id
-                                       WHERE u.telegram_id = ?
-                                         AND c.is_verified = 0
-                                         AND c.verification_code IS NOT NULL
-                                       """, (from_user_id,))
-
-                        channels = cursor.fetchall()
-
-                        # Проверяем каждый канал пользователя
-                        for channel in channels:
-                            # Проверяем, есть ли код верификации в тексте
-                            if channel['verification_code'] in forward_text:
-                                # И совпадает ли username канала
-                                if (channel['username'].lower() == chat_username or
-                                        channel['username'].lower() == f'@{chat_username}' or
-                                        str(channel.get('telegram_id')) == chat_id):
-
-                                    # Верифицируем канал
-                                    cursor.execute("""
-                                                   UPDATE channels
-                                                   SET is_verified = 1,
-                                                       verified_at = ?,
-                                                       status      = 'verified',
-                                                       telegram_id = ?
-                                                   WHERE id = ?
-                                                   """, (datetime.now().isoformat(), chat_id, channel['id']))
-
-                                    conn.commit()
-                                    logger.info(f"✅ Канал '{channel['title']}' верифицирован!")
-
-                                    # Получаем данные пользователя для красивого уведомления
+                                    # НА:
+                                    # Получаем данные пользователя
                                     cursor.execute("""
                                                    SELECT first_name, last_name, username
                                                    FROM users
@@ -961,25 +863,27 @@ def telegram_webhook():
 
                                     # Форматируем дату добавления канала
                                     try:
+                                        # Парсим дату создания канала
                                         created_at = datetime.fromisoformat(
                                             channel['created_at'].replace('Z', '+00:00'))
                                         formatted_date = created_at.strftime('%d.%m.%Y в %H:%M')
                                     except:
                                         formatted_date = 'Недавно'
 
+
                                     success_message = f"""✅ <b>Канал успешно верифицирован!</b>
 
-📺 <b>Канал:</b> {channel['title']}
-👤 <b>Пользователь:</b> {full_name}
-📅 <b>Дата добавления:</b> {formatted_date}
+                                    📺 <b>Канал:</b> {channel['title']}
+                                    👤 <b>Пользователь:</b> {full_name}
+                                    📅 <b>Дата добавления:</b> {formatted_date}
 
-🎉 <b>Поздравляем!</b> Ваш канал верифицирован!
+                                    🎉 <b>Поздравляем!</b> Ваш канал верифицирован!
 
-<b>Теперь вы можете:</b>
-• Получать предложения от рекламодателей
-• Устанавливать цены за размещение
-• Просматривать статистику канала
-• Управлять настройками контрактов"""
+                                    Теперь вы можете:
+                                    - Получать предложения от рекламодателей
+                                    - Устанавливать цены за размещение
+                                    - Просматривать статистику канала
+                                    - Управлять настройками"""
 
                                     # Создаем клавиатуру с кнопкой Mini App
                                     keyboard = {
@@ -995,98 +899,39 @@ def telegram_webhook():
                                         ]
                                     }
 
-                                    # Отправляем уведомление
-                                    try:
-                                        import requests
-                                        bot_token = os.environ.get('BOT_TOKEN',
-                                                                   '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
-                                        send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                                    requests.post(send_url, json={
+                                        'chat_id': from_user_id,
+                                        'text': success_message,
+                                        'parse_mode': 'HTML',
+                                        'reply_markup': keyboard
+                                    }, timeout=5)
+                                except Exception as e:
+                                    logger.error(f"Ошибка отправки уведомления: {e}")
 
-                                        requests.post(send_url, json={
-                                            'chat_id': from_user_id,
-                                            'text': success_message,
-                                            'parse_mode': 'HTML',
-                                            'reply_markup': keyboard
-                                        }, timeout=5)
-                                    except Exception as e:
-                                        logger.error(f"Ошибка отправки уведомления: {e}")
+                                conn.close()
+                                return jsonify({'ok': True})
 
-                                    conn.close()
-                                    return jsonify({'ok': True})
+                    # Если код не найден, отправляем подсказку
+                    try:
+                        import requests
+                        bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
+                        send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
 
-                        # Ни контракт, ни верификация не найдены
-                        info_message = """ℹ️ <b>Сообщение не распознано</b>
+                        requests.post(send_url, json={
+                            'chat_id': from_user_id,
+                            'text': '❌ Код верификации не найден в пересланном сообщении.\n\nУбедитесь, что вы переслали сообщение с кодом верификации из вашего канала.',
+                            'parse_mode': 'HTML'
+                        }, timeout=5)
+                    except:
+                        pass
 
-Это пересланное сообщение не содержит:
-• Код верификации для ваших неверифицированных каналов
-• Размещение рекламы для активных контрактов
-
-<b>Что можно сделать:</b>
-• Проверьте активные контракты в приложении
-• Убедитесь, что переслали сообщение из правильного канала
-• Проверьте коды верификации для ваших каналов
-
-<b>Нужна помощь?</b> Обратитесь в поддержку через приложение."""
-
-                        send_telegram_message(from_user_id, info_message)
-
-                        # Если код верификации не найден, отправляем дополнительную подсказку
-                        if channels:  # Есть неверифицированные каналы
-                            hint_message = """💡 <b>Подсказка для верификации:</b>
-
-У вас есть неверифицированные каналы. Убедитесь, что:
-1. Опубликовали код верификации в канале
-2. Переслали именно то сообщение с кодом
-3. Username канала совпадает с указанным при добавлении"""
-
-                            send_telegram_message(from_user_id, hint_message)
-
-                        conn.close()
-
-                    except Exception as e:
-                        logger.error(f"Ошибка обработки пересланного сообщения: {e}")
-                        if 'conn' in locals():
-                            conn.close()
-
-                        # Отправляем сообщение об общей ошибке
-                        try:
-                            error_msg = """⚠️ <b>Произошла ошибка</b>
-
-Не удалось обработать ваше сообщение. 
-Попробуйте позже или обратитесь в поддержку."""
-
-                            send_telegram_message(from_user_id, error_msg)
-                        except:
-                            pass
+                    conn.close()
 
         return jsonify({'ok': True})
 
     except Exception as e:
         logger.error(f"❌ Ошибка webhook: {e}")
         return jsonify({'ok': True})
-
-
-def send_telegram_message(chat_id, text):
-    """Отправка сообщения в Telegram"""
-    try:
-        import requests
-        bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
-        if not bot_token:
-            logger.warning("BOT_TOKEN не настроен")
-            return False
-
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        response = requests.post(url, json={
-            'chat_id': chat_id,
-            'text': text,
-            'parse_mode': 'HTML'
-        }, timeout=10)
-
-        return response.status_code == 200
-
-    except Exception as e:
-        logger.error(f"Ошибка отправки сообщения: {e}")
-        return False
 
 
 @channels_bp.route('/test', methods=['GET'])
