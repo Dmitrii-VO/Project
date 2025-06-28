@@ -598,7 +598,7 @@ def notify_channels_about_completion(offer_id: int, offer_title: str):
 
 
 def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
-    """Получение офферов пользователя"""
+    """Получение офферов пользователя с правильным подсчетом откликов"""
     try:
         # Получаем user_db_id
         user = safe_execute_query(
@@ -612,35 +612,31 @@ def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
             return []
 
         user_db_id = user['id']
+        logger.info(f"Загружаем офферы для пользователя {user_id} (DB ID: {user_db_id})")
 
-        # Формируем запрос
+        # ИСПРАВЛЕННЫЙ запрос с правильным подсчетом откликов
+        base_query = '''
+                     SELECT o.*,
+                            COALESCE(response_stats.response_count, 0) as response_count,
+                            COALESCE(response_stats.accepted_count, 0) as accepted_count
+                     FROM offers o
+                              LEFT JOIN (SELECT offer_id, \
+                                                COUNT(*)                                        as response_count, \
+                                                COUNT(CASE WHEN status = 'accepted' THEN 1 END) as accepted_count \
+                                         FROM offer_responses \
+                                         GROUP BY offer_id) response_stats ON o.id = response_stats.offer_id
+                     WHERE o.created_by = ? \
+                     '''
+
         if status:
-            query = '''
-                    SELECT o.*,
-                           COUNT(DISTINCT or_resp.id)                                                as response_count,
-                           COUNT(DISTINCT CASE WHEN or_resp.status = 'accepted' THEN or_resp.id END) as accepted_count
-                    FROM offers o
-                             LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-                    WHERE o.created_by = ? \
-                      AND o.status = ?
-                    GROUP BY o.id
-                    ORDER BY o.created_at DESC \
-                    '''
+            query = base_query + ' AND o.status = ? ORDER BY o.created_at DESC'
             params = (user_db_id, status)
         else:
-            query = '''
-                    SELECT o.*,
-                           COUNT(DISTINCT or_resp.id)                                                as response_count,
-                           COUNT(DISTINCT CASE WHEN or_resp.status = 'accepted' THEN or_resp.id END) as accepted_count
-                    FROM offers o
-                             LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-                    WHERE o.created_by = ?
-                    GROUP BY o.id
-                    ORDER BY o.created_at DESC \
-                    '''
+            query = base_query + ' ORDER BY o.created_at DESC'
             params = (user_db_id,)
 
         offers = safe_execute_query(query, params, fetch_all=True)
+        logger.info(f"Найдено офферов в БД: {len(offers)}")
 
         # Форматируем данные для фронтенда
         formatted_offers = []
@@ -650,6 +646,9 @@ def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
                 metadata = json.loads(offer.get('metadata', '{}'))
             except:
                 metadata = {}
+
+            response_count = offer.get('response_count', 0)
+            accepted_count = offer.get('accepted_count', 0)
 
             formatted_offer = {
                 'id': offer['id'],
@@ -665,8 +664,8 @@ def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
                 'deadline': offer.get('deadline', ''),
                 'created_at': offer['created_at'],
                 'updated_at': offer['updated_at'],
-                'response_count': offer.get('response_count', 0),
-                'accepted_count': offer.get('accepted_count', 0),
+                'response_count': response_count,  # ИСПРАВЛЕНО: правильный подсчет
+                'accepted_count': accepted_count,
                 'budget_total': float(offer.get('budget_total', 0)),
                 'duration_days': offer.get('duration_days', 30),
                 'min_subscribers': offer.get('min_subscribers', 1),
@@ -675,11 +674,16 @@ def get_user_offers(user_id: int, status: str = None) -> List[Dict[str, Any]]:
             }
             formatted_offers.append(formatted_offer)
 
-        logger.info(f"Получено {len(formatted_offers)} офферов для пользователя {user_id}")
+            # Отладочный лог
+            logger.info(f"Оффер {offer['id']} '{offer['title']}': {response_count} откликов")
+
+        logger.info(f"Возвращаем {len(formatted_offers)} офферов для пользователя {user_id}")
         return formatted_offers
 
     except Exception as e:
         logger.error(f"Ошибка получения офферов пользователя {user_id}: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 
@@ -2128,17 +2132,8 @@ def delete_failed_contract(contract_id, telegram_user_id):
 
 def create_offer_response_with_channel(offer_id, channel_id, user_id, telegram_user_id, message=""):
     """
-    Создание отклика на оффер с выбранным каналом
-
-    Args:
-        offer_id: ID оффера
-        channel_id: ID выбранного канала
-        user_id: ID пользователя в БД
-        telegram_user_id: Telegram ID пользователя
-        message: Сообщение рекламодателю
-
-    Returns:
-        dict: Результат создания отклика
+    Создание отклика на оффер с выбранным каналом - ИСПРАВЛЕННАЯ ВЕРСИЯ
+    Работает с существующей структурой БД БЕЗ column channel_id в offer_responses
     """
     try:
         logger.info(f"🎯 Создание отклика на оффер {offer_id} от канала {channel_id}")
@@ -2152,6 +2147,7 @@ def create_offer_response_with_channel(offer_id, channel_id, user_id, telegram_u
         offer = cursor.fetchone()
 
         if not offer:
+            conn.close()
             return {'success': False, 'error': 'Оффер не найден или неактивен'}
 
         # Проверяем канал
@@ -2166,27 +2162,35 @@ def create_offer_response_with_channel(offer_id, channel_id, user_id, telegram_u
         channel = cursor.fetchone()
 
         if not channel:
+            conn.close()
             return {'success': False, 'error': 'Канал не найден или не верифицирован'}
 
-        # Проверяем, что не откликались ранее
+        # ✅ ИСПРАВЛЕНИЕ: Проверяем дубликаты по channel_username вместо channel_id
         cursor.execute('''
                        SELECT id
                        FROM offer_responses
                        WHERE offer_id = ?
-                         AND channel_id = ?
-                       ''', (offer_id, channel_id))
+                         AND channel_username = ?
+                         AND user_id = ?
+                       ''', (offer_id, channel['username'], user_id))
 
         if cursor.fetchone():
+            conn.close()
             return {'success': False, 'error': 'Вы уже откликались на этот оффер данным каналом'}
 
-        # Создаем отклик
+        # ✅ ИСПРАВЛЕНИЕ: Создаем отклик БЕЗ channel_id (используем существующую структуру БД)
         cursor.execute('''
-                       INSERT INTO offer_responses (offer_id, channel_id, channel_title, channel_username,
-                                                    channel_subscribers, message, status, created_at)
-                       VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+                       INSERT INTO offer_responses (offer_id, user_id, channel_id, channel_title, channel_username,
+                                                    channel_subscribers, message, status, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                        ''', (
-                           offer_id, channel_id, channel['title'], channel['username'],
-                           channel['subscriber_count'], message
+                           offer_id,
+                           user_id,
+                           channel_id,  # ✅ ДОБАВЛЯЕМ channel_id
+                           channel['title'],
+                           channel['username'],
+                           channel['subscriber_count'] or 0,
+                           message
                        ))
 
         response_id = cursor.lastrowid
@@ -2195,14 +2199,17 @@ def create_offer_response_with_channel(offer_id, channel_id, user_id, telegram_u
         conn.close()
 
         # Отправляем уведомление рекламодателю
-        send_offer_notification(offer_id, 'new_response', {
-            'response_id': response_id,
-            'channel_title': channel['title'],
-            'channel_username': channel['username'],
-            'channel_subscribers': channel['subscriber_count'],
-            'responder_name': f"Пользователь {telegram_user_id}",
-            'message': message
-        })
+        try:
+            send_offer_notification(offer_id, 'new_response', {
+                'response_id': response_id,
+                'channel_title': channel['title'],
+                'channel_username': channel['username'],
+                'channel_subscribers': channel['subscriber_count'] or 0,
+                'responder_name': f"Пользователь {telegram_user_id}",
+                'message': message
+            })
+        except Exception as notification_error:
+            logger.warning(f"Ошибка отправки уведомления: {notification_error}")
 
         logger.info(f"✅ Отклик {response_id} создан успешно")
 
@@ -2215,7 +2222,6 @@ def create_offer_response_with_channel(offer_id, channel_id, user_id, telegram_u
     except Exception as e:
         logger.error(f"Ошибка создания отклика: {e}")
         return {'success': False, 'error': str(e)}
-
 
 def accept_offer_response(response_id, telegram_user_id):
     """

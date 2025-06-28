@@ -12,7 +12,7 @@ import sqlite3
 
 DATABASE_PATH = 'telegram_mini_app.db'
 logger = logging.getLogger(__name__)
-offers_bp = Blueprint('offers', __name__, url_prefix='/api/offers')
+offers_bp = Blueprint('offers', __name__)
 
 
 def get_user_id_from_request():
@@ -867,15 +867,51 @@ def respond_to_offer(offer_id):
 
         try:
             sys.path.insert(0, os.getcwd())
-            from add_offer import create_offer_response_with_channel
 
-            result = create_offer_response_with_channel(
-                offer_id=offer_id,
-                channel_id=channel_id,
-                user_id=user_db_id,
-                telegram_user_id=telegram_user_id,
-                message=message
-            )
+            # Используем старую структуру БД без channel_id
+            # Получаем данные канала для совместимости со старой структурой
+            channel_data = {
+                'channel_title': channel['title'],
+                'channel_username': channel['username'],
+                'channel_subscribers': channel['subscriber_count'] or 0,
+                'message': message
+            }
+
+            # Создаем отклик напрямую в БД без использования channel_id
+            import sqlite3
+            from datetime import datetime
+
+            DATABASE_PATH = 'telegram_mini_app.db'
+            conn = sqlite3.connect(DATABASE_PATH)
+            cursor = conn.cursor()
+
+            # Создаем отклик в старой структуре БД
+            cursor.execute('''
+                           INSERT INTO offer_responses (offer_id, user_id, message, status,
+                                                        channel_title, channel_username, channel_subscribers,
+                                                        created_at, updated_at)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           ''', (
+                               offer_id,
+                               user_db_id,
+                               message,
+                               'pending',
+                               channel_data['channel_title'],
+                               channel_data['channel_username'],
+                               channel_data['channel_subscribers'],
+                               datetime.now().isoformat(),
+                               datetime.now().isoformat()
+                           ))
+
+            response_id = cursor.lastrowid
+            conn.commit()
+            conn.close()
+
+            result = {
+                'success': True,
+                'message': 'Отклик успешно отправлен',
+                'response_id': response_id
+            }
 
             if result['success']:
                 logger.info(f"Создан отклик на оффер {offer_id} от канала {channel_id}")
@@ -894,7 +930,6 @@ def respond_to_offer(offer_id):
         logger.error(f"Ошибка создания отклика на оффер {offer_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
-
 @offers_bp.route('/<int:offer_id>/responses', methods=['GET'])
 def get_offer_responses_api(offer_id):
     """Получение откликов на оффер с подробной информацией"""
@@ -903,64 +938,70 @@ def get_offer_responses_api(offer_id):
         if not telegram_user_id:
             return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
 
-        # Проверяем права доступа к офферу
+        logger.info(f"Запрос откликов для оффера {offer_id} от пользователя {telegram_user_id}")
+
+        # ИСПРАВЛЕННЫЙ запрос: Проверяем права доступа к офферу
         offer = db_manager.execute_query(
             '''SELECT o.*, u.telegram_id as owner_telegram_id
                FROM offers o
-                        JOIN users u ON o.user_id = u.id
+                        JOIN users u ON o.created_by = u.id
                WHERE o.id = ?''',
             (offer_id,),
             fetch_one=True
         )
 
         if not offer:
+            logger.warning(f"Оффер {offer_id} не найден")
             return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
 
+        logger.info(f"Оффер найден: {offer['title']}, владелец: {offer['owner_telegram_id']}")
+
         if offer['owner_telegram_id'] != telegram_user_id:
+            logger.warning(f"Нет доступа к офферу {offer_id}: владелец {offer['owner_telegram_id']}, запрос от {telegram_user_id}")
             return jsonify({'success': False, 'error': 'Нет доступа к этому офферу'}), 403
 
-        # Получаем отклики с подробной информацией
+        # ИСПРАВЛЕННЫЙ запрос откликов: используем существующие поля из offer_responses
         responses = db_manager.execute_query(
             '''SELECT or_resp.*,
-                      c.title                                          as channel_title,
-                      c.username                                       as channel_username,
-                      c.subscriber_count                               as channel_subscribers,
-                      c.description                                    as channel_description,
-                      c.category                                       as channel_category,
                       u.first_name || ' ' || COALESCE(u.last_name, '') as channel_owner_name,
-                      u.username                                       as channel_owner_username
+                      u.username as channel_owner_username,
+                      u.telegram_id as channel_owner_telegram_id
                FROM offer_responses or_resp
-                        JOIN channels c ON or_resp.channel_id = c.id
-                        JOIN users u ON c.owner_id = u.id
+                        JOIN users u ON or_resp.user_id = u.id
                WHERE or_resp.offer_id = ?
                ORDER BY or_resp.created_at DESC''',
             (offer_id,),
             fetch_all=True
         )
 
+        logger.info(f"Найдено откликов: {len(responses)}")
+
         # Форматируем данные для фронтенда
         formatted_responses = []
         for response in responses:
-            formatted_responses.append({
+            formatted_response = {
                 'id': response['id'],
                 'offer_id': response['offer_id'],
-                'channel_id': response['channel_id'],
+                'user_id': response['user_id'],
                 'status': response['status'],
                 'message': response['message'],
                 'created_at': response['created_at'],
                 'updated_at': response['updated_at'],
 
-                # Информация о канале
-                'channel_title': response['channel_title'],
-                'channel_username': response['channel_username'],
-                'channel_subscribers': response['channel_subscribers'],
-                'channel_description': response['channel_description'],
-                'channel_category': response['channel_category'],
+                # Информация о канале (из полей offer_responses)
+                'channel_title': response.get('channel_title', 'Канал без названия'),
+                'channel_username': response.get('channel_username', 'unknown'),
+                'channel_subscribers': response.get('channel_subscribers', 0),
+                'channel_description': '',  # Пустое значение для совместимости
+                'channel_category': '',     # Пустое значение для совместимости
 
                 # Информация о владельце канала
-                'channel_owner_name': response['channel_owner_name'].strip(),
-                'channel_owner_username': response['channel_owner_username']
-            })
+                'channel_owner_name': response['channel_owner_name'].strip() if response['channel_owner_name'] else 'Пользователь',
+                'channel_owner_username': response['channel_owner_username'] or '',
+                'channel_owner_telegram_id': response['channel_owner_telegram_id']
+            }
+            formatted_responses.append(formatted_response)
+            logger.debug(f"Обработан отклик {response['id']}: {formatted_response['channel_title']}")
 
         return jsonify({
             'success': True,
@@ -975,7 +1016,9 @@ def get_offer_responses_api(offer_id):
 
     except Exception as e:
         logger.error(f"Ошибка получения откликов для оффера {offer_id}: {e}")
-        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Внутренняя ошибка сервера: {str(e)}'}), 500
 
 
 @offers_bp.route('/responses/<int:response_id>/status', methods=['PATCH'])
@@ -1257,6 +1300,89 @@ def get_response_details(response_id):
         logger.error(f"Ошибка получения деталей отклика {response_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
+
+@offers_bp.route('/debug/responses-raw/<int:offer_id>', methods=['GET'])
+def debug_responses_raw(offer_id):
+    """Отладка: сырые данные откликов"""
+    try:
+        # Проверяем оффер
+        offer = db_manager.execute_query(
+            'SELECT id, title, created_by FROM offers WHERE id = ?',
+            (offer_id,),
+            fetch_one=True
+        )
+
+        # Получаем все отклики
+        responses = db_manager.execute_query(
+            'SELECT * FROM offer_responses WHERE offer_id = ?',
+            (offer_id,),
+            fetch_all=True
+        )
+
+        # Проверяем пользователя-владельца
+        if offer:
+            owner = db_manager.execute_query(
+                'SELECT telegram_id FROM users WHERE id = ?',
+                (offer['created_by'],),
+                fetch_one=True
+            )
+        else:
+            owner = None
+
+        return jsonify({
+            'success': True,
+            'offer_id': offer_id,
+            'offer_data': offer,
+            'offer_owner': owner,
+            'responses_count': len(responses),
+            'responses_raw': responses,
+            'current_user': get_user_id_from_request()
+        })
+
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        })
+
+
+@offers_bp.route('/debug/responses-count/<int:offer_id>', methods=['GET'])
+def debug_responses_count(offer_id):
+    """Отладка подсчета откликов для оффера"""
+    try:
+        # Прямой подсчет откликов
+        direct_count = db_manager.execute_query(
+            'SELECT COUNT(*) as count FROM offer_responses WHERE offer_id = ?',
+            (offer_id,),
+            fetch_one=True
+        )
+
+        # Подсчет через LEFT JOIN (как в get_user_offers)
+        join_count = db_manager.execute_query(
+            '''SELECT o.id, o.title, COUNT(DISTINCT or_resp.id) as response_count
+               FROM offers o
+                        LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
+               WHERE o.id = ?
+               GROUP BY o.id, o.title''',
+            (offer_id,),
+            fetch_one=True
+        )
+
+        return jsonify({
+            'success': True,
+            'offer_id': offer_id,
+            'direct_count': direct_count['count'] if direct_count else 0,
+            'join_count': join_count['response_count'] if join_count else 0,
+            'join_data': join_count
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
 
 def send_contract_notification(contract_id, notification_type, extra_data=None):
     """Отправка уведомлений по контрактам"""

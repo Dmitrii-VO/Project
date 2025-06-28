@@ -199,6 +199,7 @@ def create_app() -> Flask:
     return app
 
 
+
 # === ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ===
 def init_database(app: Flask) -> None:
     """Инициализация базы данных"""
@@ -226,12 +227,12 @@ def register_blueprints(app: Flask) -> None:
     try:
         print("📦 Начинаем регистрацию Blueprint'ов...")
 
-        # Ручная регистрация только работающих Blueprint'ов
+        # ИСПРАВЛЕННЫЙ список Blueprint'ов
         blueprint_modules = [
             ('app.routers.main_router', 'main_bp', ''),
             ('app.routers.api_router', 'api_bp', '/api'),
             ('app.api.channels', 'channels_bp', '/api/channels'),
-            ('app.api.offers', 'offers_bp', '/api/offers'),  # ← ВАЖНО!
+            ('app.api.offers', 'offers_bp', '/api/offers'),  # ← ПРОБЛЕМА ЗДЕСЬ!
             ('app.routers.analytics_router', 'analytics_bp', '/api/analytics'),
             ('app.routers.payment_router', 'payment_bp', '/api/payments'),
         ]
@@ -240,14 +241,25 @@ def register_blueprints(app: Flask) -> None:
             try:
                 print(f"📋 Загружаем {blueprint_name} из {module_name}...")
 
-                module = __import__(module_name, fromlist=[blueprint_name])
-                blueprint = getattr(module, blueprint_name)
+                # ИСПРАВЛЕНИЕ: Прямой импорт без __import__
+                if module_name == 'app.api.offers':
+                    from app.api.offers import offers_bp as blueprint
+                elif module_name == 'app.api.channels':
+                    from app.api.channels import channels_bp as blueprint
+                elif module_name == 'app.routers.main_router':
+                    from app.routers.main_router import main_bp as blueprint
+                elif module_name == 'app.routers.api_router':
+                    from app.routers.api_router import api_bp as blueprint
+                else:
+                    # Для остальных используем __import__
+                    module = __import__(module_name, fromlist=[blueprint_name])
+                    blueprint = getattr(module, blueprint_name)
+
                 app.register_blueprint(blueprint, url_prefix=url_prefix)
                 blueprints_registered += 1
 
                 prefix_display = url_prefix if url_prefix else "/"
                 print(f"✅ {blueprint_name} зарегистрирован: {prefix_display}")
-                logger.debug(f"✅ Blueprint зарегистрирован: {blueprint_name} -> {prefix_display}")
 
             except ImportError as e:
                 print(f"❌ Не удалось импортировать {module_name}: {e}")
@@ -255,36 +267,31 @@ def register_blueprints(app: Flask) -> None:
 
             except AttributeError as e:
                 print(f"❌ Blueprint {blueprint_name} не найден в {module_name}: {e}")
-                logger.warning(f"Blueprint not found: {blueprint_name} in {module_name}")
 
             except Exception as e:
                 print(f"❌ Ошибка регистрации {blueprint_name}: {e}")
-                logger.error(f"Registration error for {blueprint_name}: {e}")
 
         print(f"📦 Итого зарегистрировано Blueprint'ов: {blueprints_registered}")
-        logger.info(f"📦 Зарегистрировано Blueprint'ов: {blueprints_registered}")
 
-        # Отладочная проверка маршрутов
-        print("\n🔍 ПРОВЕРЯЕМ ЗАРЕГИСТРИРОВАННЫЕ МАРШРУТЫ:")
+        # КРИТИЧЕСКАЯ ПРОВЕРКА маршрутов offers
+        print("\n🔍 ПРОВЕРЯЕМ МАРШРУТЫ /api/offers:")
         offers_routes = []
         for rule in app.url_map.iter_rules():
             if '/api/offers' in rule.rule:
                 methods = ','.join(rule.methods - {'HEAD', 'OPTIONS'})
                 offers_routes.append(f"{rule.rule} [{methods}]")
-                print(f"✅ {rule.rule:40} {methods:15}")
+                print(f"✅ {rule.rule:50} {methods:15}")
 
-        if offers_routes:
-            print(f"📋 Найдено {len(offers_routes)} маршрутов для /api/offers")
-        else:
-            print("❌ Маршруты /api/offers НЕ найдены!")
+        if not offers_routes:
+            print("❌ КРИТИЧЕСКАЯ ОШИБКА: Маршруты /api/offers НЕ найдены!")
+            logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: offers_bp не зарегистрирован!")
 
         # Проверяем Blueprint'ы
         print(f"\n📦 Зарегистрированные Blueprint'ы: {list(app.blueprints.keys())}")
 
-        if 'offers' in app.blueprints:
-            print("✅ offers_bp найден в app.blueprints")
-        else:
-            print("❌ offers_bp НЕ найден в app.blueprints!")
+        if 'offers' not in app.blueprints:
+            print("❌ КРИТИЧЕСКАЯ ОШИБКА: offers_bp НЕ найден в app.blueprints!")
+            raise Exception("offers_bp не зарегистрирован!")
 
     except Exception as e:
         print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
@@ -737,7 +744,6 @@ def verify_channel_unified(channel_id, datetime=None):
             }
         }), 500
 
-
 @app.route('/api/channels', methods=['GET'])
 def get_channels_real():
     """Получить каналы пользователя"""
@@ -1074,6 +1080,25 @@ def debug_offers_test():
             'traceback': traceback.format_exc()
         })
 
+@app.route('/debug/check-offers-routes', methods=['GET'])
+def debug_check_offers_routes():
+    """Проверка регистрации маршрутов offers"""
+    offers_routes = []
+
+    for rule in app.url_map.iter_rules():
+        if '/api/offers' in rule.rule:
+            offers_routes.append({
+                'rule': rule.rule,
+                'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
+                'endpoint': rule.endpoint
+            })
+
+    return jsonify({
+        'offers_routes_found': len(offers_routes),
+        'routes': offers_routes,
+        'blueprints_registered': list(app.blueprints.keys()),
+        'offers_bp_registered': 'offers' in app.blueprints
+    })
 
 # ТАКЖЕ ДОБАВИТЬ проверку импорта при запуске:
 
