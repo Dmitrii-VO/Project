@@ -68,28 +68,46 @@ def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, 
 
 
 def validate_offer_data(data: Dict[str, Any]) -> List[str]:
-    """Валидация данных оффера"""
+    """Валидация данных оффера - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     errors = []
 
     # Проверка обязательных полей
     if not data.get('title', '').strip():
         errors.append('Название оффера обязательно')
 
-    if not data.get('description', '').strip() and not data.get('content', '').strip():
+    # ИСПРАВЛЕНИЕ: Проверяем и description, и content
+    description = data.get('description', '').strip()
+    content = data.get('content', '').strip()
+
+    if not description and not content:
         errors.append('Описание оффера обязательно')
 
-    if not data.get('price') or float(data.get('price', 0)) <= 0:
-        errors.append('Цена должна быть больше 0')
+    # ИСПРАВЛЕНИЕ: Более гибкая проверка цены
+    price = data.get('price', 0)
+    budget_total = data.get('budget_total', 0)
+    max_price = data.get('max_price', 0)
+
+    # Пытаемся найти хотя бы одно значение цены
+    final_price = 0
+    if price and float(price) > 0:
+        final_price = float(price)
+    elif max_price and float(max_price) > 0:
+        final_price = float(max_price)
+    elif budget_total and float(budget_total) > 0:
+        # Используем 10% от общего бюджета как цену за размещение
+        final_price = min(float(budget_total) * 0.1, 50000)
+
+    if final_price <= 0:
+        errors.append('Укажите цену за размещение или общий бюджет')
 
     # Проверка длины полей
     title = data.get('title', '').strip()
-    if len(title) < 5 or len(title) > 200:
+    if title and (len(title) < 5 or len(title) > 200):
         errors.append('Название должно быть от 5 до 200 символов')
 
     # Проверка цены
     try:
-        price = float(data.get('price', 0))
-        if price < 10 or price > 1000000:
+        if final_price < 10 or final_price > 1000000:
             errors.append('Цена должна быть от 10 до 1,000,000 рублей')
     except (ValueError, TypeError):
         errors.append('Некорректная цена')
@@ -167,18 +185,35 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
             offer_data.get('first_name')
         )
 
-        # Подготовка данных для вставки
+        # ИСПРАВЛЕНИЕ: Подготовка данных для вставки
         title = offer_data['title'].strip()
         description = offer_data.get('description', '').strip()
         content = offer_data.get('content', '').strip()
 
-        # Если нет description, создаем из content
+        # ИСПРАВЛЕНИЕ: Более умная логика для description и content
         if not description and content:
             description = content[:200] + "..." if len(content) > 200 else content
         elif not description:
             description = title  # Fallback к title
 
-        price = float(offer_data['price'])
+        # Если нет content, используем description
+        if not content:
+            content = description
+
+        # ИСПРАВЛЕНИЕ: Правильная обработка цены с fallback логикой
+        price = 0
+        if 'price' in offer_data and offer_data['price']:
+            price = float(offer_data['price'])
+        elif 'max_price' in offer_data and offer_data['max_price']:
+            price = float(offer_data['max_price'])
+        elif 'budget_total' in offer_data and offer_data['budget_total']:
+            # Используем 10% от общего бюджета как цену за размещение
+            budget_total_temp = float(offer_data['budget_total'])
+            price = min(budget_total_temp * 0.1, 50000)
+        else:
+            # Если вообще ничего нет, ошибка должна была быть поймана в валидации
+            price = 1000  # Fallback значение
+
         currency = offer_data.get('currency', 'RUB').upper()
         category = offer_data.get('category', 'general')
 
@@ -187,7 +222,12 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
         requirements = offer_data.get('requirements', '').strip()
         duration_days = int(offer_data.get('duration_days', 30))
 
-        # Метаданные оффера
+        # ИСПРАВЛЕНИЕ: Обработка budget_total
+        budget_total = float(offer_data.get('budget_total', price))
+        if budget_total < price:
+            budget_total = price  # Общий бюджет не может быть меньше цены за размещение
+
+        # ИСПРАВЛЕНИЕ: Расширенные метаданные оффера
         metadata = {
             'contact_info': offer_data.get('contact_info', ''),
             'preferred_channels': offer_data.get('preferred_channels', []),
@@ -196,9 +236,20 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
             'age_targeting': offer_data.get('age_targeting', ''),
             'posting_time': offer_data.get('posting_time', ''),
             'additional_requirements': offer_data.get('additional_requirements', ''),
+            'topics': offer_data.get('topics', ''),  # ДОБАВЛЕНО
+            'geography': offer_data.get('geography', ''),  # ДОБАВЛЕНО
             'created_via': 'web_interface',
-            'category': category
+            'category': category,
+            'original_data': {  # ДОБАВЛЕНО: сохраняем оригинальные данные для отладки
+                'max_price': offer_data.get('max_price'),
+                'budget_total': offer_data.get('budget_total'),
+                'price': offer_data.get('price')
+            }
         }
+
+        # ДОБАВЛЕНО: Отладочная информация
+        logger.info(f"DEBUG: Подготовленные данные - price: {price}, budget_total: {budget_total}, currency: {currency}")
+        logger.info(f"DEBUG: title: {title}, description: {description[:50]}...")
 
         # Расчет дат
         current_time = datetime.now()
@@ -208,7 +259,6 @@ def add_offer(user_id: int, offer_data: Dict[str, Any]) -> Dict[str, Any]:
         # Параметры подписчиков
         min_subscribers = int(offer_data.get('min_subscribers', 1))
         max_subscribers = int(offer_data.get('max_subscribers', 100000000))
-        budget_total = float(offer_data.get('budget_total', price))
 
         # Вставка оффера в базу данных
         offer_id = safe_execute_query('''
@@ -2571,6 +2621,7 @@ def register_offer_routes(app):
         """API для создания нового оффера"""
         try:
             data = request.get_json()
+            print(f"DEBUG: Получены данные от клиента: {data}")
             if not data:
                 return jsonify({'success': False, 'error': 'Нет данных'}), 400
 
@@ -2586,7 +2637,7 @@ def register_offer_routes(app):
 
             # Создаем оффер
             result = add_offer(user_id, data)
-
+            print(f"DEBUG: Результат add_offer: {result}")
             if result['success']:
                 return jsonify(result), 201
             else:

@@ -677,15 +677,15 @@ class OffersManager {
             submitBtn.textContent = '⏳ Создание...';
         }
 
-        // Собираем данные формы
+        // ИСПРАВЛЕНИЕ: Собираем данные в формате, который ожидает бэкенд
         const data = {
+            // Обязательные поля согласно валидации в add_offer.py
             title: '',
             description: '',
-            budget_total: 0,
-            price: 0,
-            max_price: 0,  // ДОБАВИЛИ поле max_price
+            price: 0,  // ИСПРАВЛЕНО: используем price вместо budget_total
             currency: 'RUB',
-            category: 'general'
+            category: 'general',
+            content: ''  // ДОБАВЛЕНО: обязательное поле
         };
 
         // Название
@@ -700,37 +700,37 @@ class OffersManager {
         const descField = document.querySelector('textarea[name="description"]');
         if (descField && descField.value) {
             data.description = descField.value.trim();
+            data.content = descField.value.trim(); // ИСПРАВЛЕНО: дублируем в content
         } else {
             throw new Error('Укажите описание оффера');
         }
 
-        // Общий бюджет
-        const budgetField = document.querySelector('input[name="budget"]');
-        if (budgetField && budgetField.value) {
-            const budgetValue = parseFloat(budgetField.value);
-            if (budgetValue > 0) {
-                data.budget_total = budgetValue;
-            } else {
-                throw new Error('Укажите корректный общий бюджет');
-            }
-        } else {
-            throw new Error('Укажите общий бюджет');
-        }
-
-        // ИСПРАВЛЕНИЕ: Максимальная цена за размещение
+        // ИСПРАВЛЕНИЕ: Используем максимальную цену за размещение как основную цену
         const maxPriceField = document.querySelector('input[name="max_price"]');
+        const budgetField = document.querySelector('input[name="budget"]');
+
         if (maxPriceField && maxPriceField.value) {
             const maxPriceValue = parseFloat(maxPriceField.value);
             if (maxPriceValue > 0) {
-                data.max_price = maxPriceValue;
-                data.price = maxPriceValue; // Также сохраняем в price для совместимости
+                data.price = maxPriceValue;
             } else {
                 throw new Error('Укажите корректную максимальную цену за размещение');
             }
-        } else {
+        } else if (budgetField && budgetField.value) {
             // Если максимальная цена не указана, используем 10% от общего бюджета
-            data.max_price = Math.min(data.budget_total * 0.1, 50000);
-            data.price = data.max_price;
+            const budgetValue = parseFloat(budgetField.value);
+            if (budgetValue > 0) {
+                data.price = Math.min(budgetValue * 0.1, 50000);
+            } else {
+                throw new Error('Укажите корректный бюджет');
+            }
+        } else {
+            throw new Error('Укажите общий бюджет или максимальную цену за размещение');
+        }
+
+        // ДОПОЛНИТЕЛЬНЫЕ ПОЛЯ для совместимости с существующей логикой
+        if (budgetField && budgetField.value) {
+            data.budget_total = parseFloat(budgetField.value);
         }
 
         // Категория
@@ -739,9 +739,27 @@ class OffersManager {
             data.category = categoryField.value;
         }
 
-        data.content = data.description;
+        // Дополнительные поля
+        const geographySelect = document.querySelector('select[name="geography"]');
+        if (geographySelect && geographySelect.value) {
+            data.geography = geographySelect.value;
+        }
 
-        console.log('🚀 Отправляемые данные:', data);
+        const subscribersRange = document.querySelector('input[name="min_subscribers"]');
+        if (subscribersRange && subscribersRange.value) {
+            data.min_subscribers = parseInt(subscribersRange.value);
+        }
+
+        // Собираем выбранные чипы для тематик и аудитории
+        const selectedChips = Array.from(document.querySelectorAll('.chip.selected'))
+            .map(chip => chip.textContent.trim());
+
+        if (selectedChips.length > 0) {
+            data.topics = selectedChips.join(', ');
+            data.target_audience = selectedChips.join(', ');
+        }
+
+        console.log('🚀 Отправляемые данные (исправленные):', data);
 
         const response = await fetch('/api/offers', {
             method: 'POST',
@@ -752,7 +770,9 @@ class OffersManager {
             body: JSON.stringify(data)
         });
 
+        console.log('📥 Статус ответа:', response.status);
         const result = await response.json();
+        console.log('📋 Результат API:', result);
 
         if (response.ok && result.success) {
             alert('✅ Оффер успешно создан!');
@@ -769,7 +789,7 @@ class OffersManager {
             // Переходим к списку офферов
             switchTab('my-offers');
         } else {
-            throw new Error(result.error || 'Ошибка создания оффера');
+            throw new Error(result.error || result.errors?.join(', ') || 'Ошибка создания оффера');
         }
 
     } catch (error) {
