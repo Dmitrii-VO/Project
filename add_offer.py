@@ -2,9 +2,13 @@
 import sqlite3
 import json
 import logging
+import time
+import hashlib
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional
 import os
+
+import requests
 
 try:
     from flask import request, jsonify
@@ -884,6 +888,1668 @@ def get_available_offers(filters=None):
         import traceback
         traceback.print_exc()
         return []
+
+
+def create_offer_response(offer_id, user_id, channel_info, message=""):
+    """
+    Создание отклика на оффер
+
+    Args:
+        offer_id: ID оффера
+        user_id: Telegram ID пользователя (владельца канала)
+        channel_info: Информация о канале
+        message: Сообщение от владельца канала
+
+    Returns:
+        dict: Результат операции
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        # Проверяем, существует ли оффер
+        cursor.execute('SELECT * FROM offers WHERE id = ? AND status = "active"', (offer_id,))
+        offer = cursor.fetchone()
+
+        if not offer:
+            return {'success': False, 'error': 'Оффер не найден или неактивен'}
+
+        # Получаем или создаем пользователя в БД
+        cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (user_id,))
+        user_row = cursor.fetchone()
+
+        if not user_row:
+            # Создаем пользователя если не существует
+            cursor.execute('''
+                           INSERT INTO users (telegram_id, first_name, created_at)
+                           VALUES (?, ?, ?)
+                           ''', (user_id, 'Пользователь', datetime.now().isoformat()))
+            user_db_id = cursor.lastrowid
+        else:
+            user_db_id = user_row[0]
+
+        # Проверяем, не откликался ли уже этот пользователь
+        cursor.execute('''
+                       SELECT id
+                       FROM offer_responses
+                       WHERE offer_id = ?
+                         AND user_id = ?
+                       ''', (offer_id, user_db_id))
+
+        existing_response = cursor.fetchone()
+        if existing_response:
+            return {'success': False, 'error': 'Вы уже откликнулись на этот оффер'}
+
+        # Создаем отклик
+        cursor.execute('''
+                       INSERT INTO offer_responses (offer_id, user_id, message, status,
+                                                    channel_username, channel_title, channel_subscribers,
+                                                    created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                       ''', (
+                           offer_id, user_db_id, message, 'pending',
+                           channel_info.get('username', ''),
+                           channel_info.get('title', ''),
+                           channel_info.get('subscribers', 0),
+                           datetime.now().isoformat()
+                       ))
+
+        response_id = cursor.lastrowid
+
+        # Обновляем количество откликов в оффере
+        cursor.execute('''
+                       UPDATE offers
+                       SET response_count = (SELECT COUNT(*)
+                                             FROM offer_responses
+                                             WHERE offer_id = ?)
+                       WHERE id = ?
+                       ''', (offer_id, offer_id))
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомление автору оффера
+        send_offer_notification(offer_id, response_id, 'new_response')
+
+        logger.info(f"Создан отклик {response_id} на оффер {offer_id} от пользователя {user_id}")
+
+        return {
+            'success': True,
+            'response_id': response_id,
+            'message': 'Отклик успешно отправлен! Автор оффера получил уведомление.'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка создания отклика: {e}")
+        return {'success': False, 'error': f'Ошибка создания отклика: {str(e)}'}
+
+
+def get_offer_responses(offer_id, user_id=None):
+    """Получение откликов на оффер"""
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Проверяем права доступа (только автор оффера может видеть отклики)
+        if user_id:
+            cursor.execute('''
+                           SELECT u.id
+                           FROM offers o
+                                    JOIN users u ON o.created_by = u.id
+                           WHERE o.id = ?
+                             AND u.telegram_id = ?
+                           ''', (offer_id, user_id))
+
+            if not cursor.fetchone():
+                return {'success': False, 'error': 'Нет доступа к откликам'}
+
+        # Получаем отклики
+        cursor.execute('''
+                       SELECT or_resp.*,
+                              u.first_name,
+                              u.last_name,
+                              u.username as user_username
+                       FROM offer_responses or_resp
+                                JOIN users u ON or_resp.user_id = u.id
+                       WHERE or_resp.offer_id = ?
+                       ORDER BY or_resp.created_at DESC
+                       ''', (offer_id,))
+
+        rows = cursor.fetchall()
+
+        responses = []
+        for row in rows:
+            # Формируем имя пользователя
+            user_name = ""
+            if row['first_name']:
+                user_name += row['first_name']
+            if row['last_name']:
+                user_name += f" {row['last_name']}"
+            if not user_name and row['user_username']:
+                user_name = f"@{row['user_username']}"
+            if not user_name:
+                user_name = "Пользователь"
+
+            response = {
+                'id': row['id'],
+                'offer_id': row['offer_id'],
+                'user_id': row['user_id'],
+                'user_name': user_name,
+                'message': row['message'],
+                'status': row['status'],
+                'channel_username': row['channel_username'],
+                'channel_title': row['channel_title'],
+                'channel_subscribers': row['channel_subscribers'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at']
+            }
+            responses.append(response)
+
+        conn.close()
+
+        return {
+            'success': True,
+            'responses': responses,
+            'count': len(responses)
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка получения откликов: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def update_response_status(response_id, new_status, user_id, message=""):
+    """Обновление статуса отклика (принять/отклонить)"""
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Проверяем права доступа
+        cursor.execute('''
+                       SELECT or_resp.*, o.created_by, u.telegram_id as author_telegram_id
+                       FROM offer_responses or_resp
+                                JOIN offers o ON or_resp.offer_id = o.id
+                                JOIN users u ON o.created_by = u.id
+                       WHERE or_resp.id = ?
+                       ''', (response_id,))
+
+        response_row = cursor.fetchone()
+        if not response_row:
+            return {'success': False, 'error': 'Отклик не найден'}
+
+        if response_row['author_telegram_id'] != user_id:
+            return {'success': False, 'error': 'Нет прав для изменения статуса'}
+
+        # Обновляем статус
+        cursor.execute('''
+                       UPDATE offer_responses
+                       SET status        = ?,
+                           updated_at    = ?,
+                           admin_message = ?
+                       WHERE id = ?
+                       ''', (new_status, datetime.now().isoformat(), message, response_id))
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомление отвечающему
+        send_response_notification(response_id, new_status)
+
+        logger.info(f"Статус отклика {response_id} изменен на {new_status}")
+
+        return {
+            'success': True,
+            'message': f'Отклик {new_status}. Пользователь получил уведомление.'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка обновления статуса отклика: {e}")
+        return {'success': False, 'error': str(e)}
+
+# Заменить/дополнить функцию verify_placement() в add_offer.py
+
+def verify_placement(contract_id):
+    """
+    Проверка размещения рекламы по контракту
+
+    Args:
+        contract_id: ID контракта для проверки
+
+    Returns:
+        dict: Результат проверки
+    """
+    try:
+        logger.info(f"🔍 Проверка размещения для контракта {contract_id}")
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем данные контракта
+        cursor.execute('''
+                       SELECT c.*,
+                              o.title       as offer_title,
+                              o.description as offer_description,
+                              o.post_requirements,
+                              or_resp.channel_username,
+                              or_resp.channel_title
+                       FROM contracts c
+                                JOIN offers o ON c.offer_id = o.id
+                                JOIN offer_responses or_resp ON c.response_id = or_resp.id
+                       WHERE c.id = ?
+                       ''', (contract_id,))
+
+        contract = cursor.fetchone()
+
+        if not contract:
+            return {'success': False, 'error': 'Контракт не найден'}
+
+        if not contract['post_url']:
+            return {'success': False, 'error': 'URL поста не указан'}
+
+        # Извлекаем информацию о посте из URL
+        post_info = extract_post_info_from_url(contract['post_url'])
+        if not post_info['success']:
+            return {'success': False, 'error': post_info['error']}
+
+        channel_username = post_info['channel_username']
+        message_id = post_info['message_id']
+
+        # Проверяем пост через Telegram API
+        verification_result = check_telegram_post(
+            channel_username,
+            message_id,
+            contract['offer_description']  # Ожидаемый контент
+        )
+
+        if verification_result['success']:
+            # Пост найден и соответствует требованиям
+            new_status = 'monitoring'
+
+            # Обновляем статус контракта
+            cursor.execute('''
+                           UPDATE contracts
+                           SET status               = ?,
+                               verification_passed  = ?,
+                               verification_details = ?,
+                               verified_at          = ?
+                           WHERE id = ?
+                           ''', (
+                               new_status, True, verification_result['details'],
+                               datetime.now().isoformat(), contract_id
+                           ))
+
+            # Запускаем мониторинг
+            schedule_monitoring(contract_id)
+
+            message = "✅ Размещение проверено и подтверждено! Начат мониторинг."
+
+        else:
+            # Пост не найден или не соответствует
+            new_status = 'verification_failed'
+            cursor.execute('''
+                           UPDATE contracts
+                           SET status               = ?,
+                               verification_passed  = ?,
+                               verification_details = ?
+                           WHERE id = ?
+                           ''', (
+                               new_status, False, verification_result['error'], contract_id
+                           ))
+
+            message = f"❌ Проверка не пройдена: {verification_result['error']}"
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомления
+        send_contract_notification(contract_id, 'verification_result', {
+            'status': new_status,
+            'message': message
+        })
+
+        logger.info(f"Проверка контракта {contract_id}: {new_status}")
+
+        return {
+            'success': True,
+            'status': new_status,
+            'message': message,
+            'details': verification_result
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки размещения: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def extract_post_info_from_url(post_url):
+    """
+    Извлечение информации о посте из Telegram URL
+
+    Args:
+        post_url: URL поста (https://t.me/channel/123)
+
+    Returns:
+        dict: Информация о посте
+    """
+    try:
+        import re
+
+        # Паттерны для разных типов URL
+        patterns = [
+            r'https://t\.me/([^/]+)/(\d+)',  # https://t.me/channel/123
+            r'https://t\.me/c/(\d+)/(\d+)',  # https://t.me/c/1234567890/123
+        ]
+
+        for pattern in patterns:
+            match = re.match(pattern, post_url)
+            if match:
+                channel_identifier = match.group(1)
+                message_id = match.group(2)
+
+                return {
+                    'success': True,
+                    'channel_username': channel_identifier,
+                    'message_id': message_id,
+                    'url_type': 'public' if not channel_identifier.isdigit() else 'private'
+                }
+
+        return {'success': False, 'error': 'Неверный формат URL поста'}
+
+    except Exception as e:
+        return {'success': False, 'error': f'Ошибка парсинга URL: {str(e)}'}
+
+def create_contract(response_id, contract_details):
+    """
+    Создание контракта после принятия отклика
+
+    Args:
+        response_id: ID принятого отклика
+        contract_details: Детали контракта (срок размещения, требования и т.д.)
+
+    Returns:
+        dict: Результат операции
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем информацию об отклике
+        cursor.execute('''
+                       SELECT or_resp.*,
+                              o.id         as offer_id,
+                              o.title,
+                              o.price,
+                              o.max_price,
+                              o.created_by as advertiser_id,
+                              o.description,
+                              o.budget_total
+                       FROM offer_responses or_resp
+                                JOIN offers o ON or_resp.offer_id = o.id
+                       WHERE or_resp.id = ?
+                         AND or_resp.status = 'accepted'
+                       ''', (response_id,))
+
+        response_data = cursor.fetchone()
+        if not response_data:
+            return {'success': False, 'error': 'Принятый отклик не найден'}
+
+        # Генерируем уникальный ID контракта
+        contract_id = hashlib.md5(f"{response_id}_{time.time()}".encode()).hexdigest()[:12].upper()
+
+        # Вычисляем дедлайны
+        placement_deadline = datetime.now() + timedelta(hours=contract_details.get('placement_hours', 24))
+        monitoring_duration = contract_details.get('monitoring_days', 7)
+        monitoring_end = placement_deadline + timedelta(days=monitoring_duration)
+
+        # Создаем контракт
+        cursor.execute('''
+                       INSERT INTO contracts (id, response_id, offer_id, advertiser_id, publisher_id,
+                                              price, status,
+                                              placement_deadline, monitoring_duration, monitoring_end,
+                                              post_requirements, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ''', (
+                           contract_id, response_id, response_data['offer_id'],
+                           response_data['advertiser_id'], response_data['user_id'],
+                           response_data['max_price'] or response_data['price'], 'active',
+                           placement_deadline.isoformat(), monitoring_duration, monitoring_end.isoformat(),
+                           contract_details.get('requirements', ''), datetime.now().isoformat()
+                       ))
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомления обеим сторонам
+        send_contract_notification(contract_id, 'created')
+
+        logger.info(f"Создан контракт {contract_id} для отклика {response_id}")
+
+        return {
+            'success': True,
+            'contract_id': contract_id,
+            'placement_deadline': placement_deadline.isoformat(),
+            'message': 'Контракт создан! Участники получили уведомления с деталями.'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка создания контракта: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def send_contract_notification(contract_id, notification_type, extra_data=None):
+    """Отправка уведомлений по контрактам"""
+    try:
+        from working_app import AppConfig
+
+        bot_token = AppConfig.BOT_TOKEN
+        if not bot_token:
+            logger.warning("BOT_TOKEN не настроен, уведомления не отправляются")
+            return
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем информацию о контракте
+        cursor.execute('''
+                       SELECT c.*,
+                              o.title           as offer_title,
+                              u_adv.telegram_id as advertiser_telegram_id,
+                              u_adv.first_name  as advertiser_name,
+                              u_pub.telegram_id as publisher_telegram_id,
+                              u_pub.first_name  as publisher_name,
+                              or_resp.channel_title
+                       FROM contracts c
+                                JOIN offers o ON c.offer_id = o.id
+                                JOIN users u_adv ON c.advertiser_id = u_adv.id
+                                JOIN users u_pub ON c.publisher_id = u_pub.id
+                                JOIN offer_responses or_resp ON c.response_id = or_resp.id
+                       WHERE c.id = ?
+                       ''', (contract_id,))
+
+        data = cursor.fetchone()
+        conn.close()
+
+        if not data:
+            return
+
+        if notification_type == 'created':
+            # Уведомления о создании контракта
+            advertiser_msg = f"""📋 <b>Контракт создан!</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+💰 <b>Сумма:</b> {data['price']} RUB
+📺 <b>Канал:</b> {data['channel_title']}
+👤 <b>Издатель:</b> {data['publisher_name']}
+
+⏰ <b>Срок размещения:</b> {formatDate(data['placement_deadline'])}
+🔍 <b>Срок мониторинга:</b> {data['monitoring_duration']} дней
+
+📱 Издатель должен разместить рекламу и подать заявку в приложении."""
+
+            publisher_msg = f"""✅ <b>Ваш отклик принят! Контракт создан.</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+💰 <b>Оплата:</b> {data['price']} RUB
+👤 <b>Рекламодатель:</b> {data['advertiser_name']}
+
+⏰ <b>Разместите рекламу до:</b> {formatDate(data['placement_deadline'])}
+
+📝 <b>Что делать дальше:</b>
+1. Разместите рекламу в своем канале
+2. Подайте заявку с ссылкой на пост в приложении
+3. После проверки начнется мониторинг
+4. Получите оплату после завершения"""
+
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "📋 Открыть контракт",
+                            "web_app": {
+                                "url": f"{AppConfig.WEBAPP_URL}/offers?tab=contracts&contract_id={contract_id}"
+                            }
+                        }
+                    ]
+                ]
+            }
+
+            send_telegram_message(data['advertiser_telegram_id'], advertiser_msg, keyboard)
+            send_telegram_message(data['publisher_telegram_id'], publisher_msg, keyboard)
+
+        elif notification_type == 'placement_submitted':
+            # Уведомление рекламодателю о подаче заявки
+            message = f"""📤 <b>Заявка о размещении подана!</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+📺 <b>Канал:</b> {data['channel_title']}
+👤 <b>Издатель:</b> {data['publisher_name']}
+
+🔍 Начинается автоматическая проверка размещения.
+Вы получите уведомление о результате проверки."""
+
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "📋 Посмотреть контракт",
+                            "web_app": {
+                                "url": f"{AppConfig.WEBAPP_URL}/offers?tab=contracts&contract_id={contract_id}"
+                            }
+                        }
+                    ]
+                ]
+            }
+
+            send_telegram_message(data['advertiser_telegram_id'], message, keyboard)
+
+        elif notification_type == 'verification_result':
+            # Уведомления о результате проверки
+            status = extra_data.get('status') if extra_data else data['status']
+
+            if status == 'monitoring':
+                adv_msg = f"""✅ <b>Размещение подтверждено!</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+📺 <b>Канал:</b> {data['channel_title']}
+
+🔍 Начат мониторинг размещения на {data['monitoring_duration']} дней.
+Оплата будет произведена автоматически после завершения мониторинга."""
+
+                pub_msg = f"""✅ <b>Размещение проверено и подтверждено!</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+💰 <b>К оплате:</b> {data['price']} RUB
+
+🔍 Начат мониторинг на {data['monitoring_duration']} дней.
+Не удаляйте пост до завершения мониторинга!"""
+
+            else:
+                error_msg = extra_data.get('message') if extra_data else 'Размещение не соответствует требованиям'
+
+                pub_msg = f"""❌ <b>Проверка не пройдена</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+❌ <b>Причина:</b> {error_msg}
+
+🔄 Исправьте размещение и подайте заявку повторно."""
+
+                adv_msg = f"""❌ <b>Проверка размещения не пройдена</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+📺 <b>Канал:</b> {data['channel_title']}
+❌ <b>Причина:</b> {error_msg}
+
+Издатель должен исправить размещение."""
+
+            send_telegram_message(data['advertiser_telegram_id'], adv_msg)
+            send_telegram_message(data['publisher_telegram_id'], pub_msg)
+
+        elif notification_type == 'completed':
+            # Уведомления о завершении контракта
+            payment_id = extra_data.get('payment_id') if extra_data else 'N/A'
+            amount = extra_data.get('amount') if extra_data else data['price']
+
+            adv_msg = f"""✅ <b>Контракт завершен!</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+📺 <b>Канал:</b> {data['channel_title']}
+💰 <b>Сумма:</b> {amount} RUB
+
+✅ Мониторинг завершен успешно.
+💳 Платеж #{payment_id} обрабатывается."""
+
+            pub_msg = f"""🎉 <b>Поздравляем! Контракт выполнен.</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+💰 <b>Заработано:</b> {amount} RUB
+
+💳 Платеж #{payment_id} поступит на ваш счет в течение 24 часов.
+Спасибо за качественную работу!"""
+
+            send_telegram_message(data['advertiser_telegram_id'], adv_msg)
+            send_telegram_message(data['publisher_telegram_id'], pub_msg)
+
+        elif notification_type == 'violation':
+            # Уведомления о нарушении
+            reason = extra_data.get('reason') if extra_data else 'Нарушение условий контракта'
+
+            pub_msg = f"""⚠️ <b>Обнаружено нарушение!</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+❌ <b>Проблема:</b> {reason}
+
+🔄 Пожалуйста, восстановите размещение или свяжитесь с поддержкой."""
+
+            adv_msg = f"""⚠️ <b>Нарушение контракта</b>
+
+🎯 <b>Оффер:</b> {data['offer_title']}
+📺 <b>Канал:</b> {data['channel_title']}
+❌ <b>Проблема:</b> {reason}
+
+Мы уведомили издателя о необходимости исправления."""
+
+            send_telegram_message(data['advertiser_telegram_id'], adv_msg)
+            send_telegram_message(data['publisher_telegram_id'], pub_msg)
+
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления по контракту: {e}")
+def formatDate(date_str):
+    """Форматирование даты для уведомлений"""
+    try:
+        if not date_str:
+            return 'Не указано'
+        dt = datetime.fromisoformat(date_str)
+        return dt.strftime('%d.%m.%Y в %H:%M')
+    except:
+        return date_str
+
+def submit_placement(contract_id, post_url, user_id):
+    """
+    Подача заявки о размещении рекламы
+
+    Args:
+        contract_id: ID контракта
+        post_url: Ссылка на пост с рекламой
+        user_id: Telegram ID пользователя (издателя)
+
+    Returns:
+        dict: Результат операции
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Проверяем контракт
+        cursor.execute('''
+                       SELECT c.*, u.telegram_id as publisher_telegram_id
+                       FROM contracts c
+                                JOIN users u ON c.publisher_id = u.id
+                       WHERE c.id = ?
+                         AND u.telegram_id = ?
+                         AND c.status = 'active'
+                       ''', (contract_id, user_id))
+
+        contract = cursor.fetchone()
+        if not contract:
+            return {'success': False, 'error': 'Контракт не найден или недоступен'}
+
+        # Проверяем дедлайн
+        placement_deadline = datetime.fromisoformat(contract['placement_deadline'])
+        if datetime.now() > placement_deadline:
+            cursor.execute('UPDATE contracts SET status = ? WHERE id = ?', ('expired', contract_id))
+            conn.commit()
+            conn.close()
+            return {'success': False, 'error': 'Срок размещения истек'}
+
+        # Извлекаем данные из URL поста
+        post_data = extract_post_data(post_url)
+        if not post_data['success']:
+            return {'success': False, 'error': post_data['error']}
+
+        # Обновляем контракт
+        cursor.execute('''
+                       UPDATE contracts
+                       SET post_url     = ?,
+                           post_id      = ?,
+                           post_date    = ?,
+                           status       = 'verification',
+                           submitted_at = ?
+                       WHERE id = ?
+                       ''', (
+                           post_url, post_data['post_id'], post_data['post_date'],
+                           datetime.now().isoformat(), contract_id
+                       ))
+
+        conn.commit()
+        conn.close()
+
+        # Запускаем автоматическую проверку
+        verification_result = verify_post_placement(contract_id)
+
+        # Отправляем уведомление рекламодателю
+        send_contract_notification(contract_id, 'placement_submitted')
+
+        logger.info(f"Подана заявка о размещении для контракта {contract_id}")
+
+        return {
+            'success': True,
+            'message': 'Заявка о размещении подана! Начинается автоматическая проверка.',
+            'verification_status': verification_result.get('status', 'pending')
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка подачи заявки о размещении: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def verify_post_placement(contract_id):
+    """
+    Автоматическая проверка размещения поста
+
+    Args:
+        contract_id: ID контракта
+
+    Returns:
+        dict: Результат проверки
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем данные контракта
+        cursor.execute('''
+                       SELECT c.*, or_resp.channel_username, o.title as offer_title, o.description
+                       FROM contracts c
+                                JOIN offer_responses or_resp ON c.response_id = or_resp.id
+                                JOIN offers o ON c.offer_id = o.id
+                       WHERE c.id = ?
+                         AND c.status = 'verification'
+                       ''', (contract_id,))
+
+        contract = cursor.fetchone()
+        if not contract:
+            return {'success': False, 'error': 'Контракт не найден'}
+
+        # Проверяем пост через Telegram API
+        verification_result = check_telegram_post(
+            contract['channel_username'],
+            contract['post_id'],
+            contract['description']  # Ожидаемый контент
+        )
+
+        if verification_result['success']:
+            # Пост найден и соответствует требованиям
+            new_status = 'monitoring'
+            cursor.execute('''
+                           UPDATE contracts
+                           SET status               = ?,
+                               verification_passed  = ?,
+                               verification_details = ?,
+                               monitoring_started   = ?
+                           WHERE id = ?
+                           ''', (
+                               new_status, True, verification_result['details'],
+                               datetime.now().isoformat(), contract_id
+                           ))
+
+            # Запускаем мониторинг
+            schedule_monitoring(contract_id)
+
+            message = "✅ Размещение проверено и подтверждено! Начат мониторинг."
+
+        else:
+            # Пост не найден или не соответствует
+            new_status = 'verification_failed'
+            cursor.execute('''
+                           UPDATE contracts
+                           SET status               = ?,
+                               verification_passed  = ?,
+                               verification_details = ?
+                           WHERE id = ?
+                           ''', (
+                               new_status, False, verification_result['error'], contract_id
+                           ))
+
+            message = f"❌ Проверка не пройдена: {verification_result['error']}"
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомления
+        send_contract_notification(contract_id, 'verification_result', {
+            'status': new_status,
+            'message': message
+        })
+
+        logger.info(f"Проверка контракта {contract_id}: {new_status}")
+
+        return {
+            'success': True,
+            'status': new_status,
+            'message': message,
+            'details': verification_result
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки размещения: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def check_telegram_post(channel_username, post_id, expected_content=""):
+    """
+    Проверка существования и содержания поста в Telegram канале
+
+    Args:
+        channel_username: Username канала
+        post_id: ID поста
+        expected_content: Ожидаемый контент для проверки
+
+    Returns:
+        dict: Результат проверки
+    """
+    try:
+        from working_app import AppConfig
+
+        bot_token = AppConfig.BOT_TOKEN
+        if not bot_token:
+            return {'success': False, 'error': 'BOT_TOKEN не настроен'}
+
+        # Формируем URL для получения поста
+        url = f"https://api.telegram.org/bot{bot_token}/getChat"
+
+        # Сначала проверяем доступ к каналу
+        response = requests.get(url, params={
+            'chat_id': f"@{channel_username}"
+        }, timeout=10)
+
+        if response.status_code != 200:
+            return {'success': False, 'error': 'Канал недоступен или бот не добавлен в канал'}
+
+        # Получаем конкретный пост
+        message_url = f"https://api.telegram.org/bot{bot_token}/getChat"
+
+        # Примечание: Для полной проверки поста нужны права администратора в канале
+        # Здесь упрощенная проверка через публичные методы
+
+        # Проверяем существование поста через веб-версию (если канал публичный)
+        public_post_url = f"https://t.me/{channel_username}/{post_id}"
+
+        try:
+            post_response = requests.get(public_post_url, timeout=10)
+            if post_response.status_code == 200:
+                post_content = post_response.text
+
+                # Простая проверка наличия ключевых слов из описания оффера
+                if expected_content:
+                    keywords = expected_content.lower().split()[:5]  # Первые 5 слов
+                    content_lower = post_content.lower()
+
+                    found_keywords = [kw for kw in keywords if kw in content_lower]
+                    match_percentage = len(found_keywords) / len(keywords) * 100
+
+                    if match_percentage < 50:  # Минимум 50% совпадений
+                        return {
+                            'success': False,
+                            'error': f'Содержание поста не соответствует описанию оффера (совпадений: {match_percentage:.1f}%)'
+                        }
+
+                return {
+                    'success': True,
+                    'details': {
+                        'post_found': True,
+                        'url': public_post_url,
+                        'verified_at': datetime.now().isoformat(),
+                        'content_match': match_percentage if expected_content else 100
+                    }
+                }
+            else:
+                return {'success': False, 'error': 'Пост не найден по указанной ссылке'}
+
+        except requests.RequestException:
+            return {'success': False, 'error': 'Не удалось проверить пост (канал может быть приватным)'}
+
+    except Exception as e:
+        logger.error(f"Ошибка проверки Telegram поста: {e}")
+        return {'success': False, 'error': f'Ошибка проверки: {str(e)}'}
+
+
+def extract_post_data(post_url):
+    """
+    Извлечение данных из ссылки на пост Telegram
+
+    Args:
+        post_url: Ссылка на пост вида https://t.me/channel/123
+
+    Returns:
+        dict: Извлеченные данные
+    """
+    try:
+        import re
+
+        # Паттерн для ссылок Telegram
+        pattern = r'https://t\.me/([^/]+)/(\d+)'
+        match = re.match(pattern, post_url.strip())
+
+        if not match:
+            return {'success': False, 'error': 'Неверный формат ссылки. Ожидается: https://t.me/channel/123'}
+
+        channel = match.group(1)
+        post_id = match.group(2)
+
+        return {
+            'success': True,
+            'channel': channel,
+            'post_id': post_id,
+            'post_date': datetime.now().isoformat()
+        }
+
+    except Exception as e:
+        return {'success': False, 'error': f'Ошибка обработки ссылки: {str(e)}'}
+
+
+def schedule_monitoring(contract_id):
+    """
+    Запуск мониторинга поста на время действия контракта
+
+    Args:
+        contract_id: ID контракта
+    """
+    try:
+        # Здесь можно интегрировать с системой задач (Celery, APScheduler)
+        # Пока делаем запись в БД для последующей проверки
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+                       INSERT INTO monitoring_tasks (contract_id, task_type, status, created_at, next_check)
+                       VALUES (?, ?, ?, ?, ?)
+                       ''', (
+                           contract_id, 'post_monitoring', 'active',
+                           datetime.now().isoformat(),
+                           (datetime.now() + timedelta(hours=24)).isoformat()  # Первая проверка через 24 часа
+                       ))
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Запущен мониторинг для контракта {contract_id}")
+
+    except Exception as e:
+        logger.error(f"Ошибка запуска мониторинга: {e}")
+
+
+def process_monitoring_tasks():
+    """
+    Обработка задач мониторинга (запускается по расписанию)
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем активные задачи мониторинга
+        cursor.execute('''
+                       SELECT mt.*, c.post_url, c.monitoring_end, or_resp.channel_username
+                       FROM monitoring_tasks mt
+                                JOIN contracts c ON mt.contract_id = c.id
+                                JOIN offer_responses or_resp ON c.response_id = or_resp.id
+                       WHERE mt.status = 'active'
+                         AND mt.next_check <= ?
+                       ''', (datetime.now().isoformat(),))
+
+        tasks = cursor.fetchall()
+
+        for task in tasks:
+            contract_id = task['contract_id']
+            monitoring_end = datetime.fromisoformat(task['monitoring_end'])
+
+            if datetime.now() > monitoring_end:
+                # Мониторинг завершен - можно проводить оплату
+                finalize_contract(contract_id)
+
+                cursor.execute('''
+                               UPDATE monitoring_tasks
+                               SET status       = 'completed',
+                                   completed_at = ?
+                               WHERE id = ?
+                               ''', (datetime.now().isoformat(), task['id']))
+
+            else:
+                # Промежуточная проверка
+                if task['post_url']:
+                    post_data = extract_post_data(task['post_url'])
+                    if post_data['success']:
+                        check_result = check_telegram_post(
+                            task['channel_username'],
+                            post_data['post_id']
+                        )
+
+                        if not check_result['success']:
+                            # Пост удален или недоступен
+                            cursor.execute('''
+                                           UPDATE contracts
+                                           SET status           = 'violation',
+                                               violation_reason = ?
+                                           WHERE id = ?
+                                           ''', (check_result['error'], contract_id))
+
+                            send_contract_notification(contract_id, 'violation', {
+                                'reason': check_result['error']
+                            })
+
+                # Планируем следующую проверку
+                next_check = datetime.now() + timedelta(hours=24)
+                cursor.execute('''
+                               UPDATE monitoring_tasks
+                               SET next_check = ?,
+                                   last_check = ?
+                               WHERE id = ?
+                               ''', (next_check.isoformat(), datetime.now().isoformat(), task['id']))
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Обработано {len(tasks)} задач мониторинга")
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки мониторинга: {e}")
+
+
+def finalize_contract(contract_id):
+    """
+    Завершение контракта и проведение оплаты
+
+    Args:
+        contract_id: ID контракта
+    """
+    try:
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем данные контракта
+        cursor.execute('''
+                       SELECT c.*,
+                              u_pub.telegram_id as publisher_telegram_id,
+                              u_adv.telegram_id as advertiser_telegram_id
+                       FROM contracts c
+                                JOIN users u_pub ON c.publisher_id = u_pub.id
+                                JOIN users u_adv ON c.advertiser_id = u_adv.id
+                       WHERE c.id = ?
+                         AND c.status = 'monitoring'
+                       ''', (contract_id,))
+
+        contract = cursor.fetchone()
+        if not contract:
+            return {'success': False, 'error': 'Контракт не найден'}
+
+        # Обновляем статус контракта
+        cursor.execute('''
+                       UPDATE contracts
+                       SET status       = 'completed',
+                           completed_at = ?
+                       WHERE id = ?
+                       ''', (datetime.now().isoformat(), contract_id))
+
+        # Создаем запись о платеже
+        payment_id = hashlib.md5(f"pay_{contract_id}_{time.time()}".encode()).hexdigest()[:16].upper()
+
+        cursor.execute('''
+                       INSERT INTO payments (id, contract_id, amount, status,
+                                             publisher_id, advertiser_id, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)
+                       ''', (
+                           payment_id, contract_id, contract['price'], 'pending',
+                           contract['publisher_id'], contract['advertiser_id'],
+                           datetime.now().isoformat()
+                       ))
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомления об успешном завершении
+        send_contract_notification(contract_id, 'completed', {
+            'payment_id': payment_id,
+            'amount': contract['price']
+        })
+
+        logger.info(f"Контракт {contract_id} завершен, создан платеж {payment_id}")
+
+        return {'success': True, 'payment_id': payment_id}
+
+    except Exception as e:
+        logger.error(f"Ошибка завершения контракта: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+# ДОБАВИТЬ в add_offer.py функцию для удаления неудачных контрактов
+
+def delete_failed_contract(contract_id, telegram_user_id):
+    """
+    Удаление контракта со статусом verification_failed
+
+    Args:
+        contract_id: ID контракта для удаления
+        telegram_user_id: Telegram ID пользователя, инициирующего удаление
+
+    Returns:
+        dict: Результат удаления
+    """
+    try:
+        logger.info(f"🗑️ Удаление неудачного контракта {contract_id}")
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем данные контракта
+        cursor.execute('''
+                       SELECT c.*,
+                              o.title           as offer_title,
+                              u_adv.telegram_id as advertiser_telegram_id,
+                              u_pub.telegram_id as publisher_telegram_id,
+                              u_adv.first_name  as advertiser_name,
+                              u_pub.first_name  as publisher_name
+                       FROM contracts c
+                                JOIN offers o ON c.offer_id = o.id
+                                JOIN users u_adv ON c.advertiser_id = u_adv.id
+                                JOIN users u_pub ON c.publisher_id = u_pub.id
+                       WHERE c.id = ?
+                       ''', (contract_id,))
+
+        contract = cursor.fetchone()
+
+        if not contract:
+            return {'success': False, 'error': 'Контракт не найден'}
+
+        # Проверяем права доступа
+        if (contract['advertiser_telegram_id'] != telegram_user_id and
+                contract['publisher_telegram_id'] != telegram_user_id):
+            return {'success': False, 'error': 'Нет доступа к этому контракту'}
+
+        # Проверяем статус
+        if contract['status'] != 'verification_failed':
+            return {
+                'success': False,
+                'error': f'Можно удалять только контракты со статусом "verification_failed". Текущий статус: {contract["status"]}'
+            }
+
+        offer_title = contract['offer_title']
+
+        # Удаляем контракт
+        cursor.execute('DELETE FROM contracts WHERE id = ?', (contract_id,))
+        deleted_rows = cursor.rowcount
+
+        if deleted_rows == 0:
+            return {'success': False, 'error': 'Контракт не был удален'}
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомления участникам
+        user_role = 'advertiser' if contract['advertiser_telegram_id'] == telegram_user_id else 'publisher'
+
+        # Уведомление инициатору удаления
+        if user_role == 'advertiser':
+            message_self = f"""🗑️ <b>Контракт удален</b>
+
+📋 <b>Оффер:</b> {offer_title}
+👤 <b>Издатель:</b> {contract['publisher_name']}
+
+Контракт удален из-за неудачной проверки размещения."""
+
+            message_other = f"""🗑️ <b>Контракт удален рекламодателем</b>
+
+📋 <b>Оффер:</b> {offer_title}
+👤 <b>Рекламодатель:</b> {contract['advertiser_name']}
+
+Контракт был удален из-за неудачной проверки размещения."""
+
+            send_telegram_message(contract['advertiser_telegram_id'], message_self)
+            send_telegram_message(contract['publisher_telegram_id'], message_other)
+
+        else:  # publisher
+            message_self = f"""🗑️ <b>Контракт удален</b>
+
+📋 <b>Оффер:</b> {offer_title}
+👤 <b>Рекламодатель:</b> {contract['advertiser_name']}
+
+Контракт удален из-за неудачной проверки размещения."""
+
+            message_other = f"""🗑️ <b>Контракт удален издателем</b>
+
+📋 <b>Оффер:</b> {offer_title}
+👤 <b>Издатель:</b> {contract['publisher_name']}
+
+Контракт был удален из-за неудачной проверки размещения."""
+
+            send_telegram_message(contract['publisher_telegram_id'], message_self)
+            send_telegram_message(contract['advertiser_telegram_id'], message_other)
+
+        logger.info(f"✅ Контракт {contract_id} успешно удален")
+
+        return {
+            'success': True,
+            'message': f'Контракт "{offer_title}" успешно удален'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка удаления контракта: {e}")
+        return {'success': False, 'error': str(e)}
+# ДОБАВИТЬ в add_offer.py функции для работы с откликами
+
+def create_offer_response_with_channel(offer_id, channel_id, user_id, telegram_user_id, message=""):
+    """
+    Создание отклика на оффер с выбранным каналом
+
+    Args:
+        offer_id: ID оффера
+        channel_id: ID выбранного канала
+        user_id: ID пользователя в БД
+        telegram_user_id: Telegram ID пользователя
+        message: Сообщение рекламодателю
+
+    Returns:
+        dict: Результат создания отклика
+    """
+    try:
+        logger.info(f"🎯 Создание отклика на оффер {offer_id} от канала {channel_id}")
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Проверяем оффер
+        cursor.execute('SELECT * FROM offers WHERE id = ? AND status = "active"', (offer_id,))
+        offer = cursor.fetchone()
+
+        if not offer:
+            return {'success': False, 'error': 'Оффер не найден или неактивен'}
+
+        # Проверяем канал
+        cursor.execute('''
+                       SELECT *
+                       FROM channels
+                       WHERE id = ?
+                         AND owner_id = ?
+                         AND is_verified = 1
+                       ''', (channel_id, user_id))
+
+        channel = cursor.fetchone()
+
+        if not channel:
+            return {'success': False, 'error': 'Канал не найден или не верифицирован'}
+
+        # Проверяем, что не откликались ранее
+        cursor.execute('''
+                       SELECT id
+                       FROM offer_responses
+                       WHERE offer_id = ?
+                         AND channel_id = ?
+                       ''', (offer_id, channel_id))
+
+        if cursor.fetchone():
+            return {'success': False, 'error': 'Вы уже откликались на этот оффер данным каналом'}
+
+        # Создаем отклик
+        cursor.execute('''
+                       INSERT INTO offer_responses (offer_id, channel_id, channel_title, channel_username,
+                                                    channel_subscribers, message, status, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)
+                       ''', (
+                           offer_id, channel_id, channel['title'], channel['username'],
+                           channel['subscriber_count'], message
+                       ))
+
+        response_id = cursor.lastrowid
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомление рекламодателю
+        send_offer_notification(offer_id, 'new_response', {
+            'response_id': response_id,
+            'channel_title': channel['title'],
+            'channel_username': channel['username'],
+            'channel_subscribers': channel['subscriber_count'],
+            'responder_name': f"Пользователь {telegram_user_id}",
+            'message': message
+        })
+
+        logger.info(f"✅ Отклик {response_id} создан успешно")
+
+        return {
+            'success': True,
+            'response_id': response_id,
+            'message': 'Отклик отправлен! Рекламодатель получил уведомление.'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка создания отклика: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def accept_offer_response(response_id, telegram_user_id):
+    """
+    Принятие отклика на оффер
+
+    Args:
+        response_id: ID отклика
+        telegram_user_id: Telegram ID рекламодателя
+
+    Returns:
+        dict: Результат принятия отклика
+    """
+    try:
+        logger.info(f"✅ Принятие отклика {response_id}")
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем данные отклика
+        cursor.execute('''
+                       SELECT or_resp.*,
+                              o.title       as offer_title,
+                              c.owner_id    as channel_owner_id,
+                              u.telegram_id as channel_owner_telegram_id
+                       FROM offer_responses or_resp
+                                JOIN offers o ON or_resp.offer_id = o.id
+                                JOIN channels c ON or_resp.channel_id = c.id
+                                JOIN users u ON c.owner_id = u.id
+                       WHERE or_resp.id = ?
+                       ''', (response_id,))
+
+        response_data = cursor.fetchone()
+
+        if not response_data:
+            return {'success': False, 'error': 'Отклик не найден'}
+
+        if response_data['status'] != 'pending':
+            return {'success': False, 'error': 'Отклик уже обработан'}
+
+        # Обновляем статус отклика
+        cursor.execute('''
+                       UPDATE offer_responses
+                       SET status     = 'accepted',
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ?
+                       ''', (response_id,))
+
+        # Отклоняем остальные отклики на этот оффер
+        cursor.execute('''
+                       UPDATE offer_responses
+                       SET status     = 'auto_rejected',
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE offer_id = ?
+                         AND id != ? AND status = 'pending'
+                       ''', (response_data['offer_id'], response_id))
+
+        # Обновляем статус оффера
+        cursor.execute('''
+                       UPDATE offers
+                       SET status     = 'in_progress',
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ?
+                       ''', (response_data['offer_id'],))
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомления
+        send_response_notification(response_id, 'accepted')
+
+        # Создаем контракт автоматически
+        contract_details = {
+            'placement_hours': 24,
+            'monitoring_days': 7,
+            'requirements': 'Согласно условиям оффера'
+        }
+
+        create_contract(response_id, contract_details)
+
+        logger.info(f"✅ Отклик {response_id} принят, создан контракт")
+
+        return {
+            'success': True,
+            'message': 'Отклик принят! Контракт создан автоматически.'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка принятия отклика: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def reject_offer_response(response_id, telegram_user_id, reason="Не подходящий канал"):
+    """
+    Отклонение отклика на оффер
+
+    Args:
+        response_id: ID отклика
+        telegram_user_id: Telegram ID рекламодателя
+        reason: Причина отклонения
+
+    Returns:
+        dict: Результат отклонения отклика
+    """
+    try:
+        logger.info(f"❌ Отклонение отклика {response_id}")
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем данные отклика
+        cursor.execute('''
+                       SELECT or_resp.*, o.title as offer_title
+                       FROM offer_responses or_resp
+                                JOIN offers o ON or_resp.offer_id = o.id
+                       WHERE or_resp.id = ?
+                       ''', (response_id,))
+
+        response_data = cursor.fetchone()
+
+        if not response_data:
+            return {'success': False, 'error': 'Отклик не найден'}
+
+        if response_data['status'] != 'pending':
+            return {'success': False, 'error': 'Отклик уже обработан'}
+
+        # Обновляем статус отклика
+        cursor.execute('''
+                       UPDATE offer_responses
+                       SET status        = 'rejected',
+                           admin_message = ?,
+                           updated_at    = CURRENT_TIMESTAMP
+                       WHERE id = ?
+                       ''', (reason, response_id))
+
+        conn.commit()
+        conn.close()
+
+        # Отправляем уведомление владельцу канала
+        send_response_notification(response_id, 'rejected')
+
+        logger.info(f"❌ Отклик {response_id} отклонён")
+
+        return {
+            'success': True,
+            'message': f'Отклик отклонён. Причина: {reason}'
+        }
+
+    except Exception as e:
+        logger.error(f"Ошибка отклонения отклика: {e}")
+        return {'success': False, 'error': str(e)}
+
+
+def send_offer_notification(offer_id, notification_type, extra_data=None):
+    """Отправка уведомлений по офферам"""
+    try:
+        from working_app import AppConfig
+
+        bot_token = AppConfig.BOT_TOKEN
+        if not bot_token:
+            logger.warning("BOT_TOKEN не настроен, уведомления не отправляются")
+            return
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if notification_type == 'new_response':
+            # Уведомление рекламодателю о новом отклике
+            response_id = extra_data.get('response_id')
+
+            cursor.execute('''
+                           SELECT o.title as offer_title, o.total_budget, u.telegram_id as author_telegram_id
+                           FROM offers o
+                                    JOIN users u ON o.user_id = u.id
+                           WHERE o.id = ?
+                           ''', (offer_id,))
+
+            offer_data = cursor.fetchone()
+
+            if offer_data:
+                message = f"""🎯 <b>Новый отклик на ваш оффер!</b>
+
+📋 <b>Оффер:</b> {offer_data['offer_title']}
+💰 <b>Бюджет:</b> {offer_data['total_budget']} RUB
+
+📺 <b>Канал откликнулся:</b>
+• <b>Название:</b> {extra_data.get('channel_title')}
+• <b>Username:</b> @{extra_data.get('channel_username')}
+• <b>Подписчики:</b> {extra_data.get('channel_subscribers'):,}
+
+👤 <b>Владелец:</b> {extra_data.get('responder_name', 'Пользователь')}
+
+{f"💬 <b>Сообщение:</b> {extra_data.get('message')}" if extra_data.get('message') else ""}
+
+🔔 Перейдите в приложение, чтобы рассмотреть отклик."""
+
+                keyboard = {
+                    "inline_keyboard": [
+                        [
+                            {
+                                "text": "📋 Посмотреть отклики",
+                                "web_app": {
+                                    "url": f"{AppConfig.WEBAPP_URL}/offers?tab=my-offers&offer_id={offer_id}"
+                                }
+                            }
+                        ]
+                    ]
+                }
+
+                send_telegram_message(offer_data['author_telegram_id'], message, keyboard)
+
+        conn.close()
+
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления об оффере: {e}")
+
+
+def send_response_notification(response_id, status):
+    """Уведомление владельцу канала об изменении статуса отклика"""
+    try:
+        from working_app import AppConfig
+
+        bot_token = AppConfig.BOT_TOKEN
+        if not bot_token:
+            return
+
+        conn = sqlite3.connect(DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT o.title as offer_title, o.total_budget,
+                   u_owner.telegram_id as channel_owner_telegram_id,
+                   or_resp.admin_message, or_resp.channel_title
+            FROM offer_responses or_resp
+            JOIN offers o ON or_resp.offer_id = o.id
+            JOIN channels c ON or_resp.channel_id = c.id
+            JOIN users u_owner ON c.owner_id = u_owner.id
+            WHERE or_resp.id = ?
+        ''', (response_id,))
+
+        data = cursor.fetchone()
+        conn.close()
+
+        if not data:
+            return
+
+        if status == 'accepted':
+            message = f"""✅ <b>Ваш отклик принят!</b>
+
+📋 <b>Оффер:</b> {data['offer_title']}
+💰 <b>Бюджет:</b> {data['total_budget']} RUB
+📺 <b>Канал:</b> {data['channel_title']}
+
+🎉 <b>Поздравляем!</b> Рекламодатель принял ваш отклик.
+
+📋 <b>Что дальше?</b>
+Контракт создан автоматически. Проверьте детали в приложении и следуйте инструкциям для размещения рекламы."""
+
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "📋 Открыть контракты",
+                            "web_app": {
+                                "url": f"{AppConfig.WEBAPP_URL}/offers?tab=contracts"
+                            }
+                        }
+                    ]
+                ]
+            }
+
+        elif status == 'rejected':
+            message = f"""❌ <b>Отклик отклонён</b>
+
+📋 <b>Оффер:</b> {data['offer_title']}
+📺 <b>Канал:</b> {data['channel_title']}
+
+К сожалению, рекламодатель выбрал другой канал.
+
+{f"💬 <b>Причина:</b> {data['admin_message']}" if data['admin_message'] else ""}
+
+💪 Не расстраивайтесь! Ищите другие подходящие офферы."""
+
+            keyboard = {
+                "inline_keyboard": [
+                    [
+                        {
+                            "text": "🔍 Найти офферы",
+                            "web_app": {
+                                "url": f"{AppConfig.WEBAPP_URL}/offers"
+                            }
+                        }
+                    ]
+                ]
+            }
+
+        send_telegram_message(data['channel_owner_telegram_id'], message, keyboard)
+
+    except Exception as e:
+        logger.error(f"Ошибка отправки уведомления об отклике: {e}")
+
+
+def send_telegram_message(chat_id, text, keyboard=None):
+    """Отправка сообщения в Telegram с клавиатурой"""
+    try:
+        import requests
+        from working_app import AppConfig
+
+        bot_token = AppConfig.BOT_TOKEN
+        if not bot_token:
+            logger.warning("BOT_TOKEN не настроен")
+            return False
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+
+        payload = {
+            'chat_id': chat_id,
+            'text': text,
+            'parse_mode': 'HTML'
+        }
+
+        if keyboard:
+            payload['reply_markup'] = keyboard
+
+        response = requests.post(url, json=payload, timeout=10)
+
+        return response.status_code == 200
+
+    except Exception as e:
+        logger.error(f"Ошибка отправки сообщения: {e}")
+        return False
 
 
 # Flask маршруты для интеграции с основным приложением
