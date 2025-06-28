@@ -1745,15 +1745,6 @@ function closeResponsesModal() {
         console.log('✅ Модальное окно закрыто');
     }
 }
-
-
-
-
-
-
-
-
-
 function renderResponsesList(responses) {
     return responses.map(response => `
         <div class="response-card" style="
@@ -1833,7 +1824,6 @@ function renderResponsesList(responses) {
         </div>
     `).join('');
 }
-
 function getResponsesStatusSummary(responses) {
     const statusCounts = responses.reduce((acc, response) => {
         acc[response.status] = (acc[response.status] || 0) + 1;

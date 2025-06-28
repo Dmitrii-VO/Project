@@ -2,14 +2,13 @@
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 
-from add_offer import send_telegram_message
 from app.models.database import db_manager
 from app.config.settings import Config
 import logging
 import os
 import sys
 import sqlite3
-
+from app.utils.notifications import send_contract_notification, formatDate
 DATABASE_PATH = 'telegram_mini_app.db'
 logger = logging.getLogger(__name__)
 offers_bp = Blueprint('offers', __name__)
@@ -86,10 +85,6 @@ def create_offer():
     except Exception as e:
         logger.error(f"Ошибка создания оффера: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
-
-# ИСПРАВЛЕНИЕ: в файле app/api/offers.py
-# Найти функцию get_my_offers и заменить SQL запрос
 
 @offers_bp.route('/my', methods=['GET'])
 def get_my_offers():
@@ -350,7 +345,6 @@ def get_my_offers():
             'error': f'Внутренняя ошибка сервера: {str(e)}'
         }), 500
 
-
 @offers_bp.route('/detail/<int:offer_id>', methods=['GET'])
 def get_offer_detail(offer_id):
     """Получение детальной информации об оффере"""
@@ -377,7 +371,6 @@ def get_offer_detail(offer_id):
     except Exception as e:
         logger.error(f"Ошибка получения оффера {offer_id}: {e}")
         return jsonify({'success': False, 'error': 'Ошибка получения оффера'}), 500
-
 
 @offers_bp.route('/stats', methods=['GET'])
 def get_offers_stats():
@@ -445,7 +438,6 @@ def get_offers_stats():
         logger.error(f"Ошибка получения статистики офферов: {e}")
         return jsonify({'success': False, 'error': 'Ошибка получения статистики'}), 500
 
-
 @offers_bp.route('/available', methods=['GET'])
 def get_available_offers():
     """Получение доступных офферов для владельцев каналов (исключая свои офферы)"""
@@ -503,54 +495,6 @@ def get_available_offers():
     except Exception as e:
         logger.error(f"Ошибка получения доступных офферов: {e}")
         return jsonify({'success': False, 'error': 'Ошибка получения офферов'}), 500
-
-
-@offers_bp.route('/debug/user', methods=['GET', 'POST'])
-def debug_current_user():
-    """Отладочный маршрут для проверки текущего пользователя"""
-    try:
-        user_id = get_user_id_from_request()
-
-        return jsonify({
-            'success': True,
-            'user_id': user_id,
-            'headers': dict(request.headers),
-            'method': request.method,
-            'args': dict(request.args),
-            'env_telegram_id': os.environ.get('YOUR_TELEGRAM_ID')
-        })
-
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-
-@offers_bp.route('/debug/test', methods=['GET'])
-def debug_test_offers():
-    """Тестовый маршрут для проверки получения офферов"""
-    try:
-        # Прямой запрос к БД
-        user_id = 373086959  # Ваш ID
-
-        sys.path.insert(0, os.getcwd())
-        from add_offer import get_user_offers
-
-        offers = get_user_offers(user_id)
-
-        return jsonify({
-            'success': True,
-            'test_user_id': user_id,
-            'offers_count': len(offers),
-            'offers': offers[:3]  # Первые 3 для проверки
-        })
-
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
-
 
 @offers_bp.route('/contracts', methods=['GET'])
 def get_user_contracts():
@@ -622,7 +566,6 @@ def get_user_contracts():
         logger.error(f"Ошибка получения контрактов: {e}")
         return jsonify({'success': False, 'error': 'Ошибка получения контрактов'}), 500
 
-
 @offers_bp.route('/contracts/<contract_id>/placement', methods=['POST'])
 def submit_placement_api(contract_id):
     """Подача заявки о размещении рекламы"""
@@ -659,7 +602,6 @@ def submit_placement_api(contract_id):
     except Exception as e:
         logger.error(f"Ошибка подачи заявки о размещении: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
 
 @offers_bp.route('/contracts/<contract_id>', methods=['GET'])
 def get_contract_details(contract_id):
@@ -734,7 +676,6 @@ def get_contract_details(contract_id):
         logger.error(f"Ошибка получения деталей контракта {contract_id}: {e}")
         return jsonify({'success': False, 'error': 'Ошибка получения контракта'}), 500
 
-
 @offers_bp.route('/contracts/<contract_id>/cancel', methods=['POST'])
 def cancel_contract_api(contract_id):
     """Отмена контракта"""
@@ -806,7 +747,6 @@ def cancel_contract_api(contract_id):
     except Exception as e:
         logger.error(f"Ошибка отмены контракта {contract_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
 
 @offers_bp.route('/contracts/<contract_id>', methods=['DELETE'])
 def delete_contract_api(contract_id):
@@ -888,7 +828,6 @@ def delete_contract_api(contract_id):
         logger.error(f"Ошибка удаления контракта {contract_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
-
 @offers_bp.route('/<int:offer_id>', methods=['DELETE'])
 def delete_offer(offer_id):
     """Удаление оффера"""
@@ -923,7 +862,6 @@ def delete_offer(offer_id):
     except Exception as e:
         logger.error(f"Ошибка удаления оффера {offer_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
 
 @offers_bp.route('/<int:offer_id>/cancel', methods=['POST'])
 def cancel_offer(offer_id):
@@ -960,7 +898,6 @@ def cancel_offer(offer_id):
     except Exception as e:
         logger.error(f"Ошибка отмены оффера {offer_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
 
 @offers_bp.route('/<int:offer_id>/status', methods=['PATCH'])
 def update_offer_status(offer_id):
@@ -1008,7 +945,6 @@ def update_offer_status(offer_id):
     except Exception as e:
         logger.error(f"Ошибка изменения статуса оффера {offer_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
 
 @offers_bp.route('/<int:offer_id>/respond', methods=['POST'])
 def respond_to_offer(offer_id):
@@ -1221,7 +1157,6 @@ def get_offer_responses_api(offer_id):
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Внутренняя ошибка сервера: {str(e)}'}), 500
 
-
 @offers_bp.route('/responses/<int:response_id>/status', methods=['PATCH'])
 def update_response_status_api(response_id):
     """Обновление статуса отклика (принять/отклонить)"""
@@ -1267,7 +1202,6 @@ def update_response_status_api(response_id):
         logger.error(f"Ошибка изменения статуса отклика {response_id}: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
-
 @offers_bp.route('/responses/<int:response_id>/contract', methods=['POST'])
 def create_contract_api(response_id):
     """Создание контракта после принятия отклика"""
@@ -1308,489 +1242,3 @@ def create_contract_api(response_id):
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
 
-@offers_bp.route('/responses/<int:response_id>/accept', methods=['POST'])
-def accept_response(response_id):
-    """Принятие отклика на оффер"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
-
-        # Проверяем права доступа
-        response_data = db_manager.execute_query(
-            '''SELECT or_resp.*, o.user_id as offer_owner_id, u.telegram_id as offer_owner_telegram_id
-               FROM offer_responses or_resp
-                        JOIN offers o ON or_resp.offer_id = o.id
-                        JOIN users u ON o.user_id = u.id
-               WHERE or_resp.id = ?''',
-            (response_id,),
-            fetch_one=True
-        )
-
-        if not response_data:
-            return jsonify({'success': False, 'error': 'Отклик не найден'}), 404
-
-        if response_data['offer_owner_telegram_id'] != telegram_user_id:
-            return jsonify({'success': False, 'error': 'Нет доступа к этому отклику'}), 403
-
-        if response_data['status'] != 'pending':
-            return jsonify({'success': False, 'error': 'Отклик уже обработан'}), 400
-
-        try:
-            sys.path.insert(0, os.getcwd())
-            from add_offer import accept_offer_response
-
-            result = accept_offer_response(response_id, telegram_user_id)
-
-            if result['success']:
-                logger.info(f"Отклик {response_id} принят пользователем {telegram_user_id}")
-                return jsonify(result), 200
-            else:
-                return jsonify(result), 400
-
-        except ImportError as e:
-            logger.error(f"Ошибка импорта accept_offer_response: {e}")
-            return jsonify({
-                'success': False,
-                'error': 'Модуль системы откликов недоступен'
-            }), 503
-
-    except Exception as e:
-        logger.error(f"Ошибка принятия отклика {response_id}: {e}")
-        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
-
-@offers_bp.route('/responses/<int:response_id>/reject', methods=['POST'])
-def reject_response(response_id):
-    """Отклонение отклика на оффер"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
-
-        data = request.get_json() or {}
-        reason = data.get('reason', 'Не подходящий канал')
-
-        # Проверяем права доступа
-        response_data = db_manager.execute_query(
-            '''SELECT or_resp.*, o.user_id as offer_owner_id, u.telegram_id as offer_owner_telegram_id
-               FROM offer_responses or_resp
-                        JOIN offers o ON or_resp.offer_id = o.id
-                        JOIN users u ON o.user_id = u.id
-               WHERE or_resp.id = ?''',
-            (response_id,),
-            fetch_one=True
-        )
-
-        if not response_data:
-            return jsonify({'success': False, 'error': 'Отклик не найден'}), 404
-
-        if response_data['offer_owner_telegram_id'] != telegram_user_id:
-            return jsonify({'success': False, 'error': 'Нет доступа к этому отклику'}), 403
-
-        if response_data['status'] != 'pending':
-            return jsonify({'success': False, 'error': 'Отклик уже обработан'}), 400
-
-        try:
-            sys.path.insert(0, os.getcwd())
-            from add_offer import reject_offer_response
-
-            result = reject_offer_response(response_id, telegram_user_id, reason)
-
-            if result['success']:
-                logger.info(f"Отклик {response_id} отклонён пользователем {telegram_user_id}")
-                return jsonify(result), 200
-            else:
-                return jsonify(result), 400
-
-        except ImportError as e:
-            logger.error(f"Ошибка импорта reject_offer_response: {e}")
-            return jsonify({
-                'success': False,
-                'error': 'Модуль системы откликов недоступен'
-            }), 503
-
-    except Exception as e:
-        logger.error(f"Ошибка отклонения отклика {response_id}: {e}")
-        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
-
-@offers_bp.route('/responses/<int:response_id>', methods=['GET'])
-def get_response_details(response_id):
-    """Получение подробной информации об отклике"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
-
-        # Получаем детальную информацию об отклике
-        response_data = db_manager.execute_query(
-            '''SELECT or_resp.*,
-                      o.title                                                      as offer_title,
-                      o.description                                                as offer_description,
-                      o.total_budget                                               as offer_budget,
-                      c.title                                                      as channel_title,
-                      c.username                                                   as channel_username,
-                      c.subscriber_count                                           as channel_subscribers,
-                      c.description                                                as channel_description,
-                      c.category                                                   as channel_category,
-                      c.price_per_post                                             as channel_price,
-                      u_owner.first_name || ' ' || COALESCE(u_owner.last_name, '') as channel_owner_name,
-                      u_owner.username                                             as channel_owner_username,
-                      u_owner.telegram_id                                          as channel_owner_telegram_id,
-                      u_advertiser.telegram_id                                     as offer_owner_telegram_id
-               FROM offer_responses or_resp
-                        JOIN offers o ON or_resp.offer_id = o.id
-                        JOIN channels c ON or_resp.channel_id = c.id
-                        JOIN users u_owner ON c.owner_id = u_owner.id
-                        JOIN users u_advertiser ON o.user_id = u_advertiser.id
-               WHERE or_resp.id = ?''',
-            (response_id,),
-            fetch_one=True
-        )
-
-        if not response_data:
-            return jsonify({'success': False, 'error': 'Отклик не найден'}), 404
-
-        # Проверяем права доступа (владелец оффера или владелец канала)
-        if (response_data['offer_owner_telegram_id'] != telegram_user_id and
-                response_data['channel_owner_telegram_id'] != telegram_user_id):
-            return jsonify({'success': False, 'error': 'Нет доступа к этому отклику'}), 403
-
-        # Форматируем ответ
-        formatted_response = {
-            'id': response_data['id'],
-            'offer_id': response_data['offer_id'],
-            'channel_id': response_data['channel_id'],
-            'status': response_data['status'],
-            'message': response_data['message'],
-            'created_at': response_data['created_at'],
-            'updated_at': response_data['updated_at'],
-
-            # Информация об оффере
-            'offer': {
-                'title': response_data['offer_title'],
-                'description': response_data['offer_description'],
-                'budget': response_data['offer_budget']
-            },
-
-            # Информация о канале
-            'channel': {
-                'title': response_data['channel_title'],
-                'username': response_data['channel_username'],
-                'subscribers': response_data['channel_subscribers'],
-                'description': response_data['channel_description'],
-                'category': response_data['channel_category'],
-                'price_per_post': response_data['channel_price']
-            },
-
-            # Информация о владельце канала
-            'channel_owner': {
-                'name': response_data['channel_owner_name'].strip(),
-                'username': response_data['channel_owner_username'],
-                'telegram_id': response_data['channel_owner_telegram_id']
-            }
-        }
-
-        return jsonify({
-            'success': True,
-            'response': formatted_response
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка получения деталей отклика {response_id}: {e}")
-        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
-
-
-@offers_bp.route('/debug/responses-raw/<int:offer_id>', methods=['GET'])
-def debug_responses_raw(offer_id):
-    """Отладка: сырые данные откликов"""
-    try:
-        # Проверяем оффер
-        offer = db_manager.execute_query(
-            'SELECT id, title, created_by FROM offers WHERE id = ?',
-            (offer_id,),
-            fetch_one=True
-        )
-
-        # Получаем все отклики
-        responses = db_manager.execute_query(
-            'SELECT * FROM offer_responses WHERE offer_id = ?',
-            (offer_id,),
-            fetch_all=True
-        )
-
-        # Проверяем пользователя-владельца
-        if offer:
-            owner = db_manager.execute_query(
-                'SELECT telegram_id FROM users WHERE id = ?',
-                (offer['created_by'],),
-                fetch_one=True
-            )
-        else:
-            owner = None
-
-        return jsonify({
-            'success': True,
-            'offer_id': offer_id,
-            'offer_data': offer,
-            'offer_owner': owner,
-            'responses_count': len(responses),
-            'responses_raw': responses,
-            'current_user': get_user_id_from_request()
-        })
-
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc()
-        })
-
-
-@offers_bp.route('/debug/responses-count/<int:offer_id>', methods=['GET'])
-def debug_responses_count(offer_id):
-    """Отладка подсчета откликов для оффера"""
-    try:
-        # Прямой подсчет откликов
-        direct_count = db_manager.execute_query(
-            'SELECT COUNT(*) as count FROM offer_responses WHERE offer_id = ?',
-            (offer_id,),
-            fetch_one=True
-        )
-
-        # Подсчет через LEFT JOIN (как в get_user_offers)
-        join_count = db_manager.execute_query(
-            '''SELECT o.id, o.title, COUNT(DISTINCT or_resp.id) as response_count
-               FROM offers o
-                        LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-               WHERE o.id = ?
-               GROUP BY o.id, o.title''',
-            (offer_id,),
-            fetch_one=True
-        )
-
-        return jsonify({
-            'success': True,
-            'offer_id': offer_id,
-            'direct_count': direct_count['count'] if direct_count else 0,
-            'join_count': join_count['response_count'] if join_count else 0,
-            'join_data': join_count
-        })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        })
-
-def send_contract_notification(contract_id, notification_type, extra_data=None):
-    """Отправка уведомлений по контрактам"""
-    try:
-        from working_app import AppConfig
-
-        bot_token = AppConfig.BOT_TOKEN
-        if not bot_token:
-            logger.warning("BOT_TOKEN не настроен, уведомления не отправляются")
-            return
-
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-
-        # Получаем информацию о контракте
-        cursor.execute('''
-                       SELECT c.*,
-                              o.title           as offer_title,
-                              u_adv.telegram_id as advertiser_telegram_id,
-                              u_adv.first_name  as advertiser_name,
-                              u_pub.telegram_id as publisher_telegram_id,
-                              u_pub.first_name  as publisher_name,
-                              or_resp.channel_title
-                       FROM contracts c
-                                JOIN offers o ON c.offer_id = o.id
-                                JOIN users u_adv ON c.advertiser_id = u_adv.id
-                                JOIN users u_pub ON c.publisher_id = u_pub.id
-                                JOIN offer_responses or_resp ON c.response_id = or_resp.id
-                       WHERE c.id = ?
-                       ''', (contract_id,))
-
-        data = cursor.fetchone()
-        conn.close()
-
-        if not data:
-            return
-
-        if notification_type == 'created':
-            # Уведомления о создании контракта
-            advertiser_msg = f"""📋 <b>Контракт создан!</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>Сумма:</b> {data['price']} RUB
-📺 <b>Канал:</b> {data['channel_title']}
-👤 <b>Издатель:</b> {data['publisher_name']}
-
-⏰ <b>Срок размещения:</b> {formatDate(data['placement_deadline'])}
-🔍 <b>Срок мониторинга:</b> {data['monitoring_duration']} дней
-
-📱 Издатель должен разместить рекламу и подать заявку в приложении."""
-
-            publisher_msg = f"""✅ <b>Ваш отклик принят! Контракт создан.</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>Оплата:</b> {data['price']} RUB
-👤 <b>Рекламодатель:</b> {data['advertiser_name']}
-
-⏰ <b>Разместите рекламу до:</b> {formatDate(data['placement_deadline'])}
-
-📝 <b>Что делать дальше:</b>
-1. Разместите рекламу в своем канале
-2. Подайте заявку с ссылкой на пост в приложении
-3. После проверки начнется мониторинг
-4. Получите оплату после завершения"""
-
-            keyboard = {
-                "inline_keyboard": [
-                    [
-                        {
-                            "text": "📋 Открыть контракт",
-                            "web_app": {
-                                "url": f"{AppConfig.WEBAPP_URL}/offers?tab=contracts&contract_id={contract_id}"
-                            }
-                        }
-                    ]
-                ]
-            }
-
-            send_telegram_message(data['advertiser_telegram_id'], advertiser_msg, keyboard)
-            send_telegram_message(data['publisher_telegram_id'], publisher_msg, keyboard)
-
-        elif notification_type == 'placement_submitted':
-            # Уведомление рекламодателю о подаче заявки
-            message = f"""📤 <b>Заявка о размещении подана!</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
-👤 <b>Издатель:</b> {data['publisher_name']}
-
-🔍 Начинается автоматическая проверка размещения.
-Вы получите уведомление о результате проверки."""
-
-            keyboard = {
-                "inline_keyboard": [
-                    [
-                        {
-                            "text": "📋 Посмотреть контракт",
-                            "web_app": {
-                                "url": f"{AppConfig.WEBAPP_URL}/offers?tab=contracts&contract_id={contract_id}"
-                            }
-                        }
-                    ]
-                ]
-            }
-
-            send_telegram_message(data['advertiser_telegram_id'], message, keyboard)
-
-        elif notification_type == 'verification_result':
-            # Уведомления о результате проверки
-            status = extra_data.get('status') if extra_data else data['status']
-
-            if status == 'monitoring':
-                adv_msg = f"""✅ <b>Размещение подтверждено!</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
-
-🔍 Начат мониторинг размещения на {data['monitoring_duration']} дней.
-Оплата будет произведена автоматически после завершения мониторинга."""
-
-                pub_msg = f"""✅ <b>Размещение проверено и подтверждено!</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>К оплате:</b> {data['price']} RUB
-
-🔍 Начат мониторинг на {data['monitoring_duration']} дней.
-Не удаляйте пост до завершения мониторинга!"""
-
-            else:
-                error_msg = extra_data.get('message') if extra_data else 'Размещение не соответствует требованиям'
-
-                pub_msg = f"""❌ <b>Проверка не пройдена</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-❌ <b>Причина:</b> {error_msg}
-
-🔄 Исправьте размещение и подайте заявку повторно."""
-
-                adv_msg = f"""❌ <b>Проверка размещения не пройдена</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
-❌ <b>Причина:</b> {error_msg}
-
-Издатель должен исправить размещение."""
-
-            send_telegram_message(data['advertiser_telegram_id'], adv_msg)
-            send_telegram_message(data['publisher_telegram_id'], pub_msg)
-
-        elif notification_type == 'completed':
-            # Уведомления о завершении контракта
-            payment_id = extra_data.get('payment_id') if extra_data else 'N/A'
-            amount = extra_data.get('amount') if extra_data else data['price']
-
-            adv_msg = f"""✅ <b>Контракт завершен!</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
-💰 <b>Сумма:</b> {amount} RUB
-
-✅ Мониторинг завершен успешно.
-💳 Платеж #{payment_id} обрабатывается."""
-
-            pub_msg = f"""🎉 <b>Поздравляем! Контракт выполнен.</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>Заработано:</b> {amount} RUB
-
-💳 Платеж #{payment_id} поступит на ваш счет в течение 24 часов.
-Спасибо за качественную работу!"""
-
-            send_telegram_message(data['advertiser_telegram_id'], adv_msg)
-            send_telegram_message(data['publisher_telegram_id'], pub_msg)
-
-        elif notification_type == 'violation':
-            # Уведомления о нарушении
-            reason = extra_data.get('reason') if extra_data else 'Нарушение условий контракта'
-
-            pub_msg = f"""⚠️ <b>Обнаружено нарушение!</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-❌ <b>Проблема:</b> {reason}
-
-🔄 Пожалуйста, восстановите размещение или свяжитесь с поддержкой."""
-
-            adv_msg = f"""⚠️ <b>Нарушение контракта</b>
-
-🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
-❌ <b>Проблема:</b> {reason}
-
-Мы уведомили издателя о необходимости исправления."""
-
-            send_telegram_message(data['advertiser_telegram_id'], adv_msg)
-            send_telegram_message(data['publisher_telegram_id'], pub_msg)
-
-    except Exception as e:
-        logger.error(f"Ошибка отправки уведомления по контракту: {e}")
-
-
-def formatDate(date_str):
-    """Форматирование даты для уведомлений"""
-    try:
-        if not date_str:
-            return 'Не указано'
-        dt = datetime.fromisoformat(date_str)
-        return dt.strftime('%d.%m.%Y в %H:%M')
-    except:
-        return date_str
