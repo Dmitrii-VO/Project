@@ -105,7 +105,7 @@ function renderOffers(offers) {
         const currency = offer.currency || 'RUB';
         const category = offer.category || 'general';
         const status = offer.status || 'active';
-        const responseCount = offer.response_count || 0;  // ИСПРАВЛЕНО: правильное поле
+        const responseCount = offer.response_count || offer.responses_count || offer.total_responses || 0;  // ИСПРАВЛЕНО: правильное поле
         const createdAt = offer.created_at || '';
 
         const formattedPrice = formatPrice(displayPrice);
@@ -285,70 +285,6 @@ function renderOffers(offers) {
     console.log('✅ Компактные офферы отрисованы с правильными счетчиками откликов');
 }
 
-// ПРИНУДИТЕЛЬНОЕ ИСПРАВЛЕНИЕ: Добавляем кнопки откликов после рендеринга
-function addMissingResponseButtons() {
-    console.log('🔧 Принудительное добавление кнопок откликов...');
-
-    // Список офферов с известными откликами
-    const offersWithResponses = {
-        2: 4  // Оффер ID 2 имеет 4 отклика
-    };
-
-    Object.keys(offersWithResponses).forEach(offerId => {
-        const responseCount = offersWithResponses[offerId];
-        const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
-
-        if (offerCard) {
-            // Проверяем есть ли уже кнопка откликов
-            const existingButton = offerCard.querySelector('button[onclick*="manageResponses"]');
-
-            if (!existingButton && responseCount > 0) {
-                // Находим контейнер с кнопками
-                const buttonContainer = offerCard.querySelector('div[style*="display: flex; gap: 4px"]');
-
-                if (buttonContainer) {
-                    // Находим кнопку "Подробнее"
-                    const detailsButton = buttonContainer.querySelector('button[onclick*="viewOfferDetails"]');
-
-                    if (detailsButton) {
-                        // Создаем кнопку откликов
-                        const responseButton = document.createElement('button');
-                        responseButton.innerHTML = `💬 ${responseCount}`;
-                        responseButton.onclick = () => manageResponses(parseInt(offerId));
-                        responseButton.style.cssText = `
-                            padding: 4px 8px; 
-                            border: 1px solid #48bb78; 
-                            background: #48bb78; 
-                            color: white; 
-                            border-radius: 4px; 
-                            cursor: pointer; 
-                            font-size: 10px;
-                            flex: 1;
-                        `;
-
-                        // Вставляем после кнопки "Подробнее"
-                        detailsButton.insertAdjacentElement('afterend', responseButton);
-
-                        console.log(`✅ Добавлена кнопка откликов для оффера ${offerId}: ${responseCount}`);
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Обновляем функцию renderOffers
-const originalRenderOffers = renderOffers;
-renderOffers = function(offers) {
-    // Вызываем оригинальную функцию
-    originalRenderOffers(offers);
-
-    // Добавляем недостающие кнопки
-    setTimeout(() => {
-        addMissingResponseButtons();
-    }, 100);
-};
-
 async function updateResponseStatus(responseId, newStatus) {
     console.log(`📝 Изменение статуса отклика ${responseId} на ${newStatus}`);
 
@@ -423,10 +359,7 @@ async function loadMyOffers() {
             console.log('✅ Офферы загружены:', result.offers.length);
             renderOffers(result.offers);
 
-            // ДОБАВЛЯЕМ: Принудительное исправление кнопок
-            setTimeout(() => {
-                addMissingResponseButtons();
-            }, 200);
+
 
         } else {
             console.log('ℹ️ Офферов не найдено');
@@ -1541,7 +1474,11 @@ async function manageResponses(offerId) {
     console.log('💬 Управление откликами для оффера:', offerId);
 
     try {
-        const response = await fetch(`/api/offers/${offerId}/responses`, {
+        const url = `/api/offers/${offerId}/responses`;
+        console.log('🌐 Запрос URL:', url);
+        console.log('🔑 User ID:', getTelegramUserId());
+
+        const response = await fetch(url, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -1549,34 +1486,68 @@ async function manageResponses(offerId) {
             }
         });
 
-        console.log('📋 Статус ответа:', response.status);
-        const result = await response.json();
-        console.log('📋 Результат API:', result);
+        console.log('📋 Статус ответа:', response.status, response.statusText);
 
-        if (result.success) {
-            // Создаем объект offer для совместимости
-            const offer = {
-                id: offerId,
-                title: result.offer?.title || `Оффер #${offerId}`
-            };
-
-            console.log('📊 Отклики для модального окна:', result.responses);
-            showResponsesModal(offer, result.responses);
-        } else {
-            throw new Error(result.error || 'Ошибка загрузки откликов');
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Ошибка HTTP:', errorText);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
+        const result = await response.json();
+        console.log('📋 Полный результат API:', result);
+        console.log('📊 Количество откликов:', result.responses ? result.responses.length : 'undefined');
+
+        if (!result.success) {
+            console.error('❌ API вернул success: false, error:', result.error);
+            throw new Error(result.error || 'API вернул success: false');
+        }
+
+        if (!result.responses) {
+            console.warn('⚠️ Поле responses отсутствует в ответе API');
+            console.log('🔍 Доступные поля:', Object.keys(result));
+        }
+
+        // Создаем объект offer для совместимости
+        const offer = {
+            id: offerId,
+            title: result.offer?.title || `Оффер #${offerId}`
+        };
+
+        console.log('📊 Отклики для модального окна:', result.responses);
+
+        // Проверяем каждый отклик
+        if (result.responses && result.responses.length > 0) {
+            result.responses.forEach((response, index) => {
+                console.log(`📝 Отклик ${index + 1}:`, {
+                    id: response.id,
+                    channel_title: response.channel_title,
+                    channel_username: response.channel_username,
+                    status: response.status,
+                    message: response.message ? response.message.substring(0, 50) + '...' : 'Нет сообщения'
+                });
+            });
+        }
+
+        showResponsesModal(offer, result.responses || []);
+
     } catch (error) {
-        console.error('❌ Ошибка загрузки откликов:', error);
-        alert(`❌ Ошибка: ${error.message}`);
+        console.error('❌ Полная ошибка загрузки откликов:', error);
+        console.error('❌ Stack trace:', error.stack);
+        alert(`❌ Ошибка загрузки откликов: ${error.message}`);
     }
 }
 
 function showResponsesModal(offer, responses) {
     console.log('📋 showResponsesModal вызвана');
     console.log('📊 Оффер:', offer);
-    console.log('📋 Отклики:', responses);
-    console.log('📊 Количество откликов:', responses ? responses.length : 0);
+    console.log('📋 Отклики (тип):', typeof responses);
+    console.log('📋 Отклики (Array.isArray):', Array.isArray(responses));
+    console.log('📊 Количество откликов:', responses ? responses.length : 'undefined/null');
+
+    if (responses && responses.length > 0) {
+        console.log('📝 Первый отклик для примера:', responses[0]);
+    }
 
     // Удаляем существующее модальное окно если есть
     const existingModal = document.getElementById('responsesModal');
@@ -1656,77 +1627,102 @@ function showResponsesModal(offer, responses) {
 function renderSimpleResponsesList(responses) {
     console.log('🎨 Рендерим список откликов:', responses.length);
 
-    return responses.map((response, index) => `
-        <div style="
-            border: 1px solid #e2e8f0; 
-            border-radius: 8px; 
-            padding: 16px; 
-            margin-bottom: 12px;
-            background: white;
-        ">
-            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                <div style="flex: 1;">
-                    <h5 style="margin: 0 0 4px 0; color: #2d3748; font-size: 16px;">
-                        📺 ${response.channel_title || 'Канал без названия'}
-                    </h5>
-                    <div style="font-size: 14px; color: #718096;">
-                        @${response.channel_username || 'username'} • 
-                        👥 ${formatNumber(response.channel_subscribers || 0)} подписчиков
-                    </div>
-                </div>
-                <div style="
-                    padding: 4px 12px; 
-                    border-radius: 20px;
-                    font-size: 12px; 
-                    font-weight: 600;
-                    background: #fed7d7; 
-                    color: #c53030;
-                ">
-                    ${getStatusText(response.status)}
-                </div>
-            </div>
+    if (!Array.isArray(responses)) {
+        console.error('❌ responses не является массивом:', typeof responses);
+        return '<div>Ошибка: неверный формат данных откликов</div>';
+    }
 
-            ${response.message ? `
-                <div style="
-                    background: #f7fafc; 
-                    padding: 12px; 
-                    border-radius: 6px; 
-                    margin: 12px 0;
-                    border-left: 4px solid #4299e1;
-                ">
-                    <div style="font-size: 12px; color: #4299e1; font-weight: 600; margin-bottom: 4px;">
-                        💬 СООБЩЕНИЕ:
+    if (responses.length === 0) {
+        console.log('ℹ️ Массив откликов пустой');
+        return renderEmptyResponses();
+    }
+
+    return responses.map((response, index) => {
+        console.log(`🎨 Рендерим отклик ${index + 1}:`, {
+            id: response.id,
+            channel_title: response.channel_title,
+            status: response.status
+        });
+
+        // Безопасное получение значений с fallback
+        const channelTitle = response.channel_title || 'Канал без названия';
+        const channelUsername = response.channel_username || 'username';
+        const channelSubscribers = response.channel_subscribers || 0;
+        const message = response.message || '';
+        const status = response.status || 'pending';
+
+        return `
+            <div style="
+                border: 1px solid #e2e8f0; 
+                border-radius: 8px; 
+                padding: 16px; 
+                margin-bottom: 12px;
+                background: white;
+            ">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="flex: 1;">
+                        <h5 style="margin: 0 0 4px 0; color: #2d3748; font-size: 16px;">
+                            📺 ${channelTitle}
+                        </h5>
+                        <div style="font-size: 14px; color: #718096;">
+                            @${channelUsername} • 
+                            👥 ${formatNumber(channelSubscribers)} подписчиков
+                        </div>
                     </div>
-                    <div style="font-size: 14px; color: #2d3748;">
-                        ${response.message}
+                    <div style="
+                        padding: 4px 12px; 
+                        border-radius: 20px;
+                        font-size: 12px; 
+                        font-weight: 600;
+                        background: #fed7d7; 
+                        color: #c53030;
+                    ">
+                        ${getStatusText(status)}
                     </div>
                 </div>
-            ` : ''}
 
-            <div style="display: flex; gap: 8px; margin-top: 12px;">
-                ${response.status === 'pending' ? `
-                    <button onclick="respondToResponse('${response.id}', 'accepted')" style="
-                        padding: 6px 12px; 
-                        background: #48bb78; 
-                        color: white;
-                        border: none; 
-                        border-radius: 4px; 
-                        cursor: pointer; 
-                        font-size: 12px;
-                    ">✅ Принять</button>
-                    <button onclick="respondToResponse('${response.id}', 'rejected')" style="
-                        padding: 6px 12px; 
-                        background: #f56565; 
-                        color: white;
-                        border: none; 
-                        border-radius: 4px; 
-                        cursor: pointer; 
-                        font-size: 12px;
-                    ">❌ Отклонить</button>
+                ${message ? `
+                    <div style="
+                        background: #f7fafc; 
+                        padding: 12px; 
+                        border-radius: 6px; 
+                        margin: 12px 0;
+                        border-left: 4px solid #4299e1;
+                    ">
+                        <div style="font-size: 12px; color: #4299e1; font-weight: 600; margin-bottom: 4px;">
+                            💬 СООБЩЕНИЕ:
+                        </div>
+                        <div style="font-size: 14px; color: #2d3748;">
+                            ${message}
+                        </div>
+                    </div>
                 ` : ''}
+
+                <div style="display: flex; gap: 8px; margin-top: 12px;">
+                    ${status === 'pending' ? `
+                        <button onclick="respondToResponse('${response.id}', 'accepted')" style="
+                            padding: 6px 12px; 
+                            background: #48bb78; 
+                            color: white;
+                            border: none; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 12px;
+                        ">✅ Принять</button>
+                        <button onclick="respondToResponse('${response.id}', 'rejected')" style="
+                            padding: 6px 12px; 
+                            background: #f56565; 
+                            color: white;
+                            border: none; 
+                            border-radius: 4px; 
+                            cursor: pointer; 
+                            font-size: 12px;
+                        ">❌ Отклонить</button>
+                    ` : ''}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 function renderEmptyResponses() {

@@ -88,60 +88,261 @@ def create_offer():
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
 
+# ИСПРАВЛЕНИЕ: в файле app/api/offers.py
+# Найти функцию get_my_offers и заменить SQL запрос
+
 @offers_bp.route('/my', methods=['GET'])
 def get_my_offers():
-    """Получение моих офферов - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
+    """Получение моих офферов - ФИНАЛЬНАЯ ОПТИМИЗИРОВАННАЯ ВЕРСИЯ"""
     try:
+        import json
         logger.info("Запрос на получение моих офферов")
 
         # Получаем user_id
         telegram_user_id = get_user_id_from_request()
-        logger.info(f"Определен user_id: {telegram_user_id}")
-
         if not telegram_user_id:
-            return jsonify({
-                'success': False,
-                'error': 'Не удалось определить пользователя',
-                'debug_headers': dict(request.headers),
-                'debug_env': os.environ.get('YOUR_TELEGRAM_ID')
-            }), 400
+            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
 
-        status = request.args.get('status')
-        logger.info(f"Фильтр по статусу: {status}")
+        # Получаем ID пользователя в БД
+        user = db_manager.execute_query(
+            'SELECT id FROM users WHERE telegram_id = ?',
+            (telegram_user_id,),
+            fetch_one=True
+        )
 
-        try:
-            # Добавляем путь к корню проекта
-            sys.path.insert(0, os.getcwd())
-            from add_offer import get_user_offers
+        if not user:
+            logger.warning(f"Пользователь с telegram_id {telegram_user_id} не найден в БД")
+            return jsonify({'success': False, 'error': 'Пользователь не найден'}), 404
 
-            logger.info("Вызываем get_user_offers")
-            offers = get_user_offers(telegram_user_id, status)
-            logger.info(f"Получено офферов: {len(offers)}")
+        user_db_id = user['id']
+        logger.info(f"ID пользователя в БД: {user_db_id}")
 
+        # Параметры фильтрации и пагинации
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 50))
+        status_filter = request.args.get('status')  # active, paused, completed, cancelled
+        search = request.args.get('search', '').strip()
+        category_filter = request.args.get('category')
+
+        offset = (page - 1) * limit
+
+        # Построение базового запроса
+        base_query = '''
+                     SELECT o.id, \
+                            o.title, \
+                            o.description, \
+                            o.content, \
+                            o.price, \
+                            o.currency,
+                            o.category, \
+                            o.status, \
+                            o.created_at, \
+                            o.updated_at,
+                            o.target_audience, \
+                            o.requirements, \
+                            o.deadline, \
+                            o.budget_total,
+                            o.duration_days, \
+                            o.min_subscribers, \
+                            o.max_subscribers, \
+                            o.metadata,
+                            u.username   as creator_username, \
+                            u.first_name as creator_name
+                     FROM offers o
+                              JOIN users u ON o.created_by = u.id
+                     WHERE o.created_by = ? \
+                     '''
+
+        count_query = '''
+                      SELECT COUNT(*) as total
+                      FROM offers o
+                      WHERE o.created_by = ? \
+                      '''
+
+        params = [user_db_id]
+
+        # Добавляем фильтры
+        if status_filter:
+            base_query += ' AND o.status = ?'
+            count_query += ' AND o.status = ?'
+            params.append(status_filter)
+
+        if search:
+            base_query += ' AND (o.title LIKE ? OR o.description LIKE ?)'
+            count_query += ' AND (o.title LIKE ? OR o.description LIKE ?)'
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term])
+
+        if category_filter:
+            base_query += ' AND o.category = ?'
+            count_query += ' AND o.category = ?'
+            params.append(category_filter)
+
+        # Получаем общее количество (для пагинации)
+        total_count = db_manager.execute_query(count_query, tuple(params), fetch_one=True)['total']
+
+        # Добавляем сортировку и пагинацию
+        base_query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
+
+        # Получаем офферы
+        offers = db_manager.execute_query(base_query, tuple(params), fetch_all=True)
+        logger.info(f"Найдено офферов: {len(offers)} (всего в БД: {total_count})")
+
+        if not offers:
             return jsonify({
                 'success': True,
-                'offers': offers,
-                'count': len(offers),
+                'offers': [],
+                'count': 0,
+                'total_count': total_count,
+                'page': page,
+                'total_pages': 0,
                 'user_id': telegram_user_id
             })
 
-        except ImportError as e:
-            logger.error(f"Ошибка импорта get_user_offers: {e}")
-            return jsonify({
-                'success': False,
-                'error': f'Модуль системы офферов недоступен: {str(e)}'
-            }), 503
-        except Exception as e:
-            logger.error(f"Ошибка в get_user_offers: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({
-                'success': False,
-                'error': f'Ошибка получения офферов: {str(e)}'
-            }), 500
+        # ОПТИМИЗИРОВАННЫЙ подсчет откликов одним запросом
+        offer_ids = [str(offer['id']) for offer in offers]
+        offer_ids_str = ','.join(offer_ids)
+
+        # Получаем статистику откликов для всех офферов одним запросом
+        response_stats = db_manager.execute_query(f'''
+            SELECT offer_id,
+                   COUNT(*) as total_count,
+                   COUNT(CASE WHEN status = 'accepted' THEN 1 END) as accepted_count,
+                   COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending_count,
+                   COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected_count
+            FROM offer_responses 
+            WHERE offer_id IN ({offer_ids_str})
+            GROUP BY offer_id
+        ''', fetch_all=True)
+
+        # Создаем словарь для быстрого поиска статистики
+        stats_dict = {}
+        for stat in response_stats:
+            stats_dict[stat['offer_id']] = {
+                'total_count': stat['total_count'],
+                'accepted_count': stat['accepted_count'],
+                'pending_count': stat['pending_count'],
+                'rejected_count': stat['rejected_count']
+            }
+
+        # Форматируем данные для фронтенда
+        formatted_offers = []
+        for offer in offers:
+            offer_id = offer['id']
+
+            # Получаем статистику откликов
+            stats = stats_dict.get(offer_id, {
+                'total_count': 0,
+                'accepted_count': 0,
+                'pending_count': 0,
+                'rejected_count': 0
+            })
+
+            # Парсим метаданные
+            try:
+                metadata = json.loads(offer.get('metadata', '{}')) if offer.get('metadata') else {}
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+
+            # Рассчитываем дополнительные метрики
+            response_count = stats['total_count']
+            acceptance_rate = (stats['accepted_count'] / response_count * 100) if response_count > 0 else 0
+
+            # Определяем эффективность оффера
+            effectiveness = 'high' if acceptance_rate >= 50 else 'medium' if acceptance_rate >= 20 else 'low'
+
+            formatted_offer = {
+                # Основная информация
+                'id': offer['id'],
+                'title': offer['title'],
+                'description': offer['description'],
+                'content': offer['content'],
+                'category': offer['category'] or 'general',
+                'status': offer['status'] or 'active',
+
+                # Финансовые данные
+                'price': float(offer['price']) if offer['price'] else 0,
+                'currency': offer['currency'] or 'RUB',
+                'budget_total': float(offer.get('budget_total', 0)) if offer.get('budget_total') else 0,
+
+                # Настройки таргетинга
+                'target_audience': offer.get('target_audience', ''),
+                'min_subscribers': offer.get('min_subscribers', 1),
+                'max_subscribers': offer.get('max_subscribers', 100000000),
+
+                # Требования и условия
+                'requirements': offer.get('requirements', ''),
+                'deadline': offer.get('deadline', ''),
+                'duration_days': offer.get('duration_days', 30),
+
+                # Временные метки
+                'created_at': offer['created_at'],
+                'updated_at': offer['updated_at'],
+
+                # Статистика откликов
+                'response_count': response_count,
+                'accepted_count': stats['accepted_count'],
+                'pending_count': stats['pending_count'],
+                'rejected_count': stats['rejected_count'],
+                'acceptance_rate': round(acceptance_rate, 1),
+                'effectiveness': effectiveness,
+
+                # Информация о создателе
+                'creator_username': offer.get('creator_username', ''),
+                'creator_name': offer.get('creator_name', ''),
+
+                # Дополнительные данные
+                'metadata': metadata,
+
+                # Вычисляемые поля
+                'is_active': offer['status'] == 'active',
+                'has_responses': response_count > 0,
+                'needs_attention': stats['pending_count'] > 0,
+                'is_successful': stats['accepted_count'] > 0
+            }
+
+            formatted_offers.append(formatted_offer)
+            logger.debug(f"Оффер {offer_id} '{offer['title']}': {response_count} откликов")
+
+        # Рассчитываем общую статистику пользователя
+        total_responses = sum(stats_dict[oid]['total_count'] for oid in stats_dict)
+        total_accepted = sum(stats_dict[oid]['accepted_count'] for oid in stats_dict)
+        total_pending = sum(stats_dict[oid]['pending_count'] for oid in stats_dict)
+
+        logger.info(f"Возвращаем {len(formatted_offers)} офферов. Всего откликов: {total_responses}")
+
+        return jsonify({
+            'success': True,
+            'offers': formatted_offers,
+            'count': len(formatted_offers),
+            'total_count': total_count,
+            'page': page,
+            'total_pages': (total_count + limit - 1) // limit,
+            'user_id': telegram_user_id,
+
+            # Сводная статистика
+            'summary': {
+                'total_offers': total_count,
+                'total_responses': total_responses,
+                'total_accepted': total_accepted,
+                'total_pending': total_pending,
+                'overall_acceptance_rate': round((total_accepted / total_responses * 100) if total_responses > 0 else 0,
+                                                 1)
+            },
+
+            # Фильтры для фронтенда
+            'filters': {
+                'status': status_filter,
+                'search': search,
+                'category': category_filter,
+                'page': page,
+                'limit': limit
+            }
+        })
 
     except Exception as e:
-        logger.error(f"Общая ошибка в get_my_offers: {e}")
+        logger.error(f"Ошибка получения офферов: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
