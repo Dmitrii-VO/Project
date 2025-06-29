@@ -1000,7 +1000,56 @@ async function deleteMultipleOffers() {
         showEmptyOffersState();
     }
 }
+async function deleteContract(contractId) {
+    // Проверка входных данных
+    if (!contractId) {
+        console.error('❌ contractId не указан');
+        alert('❌ Ошибка: ID контракта не указан');
+        return;
+    }
 
+    const confirmMessage = `Вы уверены, что хотите удалить этот контракт?
+
+⚠️ Это действие нельзя отменить!
+
+Контракт будет полностью удален из системы, включая:
+• Все связанные данные
+• Историю мониторинга  
+• Записи о платежах
+
+Продолжить?`;
+
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/offers/contracts/${contractId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': getTelegramUserId()
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert('✅ ' + result.message);
+            loadUserContracts(); // Обновляем список контрактов
+        } else {
+            throw new Error(result.error || 'Неизвестная ошибка удаления контракта');
+        }
+
+    } catch (error) {
+        console.error('❌ Ошибка удаления контракта:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    }
+}
 // ===== ФУНКЦИИ УПРАВЛЕНИЯ СТАТУСОМ ОФФЕРА =====
 
 async function cancelOffer(offerId, offerTitle, buttonElement) {
@@ -1868,7 +1917,24 @@ function getResponsesStatusSummary(responses) {
         .map(([status, count]) => `${statusLabels[status] || status}: ${count}`)
         .join('<br>');
 }
+function checkContractsElements() {
+    const elements = {
+        contractsTab: document.getElementById('contracts'),
+        contractsGrid: document.getElementById('contractsGrid'),
+        activeContractsCount: document.getElementById('activeContractsCount'),
+        completedContractsCount: document.getElementById('completedContractsCount'),
+        totalEarningsAmount: document.getElementById('totalEarningsAmount')
+    };
 
+    console.log('🔍 Проверка элементов страницы контрактов:', elements);
+
+    // Создаем недостающие элементы
+    if (elements.contractsTab && !elements.contractsGrid) {
+        createContractsContainer();
+    }
+
+    return elements;
+}
 function getStatusStyle(status) {
     const styles = {
         'pending': 'background: #fed7d7; color: #c53030;',
@@ -1877,17 +1943,6 @@ function getStatusStyle(status) {
         'interested': 'background: #bee3f8; color: #2b6cb0;'
     };
     return styles[status] || 'background: #e2e8f0; color: #4a5568;';
-}
-
-
-function getStatusText(status) {
-    const texts = {
-        'pending': 'На рассмотрении',
-        'accepted': 'Принят',
-        'rejected': 'Отклонён',
-        'interested': 'Заинтересован'
-    };
-    return texts[status] || status;
 }
 
 async function respondToResponse(responseId, action) {
@@ -1974,229 +2029,334 @@ async function respondToResponse(responseId, action) {
 }
 
 function formatDate(dateString) {
-    if (!dateString) return 'Недавно';
+    if (!dateString) return 'Не указано';
 
     try {
         const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'Неверная дата';
+
         return date.toLocaleDateString('ru-RU', {
-            day: '2-digit',
-            month: '2-digit',
             year: 'numeric',
+            month: 'short',
+            day: 'numeric',
             hour: '2-digit',
             minute: '2-digit'
         });
-    } catch {
-        return 'Недавно';
+    } catch (error) {
+        console.warn('⚠️ Ошибка форматирования даты:', dateString, error);
+        return 'Ошибка даты';
     }
 }
 
 function renderContracts(contracts) {
-    console.log('🎨 Отрисовка контрактов:', contracts.length);
+    console.log('🎨 Рендерим контракты:', contracts);
 
-    // Создаем контейнер для контрактов если его нет
-    let container = document.getElementById('contractsGrid');
+    // ИСПРАВЛЕНИЕ: Используем правильный ID из HTML
+    const container = document.getElementById('contractsGrid'); // ✅ ПРАВИЛЬНО!
     if (!container) {
-        container = document.createElement('div');
-        container.id = 'contractsGrid';
-        container.style.cssText = 'margin-top: 20px;';
-
-        // Добавляем после существующих элементов
-        const offersContainer = document.querySelector('.container');
-        if (offersContainer) {
-            offersContainer.appendChild(container);
-        }
+        console.error('❌ Элемент contractsGrid не найден для рендеринга');
+        createContractsContainer(); // Пытаемся создать
+        return;
     }
 
-    if (!contracts || contracts.length === 0) {
+    // Проверка валидности данных
+    if (!Array.isArray(contracts)) {
+        console.warn('⚠️ contracts не является массивом:', contracts);
+        contracts = [];
+    }
+
+    // Проверка: пустой список
+    if (contracts.length === 0) {
         container.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon" style="font-size: 48px; margin-bottom: 16px;">📋</div>
-                <h3>Нет активных контрактов</h3>
-                <p>Когда вы примете отклик или откликнетесь на оффер, контракты появятся здесь</p>
+            <div style="text-align: center; padding: 40px; color: #718096;">
+                <div style="font-size: 48px; margin-bottom: 16px;">📋</div>
+                <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Контрактов пока нет</div>
+                <div style="font-size: 14px;">Контракты появятся после принятия ваших откликов на офферы</div>
             </div>
         `;
         return;
     }
 
-    let html = '';
-    contracts.forEach(contract => {
-        const statusColors = {
-            'active': '#ed8936',
-            'verification': '#3182ce',
-            'monitoring': '#38a169',
-            'completed': '#48bb78',
-            'cancelled': '#e53e3e',
-            'expired': '#a0aec0',
-            'violation': '#e53e3e',
-            'verification_failed': '#e53e3e'
-        };
+    try {
+        // Группируем контракты по статусам
+        const groupedContracts = contracts.reduce((groups, contract) => {
+            if (!contract || typeof contract !== 'object') {
+                console.warn('⚠️ Невалидный контракт:', contract);
+                return groups;
+            }
 
-        const statusTexts = {
-            'active': 'Ожидает размещения',
-            'verification': 'Проверка размещения',
-            'monitoring': 'Мониторинг',
-            'completed': 'Завершен',
-            'cancelled': 'Отменен',
-            'expired': 'Просрочен',
-            'violation': 'Нарушение',
-            'verification_failed': 'Проверка не пройдена'
-        };
+            const status = contract.status || 'unknown';
+            if (!groups[status]) groups[status] = [];
+            groups[status].push(contract);
+            return groups;
+        }, {});
 
-        const statusColor = statusColors[contract.status] || '#718096';
-        const statusText = statusTexts[contract.status] || contract.status;
-        const isPublisher = contract.role === 'publisher';
+        // Порядок отображения статусов
+        const statusOrder = ['active', 'verification', 'monitoring', 'verification_failed', 'cancelled', 'completed', 'expired', 'violation'];
 
-        html += `
-            <div class="contract-card" data-contract-id="${contract.id}" style="
-                background: white;
-                border: 1px solid #e2e8f0;
-                border-radius: 12px;
-                padding: 16px;
-                margin-bottom: 16px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                cursor: pointer;
-            " onclick="showContractDetails('${contract.id}')">
-                
-                <!-- Заголовок и статус -->
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="margin: 0; color: #2d3748; font-size: 16px; font-weight: 600; flex: 1;">
-                        ${contract.offer_title}
+        let html = '';
+
+        statusOrder.forEach(status => {
+            if (!groupedContracts[status] || groupedContracts[status].length === 0) return;
+
+            const statusNames = {
+                'active': 'Ожидают размещения',
+                'verification': 'На проверке',
+                'monitoring': 'Мониторинг',
+                'verification_failed': 'Проверка не пройдена',
+                'cancelled': 'Отмененные',
+                'completed': 'Завершенные',
+                'expired': 'Просроченные',
+                'violation': 'Нарушения'
+            };
+
+            html += `
+                <div style="margin-bottom: 24px;">
+                    <h3 style="color: #2d3748; font-size: 16px; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;">
+                        ${statusNames[status] || status} (${groupedContracts[status].length})
                     </h3>
-                    <span style="
-                        padding: 4px 12px;
-                        border-radius: 12px;
-                        font-size: 12px;
-                        font-weight: 500;
-                        background: ${statusColor}20;
-                        color: ${statusColor};
-                        margin-left: 12px;
-                    ">${statusText}</span>
-                </div>
-                
-                <!-- Роль и участники -->
-                <div style="margin-bottom: 12px; padding: 8px 12px; background: ${isPublisher ? '#f0fff4' : '#ebf8ff'}; border-radius: 6px;">
-                    <div style="font-size: 12px; color: #666;">
-                        ${isPublisher ? '📺 Вы - издатель' : '📢 Вы - рекламодатель'}
-                    </div>
-                    <div style="font-size: 14px; font-weight: 600; color: #333;">
-                        ${isPublisher ? `Канал: ${contract.channel_title}` : `Издатель: ${contract.publisher_name}`}
-                    </div>
-                </div>
-                
-                <!-- Основная информация -->
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; font-size: 14px;">
-                    <div>
-                        <span style="color: #718096;">💰 Сумма:</span>
-                        <span style="font-weight: 600; color: #2d3748;">${formatPrice(contract.price)} RUB</span>
-                    </div>
-                    <div>
-                        <span style="color: #718096;">📅 Создан:</span>
-                        <span style="font-weight: 600; color: #2d3748;">${formatDate(contract.created_at)}</span>
-                    </div>
-                </div>
-                
-                <!-- Дедлайны -->
-                ${contract.status === 'active' ? `
-                    <div style="background: #fffaf0; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
-                        <div style="font-size: 12px; color: #c05621;">⏰ Разместить до:</div>
-                        <div style="font-size: 14px; font-weight: 600; color: #c05621;">
-                            ${formatDate(contract.placement_deadline)}
-                        </div>
-                    </div>
-                ` : ''}
-                
-                ${contract.status === 'monitoring' ? `
-                    <div style="background: #f0fff4; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
-                        <div style="font-size: 12px; color: #276749;">🔍 Мониторинг до:</div>
-                        <div style="font-size: 14px; font-weight: 600; color: #276749;">
-                            ${formatDate(contract.monitoring_end)}
-                        </div>
-                    </div>
-                ` : ''}
+                    <div style="display: grid; gap: 12px;">
+            `;
 
-                ${contract.status === 'verification_failed' ? `
-                    <div style="background: #fed7d7; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
-                        <div style="font-size: 12px; color: #c53030;">❌ Причина:</div>
-                        <div style="font-size: 14px; font-weight: 600; color: #c53030;">
-                            ${contract.verification_details || 'Размещение не соответствует требованиям'}
-                        </div>
+            groupedContracts[status].forEach(contract => {
+                try {
+                    html += renderSingleContract(contract);
+                } catch (contractError) {
+                    console.error('❌ Ошибка рендеринга контракта:', contract, contractError);
+                }
+            });
+
+            html += `
                     </div>
-                ` : ''}
+                </div>
+            `;
+        });
+
+        // Безопасная установка innerHTML
+        if (container && typeof container.innerHTML !== 'undefined') {
+            container.innerHTML = html;
+        } else {
+            console.error('❌ Не удается установить innerHTML для контейнера');
+        }
+
+    } catch (error) {
+        console.error('❌ Критическая ошибка рендеринга контрактов:', error);
+
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #e53e3e;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">💥</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Ошибка отображения</div>
+                    <div style="font-size: 14px; margin-bottom: 16px;">Не удалось отобразить контракты</div>
+                    <button class="btn btn-outline" onclick="loadUserContracts()">🔄 Перезагрузить</button>
+                </div>
+            `;
+        }
+    }
+}
+function renderSingleContract(contract) {
+    // Безопасное получение значений с fallback
+    const contractId = contract.id || '';
+    const offerTitle = contract.offer_title || 'Без названия';
+    const status = contract.status || 'unknown';
+    const role = contract.role || 'unknown';
+    const price = contract.price || 0;
+    const createdAt = contract.created_at || '';
+    const isPublisher = role === 'publisher';
+    const canDelete = ['verification_failed', 'cancelled'].includes(status);
+
+    const advertiserName = contract.advertiser_name || 'Неизвестно';
+    const channelTitle = contract.channel_title || 'Неизвестно';
+    const placementDeadline = contract.placement_deadline || '';
+    const monitoringEnd = contract.monitoring_end || '';
+    const verificationDetails = contract.verification_details || 'Размещение не соответствует требованиям';
+    const violationReason = contract.violation_reason || 'Контракт отменен';
+
+    return `
+        <div class="contract-card" onclick="showContractDetails('${contractId}')" style="
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        ">
+            <!-- Статус -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div style="
+                    background: ${getStatusColor(status)};
+                    color: white;
+                    padding: 4px 8px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: 600;
+                ">${getStatusText(status)}</div>
                 
-                <!-- Кнопки действий -->
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                    <button onclick="event.stopPropagation(); showContractDetails('${contract.id}')" style="
+                <div style="font-size: 12px; color: #718096;">
+                    ${formatDate(createdAt)}
+                </div>
+            </div>
+
+            <!-- Основная информация -->
+            <div style="margin-bottom: 12px;">
+                <div style="font-weight: 600; color: #2d3748; margin-bottom: 4px;">
+                    ${offerTitle}
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #718096; font-size: 14px;">
+                        ${isPublisher ? '💼 ' + advertiserName : '📺 ' + channelTitle}
+                    </span>
+                    <span style="font-weight: 600; color: #48bb78;">
+                        ${price} ₽
+                    </span>
+                </div>
+            </div>
+
+            <!-- Дополнительная информация по статусу -->
+            ${status === 'active' && placementDeadline ? `
+                <div style="background: #fffaf0; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
+                    <div style="font-size: 12px; color: #c05621;">⏰ Разместить до:</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #c05621;">
+                        ${formatDate(placementDeadline)}
+                    </div>
+                </div>
+            ` : ''}
+            
+            ${status === 'monitoring' && monitoringEnd ? `
+                <div style="background: #f0fff4; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
+                    <div style="font-size: 12px; color: #276749;">🔍 Мониторинг до:</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #276749;">
+                        ${formatDate(monitoringEnd)}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${status === 'verification_failed' ? `
+                <div style="background: #fed7d7; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
+                    <div style="font-size: 12px; color: #c53030;">❌ Причина:</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #c53030;">
+                        ${verificationDetails}
+                    </div>
+                </div>
+            ` : ''}
+
+            ${status === 'cancelled' ? `
+                <div style="background: #fed7d7; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px;">
+                    <div style="font-size: 12px; color: #c53030;">🚫 Причина отмены:</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #c53030;">
+                        ${violationReason}
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- Кнопки действий -->
+            <div style="display: flex; gap: 8px; margin-top: 12px;">
+                <button onclick="event.stopPropagation(); showContractDetails('${contractId}')" style="
+                    flex: 1;
+                    padding: 8px 12px;
+                    border: 1px solid #667eea;
+                    background: #667eea;
+                    color: white;
+                    border-radius: 6px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                ">📋 Детали</button>
+                
+                ${status === 'active' && isPublisher ? `
+                    <button onclick="event.stopPropagation(); showPlacementForm('${contractId}')" style="
                         flex: 1;
                         padding: 8px 12px;
-                        border: 1px solid #667eea;
-                        background: #667eea;
+                        border: 1px solid #48bb78;
+                        background: #48bb78;
                         color: white;
                         border-radius: 6px;
                         font-size: 12px;
                         font-weight: 600;
                         cursor: pointer;
-                    ">📋 Детали</button>
-                    
-                    ${contract.status === 'active' && isPublisher ? `
-                        <button onclick="event.stopPropagation(); showPlacementForm('${contract.id}')" style="
-                            flex: 1;
-                            padding: 8px 12px;
-                            border: 1px solid #48bb78;
-                            background: #48bb78;
-                            color: white;
-                            border-radius: 6px;
-                            font-size: 12px;
-                            font-weight: 600;
-                            cursor: pointer;
-                        ">📤 Подать заявку</button>
-                    ` : ''}
-                    
-                    ${contract.status === 'active' && isPublisher ? `
-                        <button onclick="event.stopPropagation(); showContractInstructions(${JSON.stringify(contract).replace(/"/g, '&quot;')})" style="
-                            padding: 8px 12px;
-                            border: 1px solid #3182ce;
-                            background: #3182ce;
-                            color: white;
-                            border-radius: 6px;
-                            font-size: 12px;
-                            font-weight: 600;
-                            cursor: pointer;
-                        ">📋 Как размещать</button>
-                    ` : ''}
-                    
-                    ${['active', 'verification'].includes(contract.status) ? `
-                        <button onclick="event.stopPropagation(); cancelContract('${contract.id}')" style="
-                            padding: 8px 12px;
-                            border: 1px solid #e53e3e;
-                            background: #e53e3e;
-                            color: white;
-                            border-radius: 6px;
-                            font-size: 12px;
-                            font-weight: 600;
-                            cursor: pointer;
-                        ">❌ Отменить</button>
-                    ` : ''}
+                    ">📤 Подать заявку</button>
+                ` : ''}
+                
+                ${status === 'active' ? `
+                    <button onclick="event.stopPropagation(); cancelContract('${contractId}')" style="
+                        flex: 1;
+                        padding: 8px 12px;
+                        border: 1px solid #e53e3e;
+                        background: white;
+                        color: #e53e3e;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">❌ Отменить</button>
+                ` : ''}
 
-                    ${contract.status === 'verification_failed' ? `
-                        <button onclick="event.stopPropagation(); deleteFailedContract('${contract.id}', '${contract.offer_title.replace(/'/g, "\\'")}', this)" style="
-                            padding: 8px 12px;
-                            border: 1px solid #e53e3e;
-                            background: #e53e3e;
-                            color: white;
-                            border-radius: 6px;
-                            font-size: 12px;
-                            font-weight: 600;
-                            cursor: pointer;
-                        ">🗑️ Удалить</button>
-                    ` : ''}
-                </div>
+                ${canDelete ? `
+                    <button onclick="event.stopPropagation(); deleteContract('${contractId}')" style="
+                        flex: 1;
+                        padding: 8px 12px;
+                        border: 1px solid #e53e3e;
+                        background: #e53e3e;
+                        color: white;
+                        border-radius: 6px;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                    ">🗑️ Удалить</button>
+                ` : ''}
             </div>
-        `;
-    });
+        </div>
+    `;
+}
+function createContractsContainer() {
+    console.log('🔧 Создаем недостающий контейнер contractsGrid');
 
-    container.innerHTML = html;
+    // Ищем таб контрактов
+    const contractsTab = document.getElementById('contracts');
+    if (contractsTab) {
+        // Создаем контейнер
+        const container = document.createElement('div');
+        container.id = 'contractsGrid';
+        container.style.cssText = 'margin-top: 20px;';
+
+        // Добавляем в таб
+        contractsTab.appendChild(container);
+        console.log('✅ Контейнер contractsGrid создан');
+
+        // Пытаемся загрузить контракты еще раз
+        setTimeout(() => loadUserContracts(), 100);
+    } else {
+        console.error('❌ Таб contracts не найден, не можем создать контейнер');
+    }
+}
+function getStatusColor(status) {
+    const colors = {
+        'active': '#ed8936',
+        'verification': '#3182ce',
+        'monitoring': '#38a169',
+        'completed': '#48bb78',
+        'cancelled': '#e53e3e',
+        'expired': '#a0aec0',
+        'violation': '#e53e3e',
+        'verification_failed': '#e53e3e'
+    };
+    return colors[status] || '#718096';
 }
 
+function getStatusText(status) {
+    const texts = {
+        'active': 'Ожидает размещения',
+        'verification': 'Проверка размещения',
+        'monitoring': 'Мониторинг',
+        'completed': 'Завершен',
+        'cancelled': 'Отменен',
+        'expired': 'Просрочен',
+        'violation': 'Нарушение',
+        'verification_failed': 'Проверка не пройдена'
+    };
+    return texts[status] || status;
+}
 // Функция удаления неудачных контрактов
 async function deleteFailedContract(contractId, offerTitle, buttonElement) {
     console.log('🗑️ Запрос на удаление неудачного контракта:', contractId);
@@ -2900,10 +3060,24 @@ function showContractsTab() {
 async function loadUserContracts() {
     console.log('📋 Загрузка контрактов пользователя...');
 
-    // Показываем состояние загрузки
-    showContractsLoading();
+    // ИСПРАВЛЕНИЕ: Используем правильный ID из HTML
+    const container = document.getElementById('contractsGrid'); // ✅ ПРАВИЛЬНО!
+    if (!container) {
+        console.error('❌ Элемент contractsGrid не найден на странице');
+        // Пытаемся создать контейнер, если его нет
+        createContractsContainer();
+        return;
+    }
 
     try {
+        // Показываем индикатор загрузки
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #718096;">
+                <div style="font-size: 20px; margin-bottom: 12px;">⏳</div>
+                <div>Загружаем контракты...</div>
+            </div>
+        `;
+
         const response = await fetch('/api/offers/contracts', {
             method: 'GET',
             headers: {
@@ -2912,25 +3086,41 @@ async function loadUserContracts() {
             }
         });
 
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
         const result = await response.json();
 
         if (result.success) {
-            console.log('✅ Контракты загружены:', result.contracts?.length || 0);
-
-            // Обновляем статистику
-            updateContractsStats(result.contracts || []);
-
-            // Отрисовываем контракты
+            console.log(`✅ Загружено контрактов: ${result.contracts ? result.contracts.length : 0}`);
             renderContracts(result.contracts || []);
+            updateContractsStats(result.contracts || []);
         } else {
-            throw new Error(result.error || 'Ошибка загрузки контрактов');
+            throw new Error(result.error || 'Неизвестная ошибка загрузки контрактов');
         }
 
     } catch (error) {
         console.error('❌ Ошибка загрузки контрактов:', error);
-        showContractsError('Ошибка загрузки контрактов: ' + error.message);
-    } finally {
-        hideContractsLoading();
+
+        // Показываем ошибку в контейнере
+        if (container) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 40px; color: #e53e3e;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">❌</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">Ошибка загрузки</div>
+                    <div style="font-size: 14px; margin-bottom: 16px;">${error.message}</div>
+                    <button class="btn btn-outline" onclick="loadUserContracts()" style="
+                        padding: 8px 16px;
+                        border: 1px solid #667eea;
+                        background: white;
+                        color: #667eea;
+                        border-radius: 6px;
+                        cursor: pointer;
+                    ">🔄 Попробовать снова</button>
+                </div>
+            `;
+        }
     }
 }
 
@@ -2954,27 +3144,41 @@ function hideContractsLoading() {
 }
 
 function updateContractsStats(contracts) {
-    // Подсчитываем статистику
-    const activeCount = contracts.filter(c => ['active', 'verification', 'monitoring'].includes(c.status)).length;
-    const completedCount = contracts.filter(c => c.status === 'completed').length;
-    const totalEarnings = contracts
-        .filter(c => c.status === 'completed' && c.role === 'publisher')
-        .reduce((sum, c) => sum + (c.price || 0), 0);
+    if (!Array.isArray(contracts)) {
+        console.warn('⚠️ contracts не является массивом для статистики');
+        contracts = [];
+    }
 
-    // Обновляем элементы статистики
-    const activeElement = document.getElementById('activeContractsCount');
-    const completedElement = document.getElementById('completedContractsCount');
-    const earningsElement = document.getElementById('totalEarningsAmount');
+    // Пытаемся найти элементы статистики
+    const elements = {
+        active: document.getElementById('activeContractsCount'),
+        completed: document.getElementById('completedContractsCount'),
+        total: document.getElementById('totalEarningsAmount') // В шаблоне используется для заработка
+    };
 
-    if (activeElement) {
-        activeElement.textContent = activeCount;
+    // Вычисляем статистику
+    const stats = {
+        active: contracts.filter(c => c && ['active', 'verification', 'monitoring'].includes(c.status)).length,
+        completed: contracts.filter(c => c && c.status === 'completed').length,
+        earnings: contracts
+            .filter(c => c && c.status === 'completed')
+            .reduce((sum, c) => sum + (parseFloat(c.price) || 0), 0)
+    };
+
+    // Безопасно обновляем элементы
+    if (elements.active) {
+        elements.active.textContent = stats.active;
     }
-    if (completedElement) {
-        completedElement.textContent = completedCount;
+
+    if (elements.completed) {
+        elements.completed.textContent = stats.completed;
     }
-    if (earningsElement) {
-        earningsElement.textContent = formatPrice(totalEarnings) + ' ₽';
+
+    if (elements.total) {
+        elements.total.textContent = `${stats.earnings} ₽`;
     }
+
+    console.log('📊 Статистика обновлена:', stats);
 }
 
 // Добавить в app/static/js/offers.js функцию для показа инструкций
@@ -3051,10 +3255,6 @@ function addContractInstructionsButton(contractElement, contract) {
         contractElement.querySelector('.contract-actions')?.appendChild(instructionsBtn);
     }
 }
-
-// Модифицировать функцию renderContracts для добавления кнопок инструкций
-// Найти в существующем коде место создания элементов контракта и добавить:
-// addContractInstructionsButton(contractElement, contract);
 
 // ===== ОБНОВЛЕНИЕ СУЩЕСТВУЮЩИХ ФУНКЦИЙ =====
 

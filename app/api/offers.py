@@ -678,7 +678,7 @@ def get_contract_details(contract_id):
 
 @offers_bp.route('/contracts/<contract_id>/cancel', methods=['POST'])
 def cancel_contract_api(contract_id):
-    """Отмена контракта"""
+    """ИСПРАВЛЕННАЯ функция отмены контракта"""
     try:
         telegram_user_id = get_user_id_from_request()
         if not telegram_user_id:
@@ -711,14 +711,16 @@ def cancel_contract_api(contract_id):
         if contract['status'] in ['completed', 'cancelled']:
             return jsonify({'success': False, 'error': 'Контракт уже завершен или отменен'}), 400
 
-        # Отменяем контракт
+        # ИСПРАВЛЕНИЕ: Убираем дублирование параметра 'cancelled'
+        # Было: ('cancelled', reason, datetime.now().isoformat(), contract_id)
+        # Стало: (reason, datetime.now().isoformat(), contract_id)
         db_manager.execute_query('''
                                  UPDATE contracts
                                  SET status           = 'cancelled',
                                      violation_reason = ?,
                                      updated_at       = ?
                                  WHERE id = ?
-                                 ''', ('cancelled', reason, datetime.now().isoformat(), contract_id))
+                                 ''', (reason, datetime.now().isoformat(), contract_id))
 
         # Отменяем задачи мониторинга
         db_manager.execute_query('''
@@ -735,7 +737,7 @@ def cancel_contract_api(contract_id):
             from add_offer import send_contract_notification
             send_contract_notification(contract_id, 'cancelled', {'reason': reason})
         except ImportError:
-            pass
+            logger.warning("Не удалось импортировать send_contract_notification")
 
         logger.info(f"Контракт {contract_id} отменен пользователем {telegram_user_id}")
 
@@ -750,7 +752,7 @@ def cancel_contract_api(contract_id):
 
 @offers_bp.route('/contracts/<contract_id>', methods=['DELETE'])
 def delete_contract_api(contract_id):
-    """Удаление контракта (только для статуса verification_failed)"""
+    """ОБНОВЛЕННАЯ функция удаления контракта (для статусов verification_failed и cancelled)"""
     try:
         telegram_user_id = get_user_id_from_request()
         if not telegram_user_id:
@@ -783,32 +785,40 @@ def delete_contract_api(contract_id):
                 contract['publisher_telegram_id'] != telegram_user_id):
             return jsonify({'success': False, 'error': 'Нет доступа к этому контракту'}), 403
 
-        # Проверяем статус - можно удалять только verification_failed
-        if contract['status'] != 'verification_failed':
+        # ОБНОВЛЕНИЕ: Теперь можно удалять как verification_failed, так и cancelled контракты
+        deletable_statuses = ['verification_failed', 'cancelled']
+        if contract['status'] not in deletable_statuses:
             return jsonify({
                 'success': False,
-                'error': f'Можно удалять только контракты со статусом "verification_failed". Текущий статус: {contract["status"]}'
+                'error': f'Можно удалять только контракты со статусами: {", ".join(deletable_statuses)}. Текущий статус: {contract["status"]}'
             }), 400
 
         try:
             sys.path.insert(0, os.getcwd())
-            from add_offer import delete_failed_contract
+            from add_offer import delete_finished_contract
 
-            result = delete_failed_contract(contract_id, telegram_user_id)
+            result = delete_finished_contract(contract_id, telegram_user_id)
 
             if result['success']:
-                logger.info(f"Контракт {contract_id} удален пользователем {telegram_user_id}")
+                logger.info(f"Контракт {contract_id} (статус: {contract['status']}) удален пользователем {telegram_user_id}")
                 return jsonify(result), 200
             else:
                 return jsonify(result), 400
 
         except ImportError as e:
-            logger.error(f"Ошибка импорта delete_failed_contract: {e}")
+            logger.error(f"Ошибка импорта delete_finished_contract: {e}")
 
             # Fallback - удаляем напрямую
             try:
+                # Сначала удаляем связанные записи мониторинга
                 db_manager.execute_query(
-                    'DELETE FROM contracts WHERE id = ? AND status = "verification_failed"',
+                    'DELETE FROM monitoring_tasks WHERE contract_id = ?',
+                    (contract_id,)
+                )
+
+                # Затем удаляем сам контракт
+                db_manager.execute_query(
+                    'DELETE FROM contracts WHERE id = ? AND status IN ("verification_failed", "cancelled")',
                     (contract_id,)
                 )
 
@@ -1242,3 +1252,99 @@ def create_contract_api(response_id):
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
 
+# ДОБАВИТЬ в app/api/offers.py новый эндпоинт для диагностики
+
+@offers_bp.route('/debug/verify-post', methods=['POST'])
+def debug_verify_post():
+    """Диагностика проверки поста"""
+    try:
+        data = request.get_json()
+        if not data or 'post_url' not in data:
+            return jsonify({'success': False, 'error': 'Не указана ссылка на пост'}), 400
+
+        post_url = data['post_url'].strip()
+        expected_content = data.get('expected_content', '')
+
+        try:
+            sys.path.insert(0, os.getcwd())
+            from add_offer import debug_post_verification
+
+            result = debug_post_verification(post_url, expected_content)
+
+            return jsonify({
+                'success': True,
+                'debug_result': result,
+                'url': post_url
+            })
+
+        except ImportError as e:
+            logger.error(f"Ошибка импорта debug_post_verification: {e}")
+            return jsonify({
+                'success': False,
+                'error': 'Модуль диагностики недоступен'
+            }), 503
+
+    except Exception as e:
+        logger.error(f"Ошибка диагностики поста: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@offers_bp.route('/debug/test-post-verification', methods=['GET'])
+def test_post_verification_endpoint():
+    """Быстрый тест проверки поста vjissda/22"""
+    try:
+        sys.path.insert(0, os.getcwd())
+        from add_offer import test_post_verification
+
+        result = test_post_verification()
+
+        return jsonify({
+            'success': True,
+            'test_result': result
+        })
+
+    except ImportError as e:
+        logger.error(f"Ошибка импорта test_post_verification: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Модуль тестирования недоступен'
+        }), 503
+    except Exception as e:
+        logger.error(f"Ошибка тестирования: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# ДОБАВИТЬ в app/api/offers.py
+
+@offers_bp.route('/debug/quick-test', methods=['GET'])
+def quick_test_verification_endpoint():
+    """Быстрый тест проверки размещения"""
+    try:
+        sys.path.insert(0, os.getcwd())
+        from add_offer import quick_test_verification
+
+        # Захватываем вывод функции
+        import io
+        import contextlib
+
+        output_buffer = io.StringIO()
+        with contextlib.redirect_stdout(output_buffer):
+            quick_test_verification()
+
+        output = output_buffer.getvalue()
+
+        return jsonify({
+            'success': True,
+            'test_output': output,
+            'message': 'Быстрый тест выполнен'
+        })
+
+    except ImportError as e:
+        logger.error(f"Ошибка импорта quick_test_verification: {e}")
+        return jsonify({
+            'success': False,
+            'error': 'Модуль тестирования недоступен'
+        }), 503
+    except Exception as e:
+        logger.error(f"Ошибка быстрого теста: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
