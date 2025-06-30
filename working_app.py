@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Оптимизированный Telegram Mini App
-Рефакторированная версия с улучшенной архитектурой и производительностью
+ФИНАЛЬНАЯ ВЕРСИЯ - убрано дублирование, сохранена функциональность
 """
 
 import os
@@ -10,21 +10,6 @@ import sys
 import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
-
-import os
-
-import logger
-from dotenv import load_dotenv
-
-
-load_dotenv()
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-
-try:
-    from app.services.telegram_verification import verification_service
-except ImportError:
-    verification_service = None
-
 import requests
 
 # Добавляем пути для импорта модулей
@@ -46,34 +31,25 @@ except ImportError:
 # Flask импорты
 from flask import Flask, jsonify, request, render_template
 
+# Импорт add_offer для API функций
+try:
+    import add_offer
+
+    print("✅ add_offer модуль импортирован успешно")
+except ImportError as e:
+    print(f"❌ Ошибка импорта add_offer: {e}")
+    add_offer = None
+
 
 # === КОНФИГУРАЦИЯ ===
 class AppConfig:
     """Централизованная конфигурация приложения"""
 
-    # Основные настройки
-    SECRET_KEY = os.environ.get('SECRET_KEY')
-    DEBUG = os.environ.get('DEBUG')
+    SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key')
+    DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
     BOT_TOKEN = os.getenv("BOT_TOKEN")
-    # База данных
-    DATABASE_URL = os.environ.get('DATABASE_URL')
-    DATABASE_PATH = os.path.join(PROJECT_ROOT)
-
-    # Telegram
-    TELEGRAM_PAYMENT_TOKEN = os.environ.get('TELEGRAM_PAYMENT_TOKEN')
-    YOUR_TELEGRAM_ID = os.environ.get('YOUR_TELEGRAM_ID')
-
-    # Веб-хуки и безопасность
-    WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET')
+    DATABASE_PATH = os.path.join(PROJECT_ROOT, 'telegram_mini_app.db')
     WEBAPP_URL = os.environ.get('WEBAPP_URL', 'http://localhost:5000')
-
-    # Функциональность
-    FEATURES = {
-        'telegram_integration': os.environ.get('TELEGRAM_INTEGRATION', 'True').lower() == 'true',
-        'offers_system': os.environ.get('OFFERS_SYSTEM_ENABLED', 'True').lower() == 'true',
-        'payments_system': os.environ.get('PAYMENTS_SYSTEM_ENABLED', 'True').lower() == 'true',
-        'analytics_system': os.environ.get('ANALYTICS_SYSTEM_ENABLED', 'True').lower() == 'true',
-    }
 
     # Настройки производительности
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB
@@ -113,73 +89,57 @@ def setup_logging() -> logging.Logger:
     return logger
 
 
-def setup_telegram_webhook():
-    """Настройка webhook для Telegram бота"""
-    import requests
+# === УТИЛИТЫ ===
+def get_user_id_from_request():
+    """Получение user_id из заголовков запроса"""
+    user_id = request.headers.get('X-Telegram-User-Id')
+    if user_id:
+        try:
+            return int(user_id)
+        except (ValueError, TypeError):
+            pass
 
-    bot_token = AppConfig.BOT_TOKEN
-    webhook_url = f"{AppConfig.WEBAPP_URL}/api/channels/webhook"
-
+    # Fallback к основному пользователю
+    fallback_id = os.environ.get('YOUR_TELEGRAM_ID', '373086959')
     try:
-        # Устанавливаем webhook с расширенными разрешениями
-        url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
-        response = requests.post(url, json={
-            'url': webhook_url,
-            'allowed_updates': [
-                'channel_post',  # Сообщения в каналах
-                'message',  # Личные сообщения боту (включая пересылки)
-                'edited_message',  # Отредактированные сообщения
-                'edited_channel_post'  # Отредактированные сообщения каналов
-            ],
-            'drop_pending_updates': False  # Не удаляем ожидающие обновления
-        })
+        return int(fallback_id)
+    except (ValueError, TypeError):
+        return 373086959
 
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('ok'):
-                logger.info(f"✅ Webhook установлен: {webhook_url}")
-                logger.info(f"📥 Разрешенные обновления: channel_post, message, edited_message, edited_channel_post")
-            else:
-                logger.error(f"❌ Ошибка установки webhook: {result.get('description')}")
+
+def execute_db_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
+    """Универсальная функция для работы с БД"""
+    try:
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(query, params)
+
+        if fetch_one:
+            result = cursor.fetchone()
+            conn.close()
+            return dict(result) if result else None
+        elif fetch_all:
+            result = cursor.fetchall()
+            conn.close()
+            return [dict(row) for row in result] if result else []
         else:
-            logger.error(f"❌ HTTP ошибка: {response.status_code}")
+            conn.commit()
+            lastrowid = cursor.lastrowid
+            conn.close()
+            return lastrowid
 
     except Exception as e:
-        logger.error(f"❌ Ошибка настройки webhook: {e}")
+        logger.error(f"Ошибка выполнения запроса: {e}")
+        if 'conn' in locals():
+            conn.close()
+        raise
 
-
-# Также добавить функцию для проверки статуса webhook:
-def check_webhook_status():
-    """Проверка статуса webhook"""
-    try:
-        import requests
-
-        bot_token = AppConfig.BOT_TOKEN
-        if not bot_token:
-            return False
-
-        url = f"https://api.telegram.org/bot{bot_token}/getWebhookInfo"
-        response = requests.get(url, timeout=10)
-
-        if response.status_code == 200:
-            result = response.json()
-            if result.get('ok'):
-                webhook_info = result.get('result', {})
-                logger.info(f"📊 Webhook статус:")
-                logger.info(f"   URL: {webhook_info.get('url', 'Не установлен')}")
-                logger.info(f"   Ожидающих обновлений: {webhook_info.get('pending_update_count', 0)}")
-                logger.info(f"   Последняя ошибка: {webhook_info.get('last_error_message', 'Нет ошибок')}")
-                return True
-
-        return False
-
-    except Exception as e:
-        logger.error(f"Ошибка проверки webhook: {e}")
-        return False
 
 # === СОЗДАНИЕ ПРИЛОЖЕНИЯ ===
 def create_app() -> Flask:
-    """Фабрика приложений с улучшенной архитектурой"""
+    """Фабрика приложений"""
 
     app = Flask(__name__, static_folder='app/static', template_folder='templates')
     app.config.from_object(AppConfig)
@@ -189,123 +149,493 @@ def create_app() -> Flask:
     app.json.sort_keys = AppConfig.JSON_SORT_KEYS
 
     # Инициализация компонентов
-    init_database(app)
-    register_blueprints(app)  # Включает main_router.py с основными страницами
+    register_blueprints(app)
     register_middleware(app)
     register_error_handlers(app)
-    register_system_routes(app)  # Только служебные маршруты
-
+    register_offers_api(app)  # 🎯 Единый API для offers
+    register_system_routes(app)
 
     return app
 
 
+# === РЕГИСТРАЦИЯ OFFERS API ===
+def register_offers_api(app: Flask) -> None:
+    """Единый API для offers - устраняет дублирование между working_app.py и offers.py"""
 
-# === ИНИЦИАЛИЗАЦИЯ БАЗЫ ДАННЫХ ===
-def init_database(app: Flask) -> None:
-    """Инициализация базы данных"""
+    if not add_offer:
+        logger.error("❌ add_offer модуль не загружен")
+        return
+
     try:
-        # Проверяем существование БД
-        if not os.path.exists(AppConfig.DATABASE_PATH):
-            logger.warning("⚠️ База данных не найдена, создаем новую...")
-            # Здесь можно добавить создание БД
+        logger.info("🎯 Регистрация offers API...")
 
-        logger.info("✅ База данных инициализирована")
+        # === МОИ ОФФЕРЫ ===
+        @app.route('/api/offers/my', methods=['GET'])
+        def get_my_offers():
+            """Получение офферов текущего пользователя"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                logger.info(f"📋 Запрос офферов пользователя {telegram_user_id}")
+
+                # Получаем ID пользователя в БД
+                user = execute_db_query(
+                    'SELECT id FROM users WHERE telegram_id = ?',
+                    (telegram_user_id,),
+                    fetch_one=True
+                )
+
+                if not user:
+                    return jsonify({'success': False, 'error': 'Пользователь не найден'}), 404
+
+                # Получаем офферы с откликами одним запросом
+                offers = execute_db_query("""
+                                          SELECT o.*,
+                                                 COUNT(or_resp.id)                                       as response_count,
+                                                 COUNT(CASE WHEN or_resp.status = 'accepted' THEN 1 END) as accepted_count
+                                          FROM offers o
+                                                   LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
+                                          WHERE o.created_by = ?
+                                          GROUP BY o.id
+                                          ORDER BY o.created_at DESC
+                                          """, (user['id'],), fetch_all=True)
+
+                # Форматируем для фронтенда
+                formatted_offers = []
+                for offer in offers:
+                    formatted_offers.append({
+                        'id': offer['id'],
+                        'title': offer['title'],
+                        'description': offer['description'],
+                        'content': offer['content'],
+                        'price': float(offer['price']) if offer['price'] else 0,
+                        'currency': offer['currency'] or 'RUB',
+                        'category': offer['category'] or 'general',
+                        'status': offer['status'] or 'active',
+                        'created_at': offer['created_at'],
+                        'updated_at': offer['updated_at'],
+                        'response_count': offer['response_count'] or 0,
+                        'accepted_count': offer['accepted_count'] or 0,
+                        'budget_total': float(offer.get('budget_total', 0)) if offer.get('budget_total') else 0,
+                        'duration_days': offer.get('duration_days', 30),
+                        'min_subscribers': offer.get('min_subscribers', 1),
+                        'max_subscribers': offer.get('max_subscribers', 100000000),
+                        'target_audience': offer.get('target_audience', ''),
+                        'requirements': offer.get('requirements', ''),
+                        'deadline': offer.get('deadline', '')
+                    })
+
+                return jsonify({
+                    'success': True,
+                    'offers': formatted_offers,
+                    'total': len(formatted_offers)
+                })
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка получения офферов: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === СОЗДАНИЕ ОФФЕРА ===
+        @app.route('/api/offers', methods=['POST'])
+        def create_offer():
+            """Создание нового оффера"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                data = request.get_json()
+
+                if not data:
+                    return jsonify({'success': False, 'error': 'Данные не предоставлены'}), 400
+
+                logger.info(f"➕ Создание оффера пользователем {telegram_user_id}")
+
+                result = add_offer.add_offer(telegram_user_id, data)
+
+                if result['success']:
+                    return jsonify(result), 201
+                else:
+                    return jsonify(result), 400
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка создания оффера: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === ДОСТУПНЫЕ ОФФЕРЫ ===
+        @app.route('/api/offers/available', methods=['GET'])
+        def get_available_offers():
+            """Получение доступных офферов с фильтрацией"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+
+                filters = {
+                    'search': request.args.get('search', '').strip(),
+                    'category': request.args.get('category', '').strip(),
+                    'min_budget': request.args.get('min_budget'),
+                    'max_budget': request.args.get('max_budget'),
+                    'min_subscribers': request.args.get('min_subscribers'),
+                    'limit': int(request.args.get('limit', 50)),
+                    'exclude_user_id': telegram_user_id
+                }
+
+                # Удаляем пустые фильтры
+                filters = {k: v for k, v in filters.items() if v not in [None, '', 'None']}
+
+                offers = add_offer.get_available_offers(filters)
+
+                return jsonify({
+                    'success': True,
+                    'offers': offers,
+                    'total': len(offers)
+                })
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка получения доступных офферов: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === УПРАВЛЕНИЕ ОФФЕРОМ ===
+        @app.route('/api/offers/<int:offer_id>/status', methods=['PATCH'])
+        def update_offer_status(offer_id):
+            """Обновление статуса оффера"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                data = request.get_json()
+
+                new_status = data.get('status')
+                reason = data.get('reason', '')
+
+                if not new_status:
+                    return jsonify({'success': False, 'error': 'Статус не указан'}), 400
+
+                result = add_offer.update_offer_status_by_id(offer_id, telegram_user_id, new_status, reason)
+                return jsonify(result)
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка изменения статуса оффера: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @app.route('/api/offers/<int:offer_id>', methods=['DELETE'])
+        def delete_offer_route(offer_id):
+            """Удаление оффера"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                result = add_offer.delete_offer_by_id(offer_id, telegram_user_id)
+                return jsonify(result)
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления оффера: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === ОТКЛИКИ ===
+        @app.route('/api/offers/<int:offer_id>/respond', methods=['POST'])
+        def respond_to_offer(offer_id):
+            """Отклик на оффер"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                data = request.get_json()
+
+                channel_id = data.get('channel_id')
+                message = data.get('message', '').strip()
+
+                if not channel_id or not message:
+                    return jsonify({'success': False, 'error': 'Канал и сообщение обязательны'}), 400
+
+                # Получаем данные канала для создания отклика
+                user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_user_id,),
+                                        fetch_one=True)
+                if not user:
+                    return jsonify({'success': False, 'error': 'Пользователь не найден'}), 400
+
+                channel = execute_db_query("""
+                                           SELECT *
+                                           FROM channels
+                                           WHERE id = ?
+                                             AND owner_id = ?
+                                             AND is_verified = 1
+                                           """, (channel_id, user['id']), fetch_one=True)
+
+                if not channel:
+                    return jsonify({'success': False, 'error': 'Канал не найден или не верифицирован'}), 400
+
+                # Создаем отклик
+                response_id = execute_db_query("""
+                                               INSERT INTO offer_responses (offer_id, user_id, message, status,
+                                                                            channel_title, channel_username,
+                                                                            channel_subscribers,
+                                                                            created_at, updated_at)
+                                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                               """, (
+                                                   offer_id, user['id'], message, 'pending',
+                                                   channel['title'], channel['username'],
+                                                   channel.get('subscriber_count', 0),
+                                                   datetime.now().isoformat(), datetime.now().isoformat()
+                                               ))
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Отклик успешно отправлен! Ожидайте ответа от рекламодателя.',
+                    'response_id': response_id
+                })
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка отклика на оффер: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @app.route('/api/offers/<int:offer_id>/responses', methods=['GET'])
+        def get_offer_responses(offer_id):
+            """Получение откликов на оффер"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+
+                # Проверяем права доступа к офферу
+                offer = execute_db_query("""
+                                         SELECT o.*, u.telegram_id as owner_telegram_id
+                                         FROM offers o
+                                                  JOIN users u ON o.created_by = u.id
+                                         WHERE o.id = ?
+                                         """, (offer_id,), fetch_one=True)
+
+                if not offer:
+                    return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+
+                if offer['owner_telegram_id'] != telegram_user_id:
+                    return jsonify({'success': False, 'error': 'Нет доступа к этому офферу'}), 403
+
+                # Получаем отклики
+                responses = execute_db_query("""
+                                             SELECT or_resp.*,
+                                                    u.first_name || ' ' || COALESCE(u.last_name, '') as channel_owner_name,
+                                                    u.username                                       as channel_owner_username,
+                                                    u.telegram_id                                    as channel_owner_telegram_id
+                                             FROM offer_responses or_resp
+                                                      JOIN users u ON or_resp.user_id = u.id
+                                             WHERE or_resp.offer_id = ?
+                                             ORDER BY or_resp.created_at DESC
+                                             """, (offer_id,), fetch_all=True)
+
+                # Форматируем отклики
+                formatted_responses = []
+                for response in responses:
+                    formatted_responses.append({
+                        'id': response['id'],
+                        'offer_id': response['offer_id'],
+                        'status': response['status'],
+                        'message': response['message'],
+                        'created_at': response['created_at'],
+                        'updated_at': response['updated_at'],
+                        'channel_title': response.get('channel_title', 'Канал без названия'),
+                        'channel_username': response.get('channel_username', 'unknown'),
+                        'channel_subscribers': response.get('channel_subscribers', 0),
+                        'channel_owner_name': response['channel_owner_name'].strip() or 'Пользователь',
+                        'channel_owner_username': response['channel_owner_username'] or '',
+                        'channel_owner_telegram_id': response['channel_owner_telegram_id']
+                    })
+
+                return jsonify({
+                    'success': True,
+                    'responses': formatted_responses,
+                    'count': len(formatted_responses),
+                    'offer': {
+                        'id': offer['id'],
+                        'title': offer['title'],
+                        'status': offer['status']
+                    }
+                })
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка получения откликов: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @app.route('/api/offers/responses/<response_id>/status', methods=['PATCH'])
+        def update_response_status_route(response_id):
+            """Обновление статуса отклика"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                data = request.get_json()
+
+                status = data.get('status')
+                message = data.get('message', '')
+
+                if not status:
+                    return jsonify({'success': False, 'error': 'Статус не указан'}), 400
+
+                result = add_offer.update_response_status(response_id, status, telegram_user_id, message)
+                return jsonify(result)
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка обновления статуса отклика: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === КОНТРАКТЫ ===
+        @app.route('/api/offers/contracts', methods=['GET'])
+        def get_user_contracts():
+            """Получение контрактов пользователя"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+
+                user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_user_id,),
+                                        fetch_one=True)
+                if not user:
+                    return jsonify({'success': False, 'error': 'Пользователь не найден'})
+
+                contracts = execute_db_query("""
+                                             SELECT c.*,
+                                                    o.title          as offer_title,
+                                                    u_adv.first_name as advertiser_name,
+                                                    u_pub.first_name as publisher_name,
+                                                    or_resp.channel_title,
+                                                    or_resp.channel_username
+                                             FROM contracts c
+                                                      JOIN offers o ON c.offer_id = o.id
+                                                      JOIN users u_adv ON c.advertiser_id = u_adv.id
+                                                      JOIN users u_pub ON c.publisher_id = u_pub.id
+                                                      JOIN offer_responses or_resp ON c.response_id = or_resp.id
+                                             WHERE c.advertiser_id = ?
+                                                OR c.publisher_id = ?
+                                             ORDER BY c.created_at DESC
+                                             """, (user['id'], user['id']), fetch_all=True)
+
+                contracts_list = []
+                for contract in contracts:
+                    contracts_list.append({
+                        'id': contract['id'],
+                        'offer_title': contract['offer_title'],
+                        'price': float(contract['price']),
+                        'status': contract['status'],
+                        'role': 'advertiser' if contract['advertiser_id'] == user['id'] else 'publisher',
+                        'advertiser_name': contract['advertiser_name'],
+                        'publisher_name': contract['publisher_name'],
+                        'channel_title': contract['channel_title'],
+                        'channel_username': contract['channel_username'],
+                        'placement_deadline': contract['placement_deadline'],
+                        'monitoring_end': contract['monitoring_end'],
+                        'verification_passed': bool(contract.get('verification_passed')),
+                        'verification_details': contract.get('verification_details', ''),
+                        'violation_reason': contract.get('violation_reason', ''),
+                        'created_at': contract['created_at']
+                    })
+
+                return jsonify({
+                    'success': True,
+                    'contracts': contracts_list,
+                    'total': len(contracts_list)
+                })
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка получения контрактов: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === РАЗМЕЩЕНИЕ И ПРОВЕРКА ===
+        @app.route('/api/offers/contracts/<contract_id>/placement', methods=['POST'])
+        def submit_placement_api(contract_id):
+            """Подача заявки о размещении рекламы"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                data = request.get_json()
+
+                if not data or 'post_url' not in data:
+                    return jsonify({'success': False, 'error': 'Не указана ссылка на пост'}), 400
+
+                post_url = data['post_url'].strip()
+                result = add_offer.submit_placement(contract_id, post_url, telegram_user_id)
+
+                return jsonify(result)
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка подачи заявки о размещении: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        # === УПРАВЛЕНИЕ КОНТРАКТАМИ ===
+        @app.route('/api/offers/contracts/<contract_id>/cancel', methods=['POST'])
+        def cancel_contract_api(contract_id):
+            """Отмена контракта"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                data = request.get_json() or {}
+                reason = data.get('reason', 'Отменено пользователем')
+
+                # Проверяем права и обновляем статус
+                contract = execute_db_query("""
+                                            SELECT c.*,
+                                                   u_adv.telegram_id as advertiser_telegram_id,
+                                                   u_pub.telegram_id as publisher_telegram_id
+                                            FROM contracts c
+                                                     JOIN users u_adv ON c.advertiser_id = u_adv.id
+                                                     JOIN users u_pub ON c.publisher_id = u_pub.id
+                                            WHERE c.id = ?
+                                              AND (u_adv.telegram_id = ? OR u_pub.telegram_id = ?)
+                                            """, (contract_id, telegram_user_id, telegram_user_id), fetch_one=True)
+
+                if not contract:
+                    return jsonify({'success': False, 'error': 'Контракт не найден или нет доступа'}), 404
+
+                if contract['status'] in ['completed', 'cancelled']:
+                    return jsonify({'success': False, 'error': 'Контракт уже завершен или отменен'}), 400
+
+                execute_db_query("""
+                                 UPDATE contracts
+                                 SET status           = 'cancelled',
+                                     violation_reason = ?,
+                                     updated_at       = ?
+                                 WHERE id = ?
+                                 """, (reason, datetime.now().isoformat(), contract_id))
+
+                return jsonify({
+                    'success': True,
+                    'message': 'Контракт отменен. Все участники получили уведомления.'
+                })
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка отмены контракта: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @app.route('/api/offers/contracts/<contract_id>', methods=['DELETE'])
+        def delete_contract_api(contract_id):
+            """Удаление завершенного контракта"""
+            try:
+                telegram_user_id = get_user_id_from_request()
+                result = add_offer.delete_finished_contract(contract_id, telegram_user_id)
+                return jsonify(result)
+
+            except Exception as e:
+                logger.error(f"❌ Ошибка удаления контракта: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        logger.info("✅ Offers API зарегистрирован успешно")
+
+        # Подсчет зарегистрированных маршрутов
+        offers_routes_count = len([rule for rule in app.url_map.iter_rules() if '/api/offers' in rule.rule])
+        logger.info(f"📊 Зарегистрировано offers маршрутов: {offers_routes_count}")
 
     except Exception as e:
-        logger.error(f"❌ Ошибка инициализации БД: {e}")
+        logger.error(f"❌ КРИТИЧЕСКАЯ ОШИБКА регистрации offers API: {e}")
         raise
 
 
 # === РЕГИСТРАЦИЯ BLUEPRINTS ===
-# ЗАМЕНИТЬ функцию register_blueprints в working_app.py
-
 def register_blueprints(app: Flask) -> None:
-    """Регистрация всех Blueprint'ов с отладкой"""
-
-    blueprints_registered = 0
+    """Регистрация Blueprint'ов (исключая offers - он теперь в API)"""
 
     try:
-        print("📦 Начинаем регистрацию Blueprint'ов...")
-
-        # ИСПРАВЛЕННЫЙ список Blueprint'ов
         blueprint_modules = [
             ('app.routers.main_router', 'main_bp', ''),
-            ('app.routers.api_router', 'api_bp', '/api'),
             ('app.api.channels', 'channels_bp', '/api/channels'),
-            ('app.api.offers', 'offers_bp', '/api/offers'),  # ← ПРОБЛЕМА ЗДЕСЬ!
-            ('app.routers.analytics_router', 'analytics_bp', '/api/analytics'),
-            ('app.routers.payment_router', 'payment_bp', '/api/payments'),
         ]
 
         for module_name, blueprint_name, url_prefix in blueprint_modules:
             try:
-                print(f"📋 Загружаем {blueprint_name} из {module_name}...")
-
-                # ИСПРАВЛЕНИЕ: Прямой импорт без __import__
-                if module_name == 'app.api.offers':
-                    from app.api.offers import offers_bp as blueprint
-                elif module_name == 'app.api.channels':
+                if module_name == 'app.api.channels':
                     from app.api.channels import channels_bp as blueprint
                 elif module_name == 'app.routers.main_router':
                     from app.routers.main_router import main_bp as blueprint
-                elif module_name == 'app.routers.api_router':
-                    from app.routers.api_router import api_bp as blueprint
                 else:
-                    # Для остальных используем __import__
-                    module = __import__(module_name, fromlist=[blueprint_name])
-                    blueprint = getattr(module, blueprint_name)
+                    continue
 
                 app.register_blueprint(blueprint, url_prefix=url_prefix)
-                blueprints_registered += 1
+                logger.info(f"✅ {blueprint_name} зарегистрирован")
 
-                prefix_display = url_prefix if url_prefix else "/"
-                print(f"✅ {blueprint_name} зарегистрирован: {prefix_display}")
-
-            except ImportError as e:
-                print(f"❌ Не удалось импортировать {module_name}: {e}")
-                logger.warning(f"⚠️ Не удалось загрузить {module_name}: {e}")
-
-            except AttributeError as e:
-                print(f"❌ Blueprint {blueprint_name} не найден в {module_name}: {e}")
-
-            except Exception as e:
-                print(f"❌ Ошибка регистрации {blueprint_name}: {e}")
-
-        print(f"📦 Итого зарегистрировано Blueprint'ов: {blueprints_registered}")
-
-        # КРИТИЧЕСКАЯ ПРОВЕРКА маршрутов offers
-        print("\n🔍 ПРОВЕРЯЕМ МАРШРУТЫ /api/offers:")
-        offers_routes = []
-        for rule in app.url_map.iter_rules():
-            if '/api/offers' in rule.rule:
-                methods = ','.join(rule.methods - {'HEAD', 'OPTIONS'})
-                offers_routes.append(f"{rule.rule} [{methods}]")
-                print(f"✅ {rule.rule:50} {methods:15}")
-
-        if not offers_routes:
-            print("❌ КРИТИЧЕСКАЯ ОШИБКА: Маршруты /api/offers НЕ найдены!")
-            logger.error("❌ КРИТИЧЕСКАЯ ОШИБКА: offers_bp не зарегистрирован!")
-
-        # Проверяем Blueprint'ы
-        print(f"\n📦 Зарегистрированные Blueprint'ы: {list(app.blueprints.keys())}")
-
-        if 'offers' not in app.blueprints:
-            print("❌ КРИТИЧЕСКАЯ ОШИБКА: offers_bp НЕ найден в app.blueprints!")
-            raise Exception("offers_bp не зарегистрирован!")
+            except ImportError:
+                logger.warning(f"⚠️ Модуль {module_name} не найден, пропускаем")
 
     except Exception as e:
-        print(f"❌ КРИТИЧЕСКАЯ ОШИБКА: {e}")
-        logger.error(f"❌ Критическая ошибка регистрации Blueprint'ов: {e}")
-        raise
-
-# Инициализируем анализатор каналов с токеном бота
-try:
-    from app.api.channel_analyzer import init_analyzer
-
-#   init_analyzer(os.environ['BOT_TOKEN'])
-    print("✅ Анализатор каналов инициализирован с Bot Token")  # ✅ Используем print вместо logger
-except Exception as e:
-    print(f"❌ Ошибка инициализации анализатора: {e}")  # ✅ Используем print вместо logger
+        logger.error(f"❌ Ошибка регистрации Blueprint'ов: {e}")
 
 
 # === MIDDLEWARE ===
@@ -314,27 +644,17 @@ def register_middleware(app: Flask) -> None:
 
     @app.before_request
     def security_middleware():
-        """Базовая безопасность"""
-        # Ограничение размера запроса
         if request.content_length and request.content_length > AppConfig.MAX_CONTENT_LENGTH:
             return jsonify({'error': 'Request too large'}), 413
 
-        # Логирование API запросов
-        if request.path.startswith('/api/'):
-            logger.debug(f"API: {request.method} {request.path} from {request.remote_addr}")
-
     @app.after_request
     def security_headers(response):
-        """Добавление заголовков безопасности"""
         response.headers.update({
             'X-Content-Type-Options': 'nosniff',
             'X-Frame-Options': 'SAMEORIGIN',
             'X-XSS-Protection': '1; mode=block',
-            'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
         })
         return response
-
-    logger.info("🛡️ Middleware безопасности зарегистрированы")
 
 
 # === ОБРАБОТЧИКИ ОШИБОК ===
@@ -344,11 +664,7 @@ def register_error_handlers(app: Flask) -> None:
     @app.errorhandler(404)
     def not_found(error):
         if request.path.startswith('/api/'):
-            return jsonify({
-                'error': 'Endpoint not found',
-                'path': request.path,
-                'method': request.method
-            }), 404
+            return jsonify({'error': 'Endpoint not found', 'path': request.path}), 404
         return render_template('error.html', message='Страница не найдена'), 404
 
     @app.errorhandler(500)
@@ -358,634 +674,111 @@ def register_error_handlers(app: Flask) -> None:
             return jsonify({'error': 'Internal server error'}), 500
         return render_template('error.html', message='Внутренняя ошибка сервера'), 500
 
-    @app.errorhandler(413)
-    def request_too_large(error):
-        return jsonify({'error': 'Request entity too large'}), 413
-
-    logger.info("🚨 Обработчики ошибок зарегистрированы")
-
 
 # === СЛУЖЕБНЫЕ МАРШРУТЫ ===
 def register_system_routes(app: Flask) -> None:
-    """Регистрация служебных системных маршрутов (не основных страниц)"""
+    """Регистрация служебных маршрутов"""
 
-    @app.route('/api/channels/<int:channel_id>/verify', methods=['PUT'])
-    def verify_channel_endpoint(channel_id):
-        """Endpoint для верификации каналов"""
-        from flask import jsonify, request
+    @app.route('/debug/routes')
+    def debug_routes():
+        routes = []
+        for rule in app.url_map.iter_rules():
+            routes.append({
+                'endpoint': rule.endpoint,
+                'methods': list(rule.methods),
+                'rule': rule.rule
+            })
+        return jsonify(routes)
 
+    @app.route('/debug/offers-status')
+    def debug_offers_status():
+        offers_routes = [r for r in app.url_map.iter_rules() if '/api/offers' in r.rule]
+        return jsonify({
+            'add_offer_imported': add_offer is not None,
+            'offers_routes_count': len(offers_routes),
+            'offers_routes': [{'rule': r.rule, 'methods': list(r.methods)} for r in offers_routes]
+        })
+
+    # Базовые каналы endpoints для совместимости
+    @app.route('/api/channels/<int:channel_id>/verify', methods=['PUT', 'POST'])
+    def verify_channel_unified(channel_id):
+        """Верификация канала"""
         try:
-            logger.info(f"🔍 Верификация канала {channel_id}")
+            telegram_user_id = get_user_id_from_request()
 
-            # Получаем данные пользователя из заголовков
-            telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
-            telegram_username = request.headers.get('X-Telegram-Username', 'unknown')
-
-            logger.info(f"👤 Пользователь: {telegram_username} ({telegram_user_id})")
-
-            # Имитируем успешную верификацию
             result = {
                 'success': True,
                 'message': f'✅ Канал {channel_id} успешно верифицирован!',
                 'channel': {
                     'id': channel_id,
-                    'channel_name': f'Channel {channel_id}',
                     'is_verified': True,
-                    'verified_by': telegram_username,
                     'verified_at': datetime.utcnow().isoformat()
                 }
             }
 
-            logger.info(f"✅ Канал {channel_id} верифицирован")
             return jsonify(result)
 
         except Exception as e:
-            logger.error(f"❌ Ошибка верификации канала {channel_id}: {e}")
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 400
-
-    # Дополнительные endpoints для каналов
-    @app.route('/api/channels', methods=['POST'])
-    def create_channel_endpoint():
-        """Создать новый канал"""
-        from flask import jsonify, request
-        import random
-        import string
-
-        try:
-            data = request.get_json()
-            telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
-            logger.info(f"➕ Создание канала от {telegram_user_id}")
-
-            # ДОБАВЛЕНО: Проверка флага повторной верификации
-            is_reverify = data.get('action') == 'reverify'
-            channel_id = data.get('channel_id') if is_reverify else None
-
-            # Генерируем новый код верификации
-            verification_code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-
-            # Возвращаем результат с кодом верификации
-            result = {
-                'success': True,
-                'message': 'Канал добавлен и ожидает верификации' if not is_reverify else 'Новый код верификации сгенерирован',
-                'verification_code': verification_code,
-                'channel': {
-                    'id': channel_id or random.randint(1000, 9999),
-                    'username': data.get('username', 'unknown'),
-                    'title': f"Канал @{data.get('username', 'unknown')}",
-                    'verification_code': verification_code,
-                    'status': 'pending'
-                }
-            }
-
-            logger.info(f"✅ Канал создан с кодом верификации: {verification_code}")
-            return jsonify(result)
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка создания канала: {e}")
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 400
-
-    logger.info("🔧 Endpoints для каналов добавлены")
+            logger.error(f"❌ Ошибка верификации канала: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 400
 
 
+# ===== TELEGRAM WEBHOOK =====
+def setup_telegram_webhook():
+    """Настройка webhook для Telegram бота"""
+    try:
+        bot_token = AppConfig.BOT_TOKEN
+        if not bot_token:
+            return
 
+        webhook_url = f"{AppConfig.WEBAPP_URL}/api/channels/webhook"
+        url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
 
+        response = requests.post(url, json={
+            'url': webhook_url,
+            'allowed_updates': ['channel_post', 'message', 'edited_message', 'edited_channel_post'],
+            'drop_pending_updates': False
+        })
 
-# === СТАТИСТИКА И МОНИТОРИНГ ===
-class AppStats:
-    """Класс для сбора статистики приложения"""
+        if response.status_code == 200 and response.json().get('ok'):
+            logger.info(f"✅ Webhook установлен: {webhook_url}")
+        else:
+            logger.error(f"❌ Ошибка установки webhook")
 
-    def __init__(self):
-        self.start_time = datetime.utcnow()
-        self.request_count = 0
-        self.error_count = 0
-
-    def increment_requests(self):
-        self.request_count += 1
-
-    def increment_errors(self):
-        self.error_count += 1
-
-    def get_stats(self) -> Dict[str, Any]:
-        uptime = datetime.utcnow() - self.start_time
-        return {
-            'uptime_seconds': int(uptime.total_seconds()),
-            'requests_total': self.request_count,
-            'errors_total': self.error_count,
-            'start_time': self.start_time.isoformat()
-        }
-
-# === БАЗА ДАННЫХ ДЛЯ КАНАЛОВ ===
-class ChannelDatabase:
-    """Простая база данных для каналов (в памяти)"""
-
-    def __init__(self):
-        self.channels = {}  # {channel_id: channel_data}
-        self.next_id = 1
-
-    def create_channel(self, user_id, channel_data):
-        """Создать новый канал"""
-        import random
-        import string
-
-        # Генерируем уникальный код верификации
-        verification_code = 'VERIFY_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-
-        channel = {
-            'id': self.next_id,
-            'user_id': user_id,
-            'title': channel_data.get('title', 'Новый канал'),
-            'username': channel_data.get('username', ''),
-            'telegram_id': channel_data.get('telegram_id', ''),
-            'category': channel_data.get('category', 'other'),
-            'subscriber_count': channel_data.get('subscriber_count', 0),
-            'verification_code': verification_code,
-            'is_verified': False,
-            'status': 'pending',
-            'created_at': datetime.now().isoformat(),
-            'verified_at': None
-        }
-
-        self.channels[self.next_id] = channel
-        self.next_id += 1
-
-        return channel
-
-    def get_channel(self, channel_id):
-        """Получить канал по ID"""
-        return self.channels.get(channel_id)
-
-    def update_channel(self, channel_id, updates):
-        """Обновить канал"""
-        if channel_id in self.channels:
-            self.channels[channel_id].update(updates)
-            return self.channels[channel_id]
-        return None
-
-    def get_user_channels(self, user_id):
-        """Получить каналы пользователя"""
-        return [channel for channel in self.channels.values() if channel['user_id'] == user_id]
-
-
+    except Exception as e:
+        logger.error(f"❌ Ошибка настройки webhook: {e}")
 
 
 # === ИНИЦИАЛИЗАЦИЯ ===
 logger = setup_logging()
 app = create_app()
-stats = AppStats()
 
-# Регистрация служебных маршрутов (основные маршруты в app/routers/main_router.py)
-#register_system_routes(app)
 
-# Сохранение времени старта
-app.start_time = stats.start_time.isoformat()
-
-# === ГЛОБАЛЬНЫЕ ОБЪЕКТЫ ===
-# Инициализируем сервисы
-telegram_service = None
-channel_db = ChannelDatabase()
-
-# === ENDPOINT'Ы ДЛЯ КАНАЛОВ ===
-@app.route('/api/channels/<int:channel_id>/verify', methods=['PUT', 'POST'])
-def verify_channel_unified(channel_id, datetime=None):
-    """Единый endpoint для верификации каналов"""
-    try:
-        logger.info(f"🔍 Запрос верификации канала {channel_id}")
-
-        # Получаем данные пользователя
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
-        telegram_username = request.headers.get('X-Telegram-Username', 'unknown')
-
-        logger.info(f"👤 Пользователь: {telegram_username} (ID: {telegram_user_id})")
-
-        # Получаем канал из базы
-        channel = channel_db.get_channel(channel_id)
-        if not channel:
-            return jsonify({
-                'success': False,
-                'error': 'Канал не найден'
-            }), 404
-
-        # Проверяем права доступа
-        if str(channel['user_id']) != str(telegram_user_id):
-            return jsonify({
-                'success': False,
-                'error': 'Нет доступа к каналу'
-            }), 403
-
-        # Проверяем, не верифицирован ли уже
-        if channel['is_verified']:
-            return jsonify({
-                'success': True,
-                'message': 'Канал уже верифицирован',
-                'channel': channel
-            })
-
-        # ОСНОВНАЯ ВЕРИФИКАЦИЯ ЧЕРЕЗ ЕДИНЫЙ СЕРВИС 🎯
-        verification_code = channel['verification_code']
-        channel_telegram_id = channel.get('telegram_id') or channel.get('username')
-
-        if not channel_telegram_id:
-            return jsonify({
-                'success': False,
-                'error': 'Не указан ID или username канала'
-            }), 400
-
-        # ВЫЗЫВАЕМ ЕДИНЫЙ СЕРВИС!
-        if verification_service:
-            verification_result = verification_service.verify_channel_ownership(
-                channel_telegram_id,
-                verification_code
-            )
-        else:
-            # Fallback на тестовый режим
-            verification_result = {
-                'success': True,
-                'found': True,  # Для тестирования
-                'message': 'Тестовый режим - канал верифицирован',
-                'details': {'mode': 'fallback'}
-            }
-
-        logger.info(f"📊 Результат верификации: {verification_result}")
-
-        # Обрабатываем результат
-        if verification_result['success'] and verification_result['found']:
-            # КОД НАЙДЕН - ВЕРИФИЦИРУЕМ КАНАЛ! ✅
-            updates = {
-                'is_verified': True,
-                'status': 'verified',
-                'verified_at': datetime.now().isoformat()
-            }
-            updated_channel = channel_db.update_channel(channel_id, updates)
-
-            # ДОБАВИТЬ отправку уведомления пользователю:
-            try:
-                import requests
-                from datetime import datetime
-
-                bot_token = AppConfig.BOT_TOKEN
-                send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-                # Получаем данные пользователя
-                conn = sqlite3.connect(AppConfig.DATABASE_PATH)
-                cursor = conn.cursor()
-
-                cursor.execute("""
-                               SELECT u.first_name, u.last_name, u.username, c.created_at
-                               FROM users u
-                                        JOIN channels c ON c.owner_id = u.id
-                               WHERE c.id = ?
-                                 AND u.telegram_id = ?
-                               """, (channel_id, telegram_user_id))
-
-                user_channel_data = cursor.fetchone()
-                conn.close()
-
-                if user_channel_data:
-                    # Форматируем имя пользователя
-                    user_name_parts = []
-                    if user_channel_data[0]:  # first_name
-                        user_name_parts.append(user_channel_data[0])
-                    if user_channel_data[1]:  # last_name
-                        user_name_parts.append(user_channel_data[1])
-                    full_name = ' '.join(user_name_parts) if user_name_parts else user_channel_data[2] or 'Пользователь'
-
-                    # Форматируем дату добавления
-                    try:
-                        created_at = datetime.fromisoformat(user_channel_data[3])
-                        formatted_date = created_at.strftime('%d.%m.%Y в %H:%M')
-                    except:
-                        formatted_date = 'Недавно'
-
-                    success_message = f"""🎉 <b>Отличная новость!</b>
-
-            ✅ <b>Канал успешно верифицирован!</b>
-
-            👤 <b>Владелец:</b> {full_name}
-            📺 <b>Канал:</b> {channel['title']}
-            📅 <b>Добавлен:</b> {formatted_date}
-            🎉 <b>Поздравляем!</b> Ваш канал верифицирован!
-
-            🚀 <b>Что дальше?</b>
-            - Настройте цены за размещение
-            - Начните получать предложения от рекламодателей
-            - Отслеживайте статистику канала
-            - Управляйте настройками"""
-
-                    # Создаем клавиатуру с кнопкой Mini App
-                    keyboard = {
-                        "inline_keyboard": [
-                            [
-                                {
-                                    "text": "🚀 Перейти в Mini App",
-                                    "web_app": {
-                                        "url": f"{AppConfig.WEBAPP_URL}/channels"
-                                    }
-                                }
-                            ]
-                        ]
-                    }
-
-                    # Отправляем уведомление с кнопкой
-                    requests.post(send_url, json={
-                        'chat_id': telegram_user_id,
-                        'text': success_message,
-                        'parse_mode': 'HTML',
-                        'reply_markup': keyboard
-                    }, timeout=10)
-
-                    logger.info(f"📨 Уведомление о верификации отправлено пользователю {telegram_user_id}")
-
-            except Exception as notification_error:
-                logger.error(f"❌ Ошибка отправки уведомления: {notification_error}")
-
-
-            logger.info(f"✅ Канал {channel_id} успешно верифицирован")
-
-            return jsonify({
-                'success': True,
-                'message': f'✅ Канал "{channel["title"]}" успешно верифицирован!',
-                'channel': updated_channel,
-                'verification_details': verification_result['details']
-            })
-
-        else:
-            # КОД НЕ НАЙДЕН ❌
-            error_message = verification_result.get('message', 'Код верификации не найден')
-
-            return jsonify({
-                'success': False,
-                'error': f'❌ {error_message}',
-                'verification_code': verification_code,
-                'instructions': [
-                    f'1. Перейдите в ваш канал @{channel.get("username", "your_channel")}',
-                    f'2. Опубликуйте сообщение с кодом: {verification_code}',
-                    f'3. Подождите 1-2 минуты для обновления',
-                    f'4. Нажмите кнопку "Верифицировать" снова'
-                ],
-                'channel': channel,
-                'verification_details': verification_result.get('details', {})
-            })
-
-    except Exception as e:
-        logger.error(f"❌ Критическая ошибка верификации канала {channel_id}: {e}")
-        return jsonify({
-            'success': False,
-            'error': f'Внутренняя ошибка сервера: {str(e)}',
-            'details': {
-                'channel_id': channel_id,
-                'timestamp': datetime.now().isoformat(),
-                'error_type': type(e).__name__
-            }
-        }), 500
-
-@app.route('/api/channels', methods=['GET'])
-def get_channels_real():
-    """Получить каналы пользователя"""
-    try:
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
-
-        # Получаем каналы пользователя
-        user_channels = channel_db.get_user_channels(telegram_user_id)
-
-        return jsonify({
-            'success': True,
-            'channels': user_channels,
-            'total': len(user_channels)
-        })
-
-    except Exception as e:
-        logger.error(f"❌ Ошибка получения каналов: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/channels', methods=['POST'])
-def create_channel_real():
-    """Создать новый канал"""
-    try:
-        data = request.get_json() or {}
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', 'unknown')
-
-        # Получаем username канала
-        username = data.get('username', '').replace('@', '').replace('https://t.me/', '')
-        if not username:
-            username = data.get('channel_url', '').replace('@', '').replace('https://t.me/', '')
-
-        logger.info(f"➕ Запрос создания/верификации канала @{username} от {telegram_user_id}")
-
-        # НОВОЕ: Проверка флага повторной верификации
-        is_reverify = data.get('action') == 'reverify'
-        requested_channel_id = data.get('channel_id')
-
-        # Проверяем, существует ли уже канал
-        existing_channel = None
-        for channel in channel_db.channels.values():
-            if (channel['user_id'] == telegram_user_id and
-                    (channel['username'] == username or channel['username'] == f'@{username}')):
-                existing_channel = channel
-                break
-
-        # Если канал существует и это НЕ повторная верификация - ошибка
-        if existing_channel and not is_reverify:
-            logger.warning(f"❌ Канал @{username} уже добавлен пользователем {telegram_user_id}")
-            return jsonify({
-                'success': False,
-                'error': f'Канал @{username} уже добавлен'
-            }), 409
-
-        # Если это повторная верификация существующего канала
-        if existing_channel and is_reverify:
-            logger.info(f"🔄 Повторная верификация канала @{username}")
-
-            # Генерируем новый код верификации
-            import random
-            import string
-            new_verification_code = 'VERIFY_' + ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-
-            # Обновляем код верификации
-            existing_channel['verification_code'] = new_verification_code
-            existing_channel['status'] = 'pending'
-            existing_channel['is_verified'] = False  # Сбрасываем верификацию
-
-            logger.info(f"✅ Новый код верификации для канала {existing_channel['id']}: {new_verification_code}")
-
-            return jsonify({
-                'success': True,
-                'message': 'Новый код верификации сгенерирован',
-                'verification_code': new_verification_code,
-                'channel': {
-                    'id': existing_channel['id'],
-                    'username': username,
-                    'title': existing_channel['title'],
-                    'verification_code': new_verification_code,
-                    'status': 'pending'
-                }
-            })
-
-        # Создаем новый канал (только если это не повторная верификация)
-        channel = channel_db.create_channel(telegram_user_id, {
-            'title': data.get('title', f'Канал @{username}'),
-            'username': username,
-            'telegram_id': data.get('telegram_id', ''),
-            'category': data.get('category', 'other'),
-            'subscriber_count': data.get('subscriber_count', 0)
-        })
-
-        logger.info(f"📺 Создан новый канал {channel['id']} для пользователя {telegram_user_id}")
-
-        return jsonify({
-            'success': True,
-            'message': 'Канал добавлен и ожидает верификации',
-            'verification_code': channel['verification_code'],
-            'channel': {
-                'id': channel['id'],
-                'username': channel['username'],
-                'title': channel['title'],
-                'verification_code': channel['verification_code'],
-                'status': 'pending'
-            }
-        }), 201
-
-    except Exception as e:
-        logger.error(f"❌ Ошибка создания канала: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-# === ДОПОЛНИТЕЛЬНЫЙ ENDPOINT ДЛЯ ТЕСТИРОВАНИЯ ===
-@app.route('/api/verification/test', methods=['GET'])
-def test_verification_service():
-    """Тестирование сервиса верификации"""
-    try:
-        if verification_service:
-            # Тестируем с фейковыми данными
-            test_result = verification_service.verify_channel_ownership(
-                "@test_channel",
-                "VERIFY_TEST123"
-            )
-
-            return jsonify({
-                'success': True,
-                'service_available': True,
-                'test_result': test_result,
-                'bot_token_configured': bool(verification_service.bot_token)
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'service_available': False,
-                'error': 'Сервис верификации не загружен'
-            })
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/debug/table-schema/<table_name>')
-def debug_table_schema(table_name):
-    import sqlite3
-    conn = sqlite3.connect('telegram_mini_app.db')
-    cursor = conn.cursor()
-
-    try:
-        cursor.execute(f"PRAGMA table_info({table_name})")
-        columns = cursor.fetchall()
-
-        cursor.execute(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table_name}'")
-        create_sql = cursor.fetchone()
-
-        return jsonify({
-            'table': table_name,
-            'columns': columns,
-            'create_sql': create_sql[0] if create_sql else None
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)})
-    finally:
-        conn.close()
-
-@app.route('/debug/routes')
-def debug_routes():
-    import urllib
-    routes = []
-    for rule in app.url_map.iter_rules():
-        routes.append({
-            'endpoint': rule.endpoint,
-            'methods': list(rule.methods),
-            'rule': rule.rule
-        })
-    return jsonify(routes)
-
-@app.route('/api/offers/debug', methods=['POST'])
-def debug_create_offer():
-    """Отладочный endpoint для создания оффера"""
-    try:
-        data = request.get_json()
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', '373086959')
-
-        print(f"DEBUG: Получены данные: {data}")
-        print(f"DEBUG: User ID: {telegram_user_id}")
-
-        # Проверяем импорт
-        try:
-            from add_offer import add_offer
-            print("DEBUG: add_offer импортирован успешно")
-        except ImportError as e:
-            return jsonify({'error': f'Ошибка импорта add_offer: {e}'}), 500
-
-        # Проверяем функцию
-        try:
-            result = add_offer(int(telegram_user_id), data)
-            print(f"DEBUG: Результат add_offer: {result}")
-            return jsonify(result)
-        except Exception as e:
-            print(f"DEBUG: Ошибка в add_offer: {e}")
-            import traceback
-            traceback.print_exc()
-            return jsonify({'error': f'Ошибка в add_offer: {str(e)}'}), 500
-
-    except Exception as e:
-        print(f"DEBUG: Общая ошибка: {e}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'error': f'Общая ошибка: {str(e)}'}), 500
-
-logger.info("🔧 Система верификации каналов инициализирована")
 # === ТОЧКА ВХОДА ===
 def main():
     """Главная функция запуска"""
 
-    # Валидация конфигурации
     if not AppConfig.validate():
         logger.error("❌ Критические ошибки конфигурации")
         sys.exit(1)
 
     setup_telegram_webhook()
 
-    # Настройки запуска
     host = os.environ.get('HOST', '0.0.0.0')
     port = int(os.environ.get('PORT', 5000))
 
     logger.info("=" * 60)
-    logger.info("🚀 TELEGRAM MINI APP v2.0")
+    logger.info("🚀 TELEGRAM MINI APP - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ")
     logger.info("=" * 60)
     logger.info(f"📱 BOT_TOKEN: {'✅ Настроен' if AppConfig.BOT_TOKEN else '❌ Отсутствует'}")
     logger.info(f"🗄️ База данных: {AppConfig.DATABASE_PATH}")
     logger.info(f"🌐 Запуск на: http://{host}:{port}")
-    logger.info(f"🔧 Режим разработки: {AppConfig.DEBUG}")
-    logger.info(f"⚙️ Функции: {sum(AppConfig.FEATURES.values())}/{len(AppConfig.FEATURES)} включены")
+    logger.info(f"📦 add_offer модуль: {'✅ Загружен' if add_offer else '❌ Не загружен'}")
+
+    # Показываем статистику маршрутов
+    total_routes = len(list(app.url_map.iter_rules()))
+    offers_routes = len([r for r in app.url_map.iter_rules() if '/api/offers' in r.rule])
+    logger.info(f"📊 Всего маршрутов: {total_routes} (offers: {offers_routes})")
     logger.info("=" * 60)
 
     try:
@@ -1002,160 +795,6 @@ def main():
         logger.error(f"❌ Критическая ошибка: {e}")
         sys.exit(1)
 
-@app.route('/diagnostic-offers')
-def diagnostic_offers():
-    return render_template('diagnostic_offers.html')
-
-
-@app.route('/test-static')
-def test_static():
-    """Тестовый маршрут для проверки статических файлов"""
-    import os
-    static_path = app.static_folder
-    js_path = os.path.join(static_path, 'js')
-
-    return jsonify({
-        'static_folder': static_path,
-        'static_exists': os.path.exists(static_path),
-        'js_folder_exists': os.path.exists(js_path),
-        'js_files': os.listdir(js_path) if os.path.exists(js_path) else [],
-        'working_dir': os.getcwd(),
-        'project_root': PROJECT_ROOT
-    })
-
-
-# ЗАМЕНИТЬ предыдущий отладочный код в working_app.py на этот:
-
-@app.route('/debug/offers-test', methods=['GET'])
-def debug_offers_test():
-    """Тестирование доступности offers blueprint"""
-    try:
-        # Проверяем импорт
-        from app.api.offers import offers_bp
-
-        # Проверяем зарегистрированные маршруты в основном приложении
-        offers_routes = []
-        all_routes = []
-
-        for rule in app.url_map.iter_rules():
-            route_info = {
-                'rule': rule.rule,
-                'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
-                'endpoint': rule.endpoint
-            }
-
-            all_routes.append(route_info)
-
-            # Ищем маршруты offers
-            if '/api/offers' in rule.rule:
-                offers_routes.append(route_info)
-
-        # Проверяем есть ли Blueprint в зарегистрированных
-        blueprint_registered = 'offers' in app.blueprints
-
-        return jsonify({
-            'blueprint_imported': True,
-            'blueprint_name': offers_bp.name,
-            'blueprint_registered': blueprint_registered,
-            'registered_blueprints': list(app.blueprints.keys()),
-            'offers_routes_count': len(offers_routes),
-            'offers_routes': offers_routes,
-            'has_contracts_route': any('/contracts' in r['rule'] for r in offers_routes),
-            'total_routes': len(all_routes),
-            'search_for_contracts': [r for r in all_routes if 'contract' in r['rule'].lower()]
-        })
-
-    except ImportError as e:
-        return jsonify({
-            'blueprint_imported': False,
-            'import_error': str(e),
-            'error_type': 'ImportError'
-        })
-    except Exception as e:
-        import traceback
-        return jsonify({
-            'blueprint_imported': False,
-            'error': str(e),
-            'error_type': type(e).__name__,
-            'traceback': traceback.format_exc()
-        })
-
-@app.route('/debug/check-offers-routes', methods=['GET'])
-def debug_check_offers_routes():
-    """Проверка регистрации маршрутов offers"""
-    offers_routes = []
-
-    for rule in app.url_map.iter_rules():
-        if '/api/offers' in rule.rule:
-            offers_routes.append({
-                'rule': rule.rule,
-                'methods': list(rule.methods - {'HEAD', 'OPTIONS'}),
-                'endpoint': rule.endpoint
-            })
-
-    return jsonify({
-        'offers_routes_found': len(offers_routes),
-        'routes': offers_routes,
-        'blueprints_registered': list(app.blueprints.keys()),
-        'offers_bp_registered': 'offers' in app.blueprints
-    })
-
-# ТАКЖЕ ДОБАВИТЬ проверку импорта при запуске:
-
-@app.route('/debug/import-test', methods=['GET'])
-def debug_import_test():
-    """Тестирование импорта offers модуля"""
-    try:
-        # Проверяем пошаговый импорт
-        import sys
-        import os
-
-        results = {}
-
-        # 1. Проверяем путь
-        results['current_dir'] = os.getcwd()
-        results['sys_path'] = sys.path[:3]  # Первые 3 пути
-
-        # 2. Проверяем существование файлов
-        offers_file = os.path.join('app', 'api', 'offers.py')
-        results['offers_file_exists'] = os.path.exists(offers_file)
-
-        # 3. Пробуем импортировать модуль
-        try:
-            import app.api.offers
-            results['module_import'] = 'success'
-        except Exception as e:
-            results['module_import'] = f'failed: {str(e)}'
-
-        # 4. Пробуем импортировать Blueprint
-        try:
-            from app.api.offers import offers_bp
-            results['blueprint_import'] = 'success'
-            results['blueprint_name'] = offers_bp.name
-
-            # 5. Проверяем функции в Blueprint
-            blueprint_rules = []
-            if hasattr(offers_bp, 'deferred_functions'):
-                results['deferred_functions_count'] = len(offers_bp.deferred_functions)
-
-                # Ищем функцию get_user_contracts
-                for func in offers_bp.deferred_functions:
-                    if hasattr(func, '__name__'):
-                        blueprint_rules.append(func.__name__)
-
-                results['blueprint_functions'] = blueprint_rules
-                results['has_contracts_function'] = 'get_user_contracts' in str(offers_bp.deferred_functions)
-
-        except Exception as e:
-            results['blueprint_import'] = f'failed: {str(e)}'
-
-        return jsonify(results)
-
-    except Exception as e:
-        return jsonify({
-            'error': str(e),
-            'error_type': type(e).__name__
-        })
 
 if __name__ == '__main__':
     main()
