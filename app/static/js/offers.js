@@ -883,39 +883,39 @@ const ResponseManager = {
     },
 
     showResponsesModal(offer, responses) {
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: flex; align-items: center;
-            justify-content: center; z-index: 9999; padding: 20px;
-        `;
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.8); display: flex; align-items: center;
+        justify-content: center; z-index: 9999; padding: 20px;
+    `;
 
-        modal.innerHTML = `
-            <div style="background: white; border-radius: 12px; padding: 24px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin: 0; color: #2d3748; font-size: 20px;">💬 Отклики на оффер "${offer.title}"</h3>
-                    <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 5px;">&times;</button>
-                </div>
-                
-                <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 4px 0; color: #2d3748;">📊 Статистика</h4>
-                    <p style="margin: 0; color: #718096; font-size: 14px;">Всего откликов: <strong>${responses.length}</strong></p>
-                </div>
-
-                <div>${responses.length > 0 ? this.renderResponsesList(responses) : this.renderEmptyResponses()}</div>
+    modal.innerHTML = `
+        <div style="background: white; border-radius: 12px; padding: 24px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #2d3748; font-size: 20px;">💬 Отклики на оффер "${offer.title}"</h3>
+                <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 5px;">&times;</button>
             </div>
-        `;
+            
+            <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                <h4 style="margin: 0 0 4px 0; color: #2d3748;">📊 Статистика</h4>
+                <p style="margin: 0; color: #718096; font-size: 14px;">Всего откликов: <strong>${responses.length}</strong></p>
+            </div>
 
-        document.body.appendChild(modal);
-        document.body.style.overflow = 'hidden';
+            <div>${responses.length > 0 ? this.renderResponsesList(responses) : this.renderEmptyResponses()}</div>
+        </div>
+    `;
 
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-                document.body.style.overflow = 'auto';
-            }
-        });
-    },
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+            document.body.style.overflow = 'auto';
+        }
+    });
+},
 
     renderResponsesList(responses) {
         return responses.map(response => {
@@ -1462,6 +1462,20 @@ function goBack() {
 }
 
 // ===== ИНИЦИАЛИЗАЦИЯ =====
+
+// ===== ГЛОБАЛЬНЫЙ ДОСТУП К ФУНКЦИЯМ =====
+window.ResponseManager = ResponseManager;
+window.manageResponses = (offerId) => ResponseManager.manageResponses(offerId);
+window.acceptOffer = (offerId) => ResponseManager.acceptOffer(offerId);
+
+console.log('🔧 Функции доступны глобально:', {
+    ResponseManager: typeof window.ResponseManager,
+    manageResponses: typeof window.manageResponses,
+    acceptOffer: typeof window.acceptOffer
+});
+
+// Глобальные функции уже определены внизу файла
+console.log('🌐 Функции экспортированы в глобальную область');
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎯 Инициализация страницы офферов');
     loadMyOffers();

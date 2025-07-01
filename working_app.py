@@ -141,7 +141,7 @@ def execute_db_query(query: str, params: tuple = (), fetch_one: bool = False, fe
 def create_app() -> Flask:
     """Фабрика приложений"""
 
-    app = Flask(__name__, static_folder='app/static', template_folder='templates')
+    app = Flask(__name__, static_folder= 'app/static', template_folder='templates')
     app.config.from_object(AppConfig)
 
     # Настройка JSON сериализации
@@ -188,14 +188,40 @@ def register_offers_api(app: Flask) -> None:
                     return jsonify({'success': False, 'error': 'Пользователь не найден'}), 404
 
                 # Получаем офферы с откликами одним запросом
+                # Получаем офферы с правильными полями из bd.txt
                 offers = execute_db_query("""
-                                          SELECT o.*,
-                                                 COUNT(or_resp.id)                                       as response_count,
-                                                 COUNT(CASE WHEN or_resp.status = 'accepted' THEN 1 END) as accepted_count
+                                          SELECT o.id,
+                                                 o.title,
+                                                 o.description,
+                                                 o.content,
+                                                 o.price,
+                                                 o.currency,
+                                                 o.deadline,
+                                                 o.target_audience,
+                                                 o.requirements,
+                                                 o.status,
+                                                 o.created_at,
+                                                 o.updated_at,
+                                                 o.channel_id,
+                                                 o.created_by,
+                                                 o.category,
+                                                 o.metadata,
+                                                 o.budget_total,
+                                                 o.expires_at,
+                                                 o.duration_days,
+                                                 o.min_subscribers,
+                                                 o.max_subscribers,
+                                                 o.max_price,
+                                                 COALESCE(COUNT(or_resp.id), 0)                                       as response_count,
+                                                 COALESCE(COUNT(CASE WHEN or_resp.status = 'accepted' THEN 1 END), 0) as accepted_count
                                           FROM offers o
                                                    LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
                                           WHERE o.created_by = ?
-                                          GROUP BY o.id
+                                          GROUP BY o.id, o.title, o.description, o.content, o.price, o.currency,
+                                                   o.deadline, o.target_audience, o.requirements, o.status,
+                                                   o.created_at, o.updated_at, o.channel_id, o.created_by,
+                                                   o.category, o.metadata, o.budget_total, o.expires_at,
+                                                   o.duration_days, o.min_subscribers, o.max_subscribers, o.max_price
                                           ORDER BY o.created_at DESC
                                           """, (user['id'],), fetch_all=True)
 
@@ -355,17 +381,17 @@ def register_offers_api(app: Flask) -> None:
                     return jsonify({'success': False, 'error': 'Канал не найден или не верифицирован'}), 400
 
                 # Создаем отклик
+                # Создаем отклик
                 response_id = execute_db_query("""
-                                               INSERT INTO offer_responses (offer_id, user_id, message, status,
+                                               INSERT INTO offer_responses (offer_id, user_id, channel_id, message,
+                                                                            status,
                                                                             channel_title, channel_username,
-                                                                            channel_subscribers,
-                                                                            created_at, updated_at)
-                                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                                            channel_subscribers, created_at, updated_at)
+                                               VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                                """, (
-                                                   offer_id, user['id'], message, 'pending',
-                                                   channel['title'], channel['username'],
-                                                   channel.get('subscriber_count', 0),
-                                                   datetime.now().isoformat(), datetime.now().isoformat()
+                                                   offer_id, user['id'], channel['id'], message, 'pending',
+                                                   channel.get('title', ''), channel.get('username', ''),
+                                                   channel.get('subscriber_count', 0)
                                                ))
 
                 return jsonify({
@@ -753,7 +779,9 @@ def setup_telegram_webhook():
 logger = setup_logging()
 app = create_app()
 
-
+@app.route('/debug_frontend')
+def debug_frontend():
+    return render_template('debug_frontend.html')
 # === ТОЧКА ВХОДА ===
 def main():
     """Главная функция запуска"""

@@ -414,15 +414,14 @@ def respond_to_offer(offer_id):
 
         # Создаем отклик
         response_id = execute_db_query("""
-                                       INSERT INTO offer_responses (offer_id, user_id, message, status,
+                                       INSERT INTO offer_responses (offer_id, user_id, channel_id, message, status,
                                                                     channel_title, channel_username,
-                                                                    channel_subscribers,
-                                                                    created_at, updated_at)
-                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                                    channel_subscribers, created_at, updated_at)
+                                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                        """, (
-                                           offer_id, user['id'], message, 'pending',
-                                           channel['title'], channel['username'], channel.get('subscriber_count', 0),
-                                           datetime.now().isoformat(), datetime.now().isoformat()
+                                           offer_id, user['id'], channel['id'], message, 'pending',
+                                           channel.get('title', ''), channel.get('username', ''),
+                                           channel.get('subscriber_count', 0)
                                        ))
 
         logger.info(f"Создан отклик {response_id} на оффер {offer_id}")
