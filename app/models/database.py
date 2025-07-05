@@ -1,8 +1,12 @@
 import sqlite3
 import logging
 import os
+import datetime
 from typing import Optional, Dict, Any, List, Union
+
+from flask import request
 from app.config.settings import Config
+from app.config.telegram_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +38,10 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Database connection test failed: {e}")
             return False
+        
+    
+
+
 
     def execute_query(self, query: str, params: tuple = (),
                       fetch_one: bool = False, fetch_all: bool = False) -> Union[Dict, List, int, None]:
@@ -133,6 +141,97 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Error ensuring user exists: {e}")
             return None
+
+
+# ===== ВАЛИДАЦИЯ =====
+class OfferValidator:
+    @staticmethod
+    def validate_offer_data(data: Dict[str, Any]) -> List[str]:
+        """Валидация данных оффера"""
+        errors = []
+
+        # Обязательные поля
+        if not data.get('title', '').strip():
+            errors.append('Название оффера обязательно')
+
+        description = data.get('description', '').strip()
+        content = data.get('content', '').strip()
+        if not description and not content:
+            errors.append('Описание оффера обязательно')
+
+        # Проверка цены
+        price = OfferValidator._get_offer_price(data)
+        if price <= 0:
+            errors.append('Укажите корректную цену за размещение или общий бюджет')
+
+        # Проверка длины полей
+        title = data.get('title', '').strip()
+        if title and (len(title) < 5 or len(title) > 200):
+            errors.append('Название должно быть от 5 до 200 символов')
+
+        # Проверка диапазона цены
+        if price < 10 or price > 1000000:
+            errors.append('Цена должна быть от 10 до 1,000,000 рублей')
+
+        # Проверка валюты
+        currency = data.get('currency', 'RUB').upper()
+        if currency not in ['RUB', 'USD', 'EUR']:
+            errors.append('Валюта должна быть одной из: RUB, USD, EUR')
+
+        # Проверка категории
+        category = data.get('category', 'general')
+        allowed_categories = [
+            'general', 'tech', 'finance', 'lifestyle', 'education',
+            'entertainment', 'business', 'health', 'sports', 'travel', 'other'
+        ]
+        if category not in allowed_categories:
+            errors.append(f'Категория должна быть одной из: {", ".join(allowed_categories)}')
+
+        return errors
+
+    @staticmethod
+    def _get_offer_price(data: Dict[str, Any]) -> float:
+        """Определение цены оффера с fallback логикой"""
+        price = data.get('price', 0)
+        max_price = data.get('max_price', 0)
+        budget_total = data.get('budget_total', 0)
+
+        if price and float(price) > 0:
+            return float(price)
+        elif max_price and float(max_price) > 0:
+            return float(max_price)
+        elif budget_total and float(budget_total) > 0:
+            return min(float(budget_total) * 0.1, 50000)
+
+        return 0
+
+
+# ===== МЕНЕДЖЕР ПОЛЬЗОВАТЕЛЕЙ =====
+class UserManager:
+    @staticmethod
+    def ensure_user_exists(user_id: int, username: str = None, first_name: str = None) -> int:
+        """Убеждаемся что пользователь существует в БД"""
+        user = DatabaseManager.execute_query(
+            'SELECT id FROM users WHERE telegram_id = ?',
+            (user_id,),
+            fetch_one=True
+        )
+
+        if not user:
+            user_db_id = DatabaseManager.execute_query('''
+                                                       INSERT INTO users (telegram_id, username, first_name, created_at)
+                                                       VALUES (?, ?, ?, ?)
+                                                       ''', (
+                                                           user_id,
+                                                           username or f'user_{user_id}',
+                                                           first_name or 'User',
+                                                           datetime.now().isoformat()
+                                                       ))
+            logger.info(f"Создан новый пользователь: {user_id}")
+            return user_db_id
+
+        return user['id']
+
 # Глобальный экземпляр
 db_manager = DatabaseManager()
 
@@ -141,3 +240,51 @@ db_manager = DatabaseManager()
 def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
     """Обертка для обратной совместимости"""
     return db_manager.execute_query(query, params, fetch_one, fetch_all)
+
+
+# === УТИЛИТЫ ===
+def get_user_id_from_request():
+    """Получение user_id из заголовков запроса"""
+    user_id = request.headers.get('X-Telegram-User-Id')
+    if user_id:
+        try:
+            return int(user_id)
+        except (ValueError, TypeError):
+            pass
+
+    # Fallback к основному пользователю
+    fallback_id = os.environ.get('YOUR_TELEGRAM_ID', '373086959')
+    try:
+        return int(fallback_id)
+    except (ValueError, TypeError):
+        return 373086959 
+        
+def execute_db_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
+    """Универсальная функция для работы с БД"""
+    try:
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(query, params)
+
+        if fetch_one:
+            result = cursor.fetchone()
+            conn.close()
+            return dict(result) if result else None
+        elif fetch_all:
+            result = cursor.fetchall()
+            conn.close()
+            return [dict(row) for row in result] if result else []
+        else:
+            conn.commit()
+            lastrowid = cursor.lastrowid
+            conn.close()
+            return lastrowid
+
+    except Exception as e:
+        logger.error(f"Ошибка выполнения запроса: {e}")
+        if 'conn' in locals():
+            conn.close()
+        raise
+

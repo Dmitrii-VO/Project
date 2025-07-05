@@ -3,7 +3,7 @@ import logging
 from datetime import datetime
 import os
 import sys
-from add_offer import send_telegram_message
+from app.services.add_offer import send_telegram_message
 # Добавляем путь для импорта
 sys.path.insert(0, os.getcwd())
 
