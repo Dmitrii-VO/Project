@@ -16,8 +16,7 @@ from enum import Enum
 
 from .database import db_manager
 from ..utils.exceptions import UserError, ValidationError, AuthenticationError
-from ..config.settings import TELEGRAM_BOT_TOKEN, MIN_WITHDRAWAL_AMOUNT, REFERRAL_BONUS_AMOUNT, DEFAULT_USER_TYPE
-
+from ..config.telegram_config import TELEGRAM_BOT_TOKEN, MIN_WITHDRAWAL_AMOUNT, REFERRAL_BONUS_AMOUNT, DEFAULT_USER_TYPE
 class UserType(Enum):
     """Типы пользователей"""
     CHANNEL_OWNER = 'channel_owner'
@@ -975,7 +974,7 @@ class UserNotificationService:
     def send_welcome_notification(user: User) -> bool:
         """Отправка приветственного уведомления"""
         try:
-            from ..services.notification_service import NotificationService
+            from utils.notifications import NotificationService
 
             welcome_message = f"""
 🎉 Добро пожаловать в платформу рекламы!
@@ -1011,7 +1010,7 @@ class UserNotificationService:
     def send_balance_notification(user: User, amount: float, transaction_type: str) -> bool:
         """Уведомление об изменении баланса"""
         try:
-            from ..services.notification_service import NotificationService
+            from utils.notifications import NotificationService
 
             if transaction_type == 'deposit':
                 emoji = "💰"
@@ -1054,7 +1053,7 @@ class UserNotificationService:
     def send_milestone_notification(user: User, milestone_type: str, value: Any) -> bool:
         """Уведомление о достижениях пользователя"""
         try:
-            from ..services.notification_service import NotificationService
+            from utils.notifications import NotificationService
 
             milestone_messages = {
                 'first_channel': f"🎊 Поздравляем! Вы добавили свой первый канал: {value}",

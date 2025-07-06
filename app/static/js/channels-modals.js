@@ -9,25 +9,65 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
 
     channelToDelete = channelId;
 
-    // Заполняем информацию о канале
-    const channelInfo = document.getElementById('deleteChannelInfo');
-    channelInfo.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px;">
-            <div class="channel-avatar" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: #e5e7eb; border-radius: 50%; font-weight: bold;">
-                ${channelName.substring(0, 2).toUpperCase()}
+    // Удаляем старое модальное окно если существует
+    const oldModal = document.getElementById('deleteChannelModal');
+    if (oldModal) {
+        oldModal.remove();
+    }
+
+    // Создаем новое модальное окно
+    const modal = document.createElement('div');
+    modal.id = 'deleteChannelModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeDeleteModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🗑️ Удалить канал</h3>
+                <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
             </div>
-            <div>
-                <div style="font-weight: 600; color: #111827;">${channelName}</div>
-                <div style="color: #6b7280; font-size: 0.875rem;">${channelUsername || 'Без username'}</div>
+            <div class="modal-body">
+                <div class="confirmation-content">
+                    <div class="channel-info" id="deleteChannelInfo">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div class="channel-avatar" style="width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; background: #e5e7eb; border-radius: 50%; font-weight: bold;">
+                                ${channelName.substring(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                                <div style="font-weight: 600; color: #111827;">${channelName}</div>
+                                <div style="color: #6b7280; font-size: 0.875rem;">${channelUsername || 'Без username'}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="background: #fef3cd; border: 1px solid #f59e0b; border-radius: var(--border-radius-sm); padding: 16px; margin: 16px 0; color: #92400e;">
+                        <strong>⚠️ Внимание!</strong><br>
+                        Это действие нельзя отменить. Канал будет удален из системы.
+                    </div>
+                    <div style="text-align: center; font-weight: 600; color: var(--text-primary); margin: 16px 0;">
+                        Вы действительно хотите удалить этот канал?
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeDeleteModal()">
+                    Отмена
+                </button>
+                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmChannelDeletion()">
+                    🗑️ Удалить канал
+                </button>
             </div>
         </div>
     `;
 
-    // Показываем модальное окно
-    document.getElementById('deleteChannelModal').style.display = 'flex';
+    // Добавляем в body
+    document.body.appendChild(modal);
 
     // Блокируем прокрутку страницы
     document.body.style.overflow = 'hidden';
+
+    console.log('✅ Модальное окно удаления создано заново');
 }
 function closeDeleteModal() {
     console.log('❌ Закрываем модальное окно удаления');
