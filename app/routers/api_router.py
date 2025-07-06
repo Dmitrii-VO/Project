@@ -950,31 +950,6 @@ def validate_data():
             'error': 'Internal server error'
         }), 500
 
-# === ОБРАБОТЧИКИ ОШИБОК ===
-
-@api_bp.errorhandler(404)
-def api_not_found(error):
-    """Обработчик 404 ошибок для API"""
-    return jsonify({
-        'error': 'API endpoint not found',
-        'message': 'The requested API endpoint does not exist'
-    }), 404
-
-@api_bp.errorhandler(405)
-def method_not_allowed(error):
-    """Обработчик 405 ошибок для API"""
-    return jsonify({
-        'error': 'Method not allowed',
-        'message': 'The HTTP method is not allowed for this endpoint'
-    }), 405
-
-@api_bp.errorhandler(429)
-def rate_limit_exceeded(error):
-    """Обработчик превышения rate limit"""
-    return jsonify({
-        'error': 'Rate limit exceeded',
-        'message': 'Too many requests. Please try again later.'
-    }), 429
 
 # Инициализация Blueprint
 def init_api_routes():

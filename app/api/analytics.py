@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.services.auth_service import auth_service
 from app.utils.decorators import require_telegram_auth
 from app.models.database import db_manager
-from app.config.settings import Config
+from app.config.telegram_config import AppConfig
 from datetime import datetime
 import logging
 
@@ -17,12 +17,12 @@ def get_analytics_status():
         telegram_user_id = auth_service.get_current_user_id()
 
         status = {
-            'analytics_enabled': Config.ANALYTICS_SYSTEM_ENABLED,
+            'analytics_enabled': AppConfig.ANALYTICS_SYSTEM_ENABLED,
             'database_connected': True,  # Если дошли до сюда, значит БД работает
             'user_authenticated': bool(telegram_user_id),
             'telegram_user_id': telegram_user_id,
-            'placement_tracking': Config.PLACEMENT_TRACKING_ENABLED,
-            'ai_recommendations': Config.AI_RECOMMENDATIONS_ENABLED
+            'placement_tracking': AppConfig.PLACEMENT_TRACKING_ENABLED,
+            'ai_recommendations': AppConfig.AI_RECOMMENDATIONS_ENABLED
         }
 
         return jsonify({
@@ -49,7 +49,7 @@ def get_analytics_status():
 def get_dashboard_data():
     """Получение данных для дашборда аналитики"""
     try:
-        if not Config.ANALYTICS_SYSTEM_ENABLED:
+        if not AppConfig.ANALYTICS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Система аналитики отключена'}), 503
 
         telegram_user_id = auth_service.get_current_user_id()

@@ -5,7 +5,6 @@ import datetime
 from typing import Optional, Dict, Any, List, Union
 
 from flask import request
-from app.config.settings import Config
 from app.config.telegram_config import AppConfig
 
 logger = logging.getLogger(__name__)
@@ -15,7 +14,7 @@ class DatabaseManager:
     """Менеджер базы данных SQLite"""
 
     def __init__(self, db_path: str = None):
-        self.db_path = db_path or Config.DATABASE_PATH
+        self.db_path = db_path or AppConfig.DATABASE_PATH
 
     def get_connection(self) -> sqlite3.Connection:
         """Получение подключения к SQLite"""

@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 from app.services.auth_service import auth_service
 from app.utils.decorators import require_telegram_auth
 from app.models.database import db_manager
-from app.config.settings import Config
+from app.config.telegram_config import AppConfig
 from datetime import datetime, timedelta
 import json
 import logging
@@ -16,7 +16,7 @@ payments_bp = Blueprint('payments', __name__)
 def get_payment_stats():
     """Получение статистики платежей пользователя"""
     try:
-        if not Config.PAYMENTS_SYSTEM_ENABLED:
+        if not AppConfig.PAYMENTS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Система платежей отключена'}), 503
 
         telegram_user_id = auth_service.get_current_user_id()
@@ -61,7 +61,7 @@ def get_payment_stats():
 def create_escrow():
     """Создание эскроу-транзакции"""
     try:
-        if not Config.PAYMENTS_SYSTEM_ENABLED:
+        if not AppConfig.PAYMENTS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Система платежей отключена'}), 503
 
         telegram_user_id = auth_service.get_current_user_id()

@@ -3,7 +3,7 @@ import logging
 from typing import Optional, Dict, Any
 from urllib.parse import unquote
 from flask import request, session
-from app.config.settings import Config
+from app.config.telegram_config import AppConfig
 from app.models.database import db_manager
 from datetime import datetime
 
@@ -41,7 +41,7 @@ class AuthService:
                 pass
 
         # Fallback на основного пользователя
-        return Config.YOUR_TELEGRAM_ID
+        return AppConfig.YOUR_TELEGRAM_ID
 
     def validate_telegram_data(self, init_data_raw: str) -> Optional[int]:
         """Проверка подлинности данных от Telegram WebApp"""
@@ -87,7 +87,7 @@ class AuthService:
                                              telegram_user_id,
                                              username or f'user_{telegram_user_id}',
                                              first_name or 'Telegram User',
-                                             telegram_user_id == Config.YOUR_TELEGRAM_ID,
+                                             telegram_user_id == AppConfig.YOUR_TELEGRAM_ID,
                                              datetime.now().isoformat()
                                          ))
 

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Dict, Any, Optional
-from app.config.settings import Config
+
 
 logger = logging.getLogger(__name__)
 

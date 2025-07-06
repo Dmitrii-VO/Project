@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Tuple, Optional, Dict, Any
 from flask import request
 from datetime import datetime
-from app.config.settings import Config
+from app.config.telegram_config import AppConfig
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +53,10 @@ class SecurityService:
         now = time.time()
         self.request_counts[identifier] = [
             req_time for req_time in self.request_counts[identifier]
-            if now - req_time < Config.TIME_WINDOW
+            if now - req_time < AppConfig.TIME_WINDOW
         ]
 
-        if len(self.request_counts[identifier]) >= Config.REQUEST_LIMIT:
+        if len(self.request_counts[identifier]) >= AppConfig.REQUEST_LIMIT:
             return False
 
         self.request_counts[identifier].append(now)

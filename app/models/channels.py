@@ -14,7 +14,8 @@ from enum import Enum
 
 from .database import db_manager
 from ..utils.exceptions import ChannelError, ValidationError, TelegramAPIError
-from ..config.settings import TELEGRAM_BOT_TOKEN, MAX_CHANNELS_PER_USER, TELEGRAM_API_TIMEOUT
+from ..config.telegram_config import TELEGRAM_BOT_TOKEN, TELEGRAM_API_TIMEOUT, MAX_CHANNELS_PER_USER
+
 
 
 class ChannelStatus(Enum):
