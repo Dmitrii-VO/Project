@@ -12,7 +12,6 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from app.models.database import get_user_id_from_request, execute_db_query
 from app.config.telegram_config import AppConfig
-from app.models.database import execute_db_query
 from app.api.offers import offers_bp
 from app.routers.main_router import main_bp
 from app.api.channels import channels_bp
@@ -92,72 +91,461 @@ def register_middleware(app: Flask) -> None:
 def register_error_handlers(app: Flask) -> None:
     """Регистрация обработчиков ошибок"""
 
+    @app.errorhandler(400)
+    def bad_request(error):
+        logger.warning(f"Bad request: {error} | Path: {request.path}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Bad request',
+                'message': 'Неверные данные запроса',
+                'path': request.path
+            }), 400
+        return render_template('error.html', 
+                             message='Неверные данные запроса', 
+                             code=400), 400
+
+    @app.errorhandler(401)
+    def unauthorized(error):
+        logger.warning(f"Unauthorized access: {request.path} | User-Agent: {request.headers.get('User-Agent')}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Unauthorized',
+                'message': 'Требуется авторизация',
+                'path': request.path
+            }), 401
+        return render_template('error.html', 
+                             message='Требуется авторизация через Telegram', 
+                             code=401), 401
+
+    @app.errorhandler(403)
+    def forbidden(error):
+        logger.warning(f"Forbidden access: {request.path} | Headers: {dict(request.headers)}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Forbidden',
+                'message': 'Недостаточно прав доступа',
+                'path': request.path
+            }), 403
+        return render_template('error.html', 
+                             message='Недостаточно прав доступа', 
+                             code=403), 403
+
     @app.errorhandler(404)
     def not_found(error):
+        logger.info(f"Not found: {request.path} | Method: {request.method}")
         if request.path.startswith('/api/'):
-            return jsonify({'error': 'Endpoint not found', 'path': request.path}), 404
-        return render_template('error.html', message='Страница не найдена'), 404
+            return jsonify({
+                'error': 'Endpoint not found', 
+                'path': request.path,
+                'method': request.method
+            }), 404
+        return render_template('error.html', 
+                             message='Страница не найдена', 
+                             code=404), 404
+
+    @app.errorhandler(405)
+    def method_not_allowed(error):
+        logger.warning(f"Method not allowed: {request.method} {request.path}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Method not allowed',
+                'message': f'Метод {request.method} не поддерживается',
+                'path': request.path,
+                'allowed_methods': error.valid_methods if hasattr(error, 'valid_methods') else []
+            }), 405
+        return render_template('error.html', 
+                             message=f'Метод {request.method} не поддерживается', 
+                             code=405), 405
+
+    @app.errorhandler(413)
+    def request_entity_too_large(error):
+        logger.warning(f"Request too large: {request.path} | Content-Length: {request.content_length}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Request too large',
+                'message': 'Размер запроса превышает максимально допустимый',
+                'max_size': f"{AppConfig.MAX_CONTENT_LENGTH // (1024*1024)}MB"
+            }), 413
+        return render_template('error.html', 
+                             message='Файл слишком большой', 
+                             code=413), 413
+
+    @app.errorhandler(429)
+    def rate_limit_exceeded(error):
+        logger.warning(f"Rate limit exceeded: {request.path} | IP: {request.remote_addr}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Rate limit exceeded',
+                'message': 'Превышен лимит запросов',
+                'retry_after': getattr(error, 'retry_after', 60)
+            }), 429
+        return render_template('error.html', 
+                             message='Превышен лимит запросов. Попробуйте позже.', 
+                             code=429), 429
 
     @app.errorhandler(500)
     def internal_error(error):
-        logger.error(f"Internal error: {error}")
+        logger.error(f"Internal error: {error} | Path: {request.path} | Method: {request.method}")
         if request.path.startswith('/api/'):
-            return jsonify({'error': 'Internal server error'}), 500
-        return render_template('error.html', message='Внутренняя ошибка сервера'), 500
+            return jsonify({
+                'error': 'Internal server error',
+                'message': 'Внутренняя ошибка сервера'
+            }), 500
+        return render_template('error.html', 
+                             message='Внутренняя ошибка сервера', 
+                             code=500), 500
+
+    @app.errorhandler(502)
+    def bad_gateway(error):
+        logger.error(f"Bad gateway: {error} | Path: {request.path}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Bad gateway',
+                'message': 'Сервис временно недоступен'
+            }), 502
+        return render_template('error.html', 
+                             message='Сервис временно недоступен', 
+                             code=502), 502
+
+    @app.errorhandler(503)
+    def service_unavailable(error):
+        logger.error(f"Service unavailable: {error} | Path: {request.path}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Service unavailable',
+                'message': 'Сервис находится на техническом обслуживании'
+            }), 503
+        return render_template('error.html', 
+                             message='Сервис находится на техническом обслуживании', 
+                             code=503), 503
+
+    # Обработка SQLite ошибок
+    @app.errorhandler(sqlite3.Error)
+    def database_error(error):
+        logger.error(f"Database error: {error} | Path: {request.path} | Query context available")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Database error',
+                'message': 'Ошибка базы данных'
+            }), 500
+        return render_template('error.html', 
+                             message='Временная ошибка. Попробуйте позже.', 
+                             code=500), 500
+
+    # Обработка JSON ошибок
+    @app.errorhandler(400)
+    def handle_json_error(error):
+        if 'application/json' in request.content_type:
+            logger.warning(f"Invalid JSON: {request.path} | Error: {error}")
+            return jsonify({
+                'error': 'Invalid JSON',
+                'message': 'Неверный формат JSON данных'
+            }), 400
+        return bad_request(error)
+
+    # Обработка ошибок валидации (если используется)
+    try:
+        from werkzeug.exceptions import UnprocessableEntity
+        
+        @app.errorhandler(422)
+        def validation_error(error):
+            logger.warning(f"Validation error: {error} | Path: {request.path}")
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'error': 'Validation failed',
+                    'message': 'Ошибка валидации данных',
+                    'details': getattr(error, 'data', {})
+                }), 422
+            return render_template('error.html', 
+                                 message='Ошибка валидации данных', 
+                                 code=422), 422
+    except ImportError:
+        pass
+
+    # Обработка ошибок Telegram API (если используется)
+    try:
+        import telegram
+        
+        @app.errorhandler(telegram.error.TelegramError)
+        def telegram_error(error):
+            logger.error(f"Telegram API error: {error} | Path: {request.path}")
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'error': 'Telegram API error',
+                    'message': 'Ошибка Telegram API'
+                }), 503
+            return render_template('error.html', 
+                                 message='Ошибка связи с Telegram', 
+                                 code=503), 503
+    except ImportError:
+        pass
+
+    # Общий обработчик для всех остальных исключений
+    @app.errorhandler(Exception)
+    def handle_unexpected_error(error):
+        logger.error(f"Unexpected error: {type(error).__name__}: {error} | Path: {request.path}")
+        logger.error(f"Traceback: ", exc_info=True)
+        
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Unexpected error',
+                'message': 'Произошла неожиданная ошибка'
+            }), 500
+        return render_template('error.html', 
+                             message='Произошла неожиданная ошибка', 
+                             code=500), 500
+
+    logger.info("✅ Обработчики ошибок зарегистрированы")
 
 
 # === СЛУЖЕБНЫЕ МАРШРУТЫ ===
 def register_system_routes(app: Flask) -> None:
     """Регистрация служебных маршрутов"""
 
-    # Базовые каналы endpoints для совместимости
-    @app.route('/api/channels/<int:channel_id>/verify', methods=['PUT', 'POST'])
-    def verify_channel_unified(channel_id):
-        """Верификация канала"""
+    # === МАРШРУТЫ ЗДОРОВЬЯ СИСТЕМЫ ===
+    
+    @app.route('/health')
+    @app.route('/api/health')
+    def health_check():
+        """Проверка состояния системы"""
         try:
-            telegram_user_id = get_user_id_from_request()
+            # Проверяем БД
+            db_status = 'healthy'
+            try:
+                execute_db_query("SELECT 1", fetch_one=True)
+            except Exception as e:
+                db_status = f'unhealthy: {str(e)}'
+                logger.error(f"Database health check failed: {e}")
 
-            result = {
-                'success': True,
-                'message': f'✅ Канал {channel_id} успешно верифицирован!',
-                'channel': {
-                    'id': channel_id,
-                    'is_verified': True,
-                    'verified_at': datetime.utcnow().isoformat()
+            # Проверяем файловую систему
+            fs_status = 'healthy' if os.path.exists(AppConfig.DATABASE_PATH) else 'database_missing'
+
+            status = {
+                'status': 'healthy' if db_status == 'healthy' else 'degraded',
+                'timestamp': datetime.utcnow().isoformat(),
+                'version': '1.0.0',
+                'telegram_webapp': True,
+                'services': {
+                    'database': db_status,
+                    'filesystem': fs_status,
+                    'bot_configured': bool(AppConfig.BOT_TOKEN)
                 }
             }
 
-            return jsonify(result)
+            status_code = 200 if status['status'] == 'healthy' else 503
+            return jsonify(status), status_code
 
         except Exception as e:
-            logger.error(f"❌ Ошибка верификации канала: {e}")
-            return jsonify({'success': False, 'error': str(e)}), 400
+            logger.error(f"Health check failed: {e}")
+            return jsonify({
+                'status': 'unhealthy',
+                'error': str(e),
+                'timestamp': datetime.utcnow().isoformat()
+            }), 503
+
+    # === МАРШРУТЫ КОНФИГУРАЦИИ ===
+
+    @app.route('/api/config')
+    def get_app_config():
+        """Получение публичной конфигурации приложения"""
+        try:
+            config = {
+                'app_name': 'Telegram Mini App',
+                'version': '1.0.0',
+                'api_version': 'v1',
+                'features': {
+                    'channels': True,
+                    'offers': True,
+                    'analytics': True,
+                    'payments': True,
+                    'notifications': True
+                },
+                'limits': {
+                    'max_channels_per_user': 10,
+                    'max_offers_per_user': 50,
+                    'max_file_size': AppConfig.MAX_CONTENT_LENGTH,
+                    'supported_file_types': ['jpg', 'jpeg', 'png', 'gif', 'mp4']
+                },
+                'telegram': {
+                    'webapp_url': AppConfig.WEBAPP_URL,
+                    'bot_configured': bool(AppConfig.BOT_TOKEN)
+                }
+            }
+
+            return jsonify({
+                'success': True,
+                'config': config,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+
+        except Exception as e:
+            logger.error(f"Config fetch failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# ===== TELEGRAM WEBHOOK =====
-def setup_telegram_webhook():
-    """Настройка webhook для Telegram бота"""
-    try:
-        bot_token = AppConfig.BOT_TOKEN
-        if not bot_token:
-            return
+    # === МАРШРУТЫ СТАТИСТИКИ ===
 
-        webhook_url = f"{AppConfig.WEBAPP_URL}/api/channels/webhook"
-        url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
+    @app.route('/api/stats/global')
+    def get_global_stats():
+        """Получение глобальной статистики системы"""
+        try:
+            stats = {
+                'channels': 0,
+                'users': 0,
+                'offers': 0,
+                'revenue': 0
+            }
 
-        response = requests.post(url, json={
-            'url': webhook_url,
-            'allowed_updates': ['channel_post', 'message', 'edited_message', 'edited_channel_post'],
-            'drop_pending_updates': False
-        })
+            # Безопасный подсчет с обработкой ошибок
+            try:
+                result = execute_db_query("SELECT COUNT(*) as count FROM channels WHERE is_active = 1", fetch_one=True)
+                stats['channels'] = result['count'] if result else 0
+            except:
+                pass
 
-        if response.status_code == 200 and response.json().get('ok'):
-            logger.info(f"✅ Webhook установлен: {webhook_url}")
-        else:
-            logger.error(f"❌ Ошибка установки webhook")
+            try:
+                result = execute_db_query("SELECT COUNT(*) as count FROM users WHERE is_active = 1", fetch_one=True)
+                stats['users'] = result['count'] if result else 0
+            except:
+                pass
 
-    except Exception as e:
-        logger.error(f"❌ Ошибка настройки webhook: {e}")
+            try:
+                result = execute_db_query("SELECT COUNT(*) as count FROM offers WHERE status = 'active'", fetch_one=True)
+                stats['offers'] = result['count'] if result else 0
+            except:
+                pass
+
+            try:
+                result = execute_db_query("SELECT COALESCE(SUM(price), 0) as total FROM offers WHERE status = 'active'", fetch_one=True)
+                stats['revenue'] = float(result['total']) if result and result['total'] else 0
+            except:
+                pass
+
+            return jsonify({
+                'success': True,
+                'stats': stats,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+
+        except Exception as e:
+            logger.error(f"Global stats failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # === WEBHOOK МАРШРУТЫ ===
+
+    @app.route('/webhook/telegram', methods=['POST'])
+    def telegram_webhook():
+        """Обработка Telegram webhook"""
+        try:
+            update = request.get_json()
+            
+            if not update:
+                return jsonify({'ok': True})
+
+            logger.info(f"Received Telegram update: {update.get('update_id', 'unknown')}")
+            
+            # Здесь можно добавить обработку конкретных типов обновлений
+            # Например, сообщения, callback_query и т.д.
+            
+            return jsonify({'ok': True})
+
+        except Exception as e:
+            logger.error(f"Webhook error: {e}")
+            return jsonify({'ok': True})  # Всегда возвращаем ok для Telegram
+
+    # === СЛУЖЕБНЫЕ МАРШРУТЫ ===
+
+    @app.route('/api/system/info')
+    def system_info():
+        """Информация о системе"""
+        try:
+            import platform
+            import sys
+
+            info = {
+                'python_version': sys.version,
+                'platform': platform.platform(),
+                'architecture': platform.architecture(),
+                'hostname': platform.node(),
+                'app_config': {
+                    'debug': AppConfig.DEBUG,
+                    'database_path': AppConfig.DATABASE_PATH,
+                    'webapp_url': AppConfig.WEBAPP_URL
+                }
+            }
+
+            return jsonify({
+                'success': True,
+                'system_info': info,
+                'timestamp': datetime.utcnow().isoformat()
+            })
+
+        except Exception as e:
+            logger.error(f"System info failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/api/test/connection')
+    def test_connection():
+        """Тест соединения и базовой функциональности"""
+        try:
+            # Тестируем различные компоненты
+            tests = {
+                'database': False,
+                'filesystem': False,
+                'config': False
+            }
+
+            # Тест БД
+            try:
+                execute_db_query("SELECT 1", fetch_one=True)
+                tests['database'] = True
+            except:
+                pass
+
+            # Тест файловой системы
+            try:
+                tests['filesystem'] = os.path.exists(AppConfig.DATABASE_PATH)
+            except:
+                pass
+
+            # Тест конфигурации
+            try:
+                tests['config'] = bool(AppConfig.BOT_TOKEN)
+            except:
+                pass
+
+            success = all(tests.values())
+
+            return jsonify({
+                'success': success,
+                'tests': tests,
+                'message': 'All tests passed' if success else 'Some tests failed',
+                'timestamp': datetime.utcnow().isoformat()
+            })
+
+        except Exception as e:
+            logger.error(f"Connection test failed: {e}")
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    # === СЛУЖЕБНЫЕ СТРАНИЦЫ ===
+
+    @app.route('/robots.txt')
+    def robots_txt():
+        """Robots.txt для поисковых систем"""
+        return """User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Allow: /
+""", 200, {'Content-Type': 'text/plain'}
+
+    @app.route('/favicon.ico')
+    def favicon():
+        """Favicon redirect"""
+        return '', 204
+
+    logger.info("✅ Служебные маршруты зарегистрированы")
+
+
 
 
 # === ИНИЦИАЛИЗАЦИЯ ===
@@ -171,9 +559,6 @@ def main():
     if not AppConfig.validate():
         logger.error("❌ Критические ошибки конфигурации")
         sys.exit(1)
-
-    setup_telegram_webhook()
-
     host = os.environ.get('HOST', '0.0.0.0')
     port = int(os.environ.get('PORT', 5000))
 

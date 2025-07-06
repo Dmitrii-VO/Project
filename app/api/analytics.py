@@ -80,8 +80,8 @@ def get_dashboard_data():
         # Получаем метрики каналов
         channels_metrics = db_manager.execute_query('''
                                                     SELECT COUNT(*)               as total_channels,
-                                                           SUM(subscribers_count) as total_subscribers,
-                                                           AVG(subscribers_count) as avg_subscribers
+                                                           SUM(subscriber_count) as total_subscriber,
+                                                           AVG(subscriber_count) as avg_subscriber
                                                     FROM channels c
                                                              JOIN users u ON c.owner_id = u.id
                                                     WHERE u.telegram_id = ?

@@ -137,24 +137,24 @@ class TelegramChannelAnalyzer:
                         break
 
                 # ИСПРАВЛЕННЫЙ парсинг подписчиков - ищем в разных местах
-                subscribers_patterns = [
-                    r'(\d+(?:\s*\d+)*)\s*(?:subscribers|подписчиков|members|участников)',  # Стандартный формат
-                    r'(\d+(?:\.\d+)?[KММKk])\s*(?:subscribers|подписчиков|members|участников)',  # С K/M
-                    r'"subscribers_count":(\d+)',  # JSON в коде страницы
+                subscriber_patterns = [
+                    r'(\d+(?:\s*\d+)*)\s*(?:subscriber|подписчиков|members|участников)',  # Стандартный формат
+                    r'(\d+(?:\.\d+)?[KММKk])\s*(?:subscriber|подписчиков|members|участников)',  # С K/M
+                    r'"subscriber_count":(\d+)',  # JSON в коде страницы
                     r'data-num="(\d+)"',  # Атрибуты данных
                     r'class="counter_value"[^>]*>(\d+(?:\s*\d+)*)',  # Счетчик
                 ]
 
                 max_subscribers = 0  # Берем максимальное найденное значение
 
-                for pattern in subscribers_patterns:
+                for pattern in subscriber_patterns:
                     matches = re.finditer(pattern, content, re.IGNORECASE)
                     for match in matches:
                         subs_text = match.group(1)
                         parsed_count = self.parse_subscriber_count(subs_text)
                         if parsed_count > max_subscribers:
                             max_subscribers = parsed_count
-                            result['subscribers_text'] = subs_text
+                            result['subscriber_text'] = subs_text
 
                 # Логирование для отладки
                 logger.info(f"Скрапинг канала {username}: найдено {max_subscribers} подписчиков")
@@ -190,7 +190,7 @@ class TelegramChannelAnalyzer:
                     number_part = text[:-len(suffix)]
                     number = float(number_part)
                     result = int(number * multiplier)
-                    logger.debug(f"Parsed '{text}' as {result} subscribers")
+                    logger.debug(f"Parsed '{text}' as {result} subscriber")
                     return result
                 except ValueError:
                     continue
@@ -218,20 +218,20 @@ class TelegramChannelAnalyzer:
 
         return 0
     
-    def generate_realistic_stats(self, username: str, base_subscribers: int = None) -> Dict:
+    def generate_realistic_stats(self, username: str, base_subscriber: int = None) -> Dict:
         """
         Генерация реалистичной статистики канала
         """
         # Если подписчиков не передано, генерируем на основе хэша username
-        if base_subscribers is None:
+        if base_subscriber is None:
             # Используем хэш для консистентности
             hash_val = abs(hash(username)) % 100000
-            base_subscribers = 1000 + hash_val
+            base_subscriber = 1000 + hash_val
         
         # Реалистичные метрики
         # ER обычно от 2% до 15% для Telegram каналов
         engagement_rate = 2 + (abs(hash(username + 'er')) % 13)
-        avg_views = int(base_subscribers * (engagement_rate / 100))
+        avg_views = int(base_subscriber * (engagement_rate / 100))
         
         # Определяем категорию на основе названия канала/username
         categories = ['tech', 'business', 'education', 'lifestyle', 'finance', 
@@ -277,29 +277,29 @@ class TelegramChannelAnalyzer:
             'title': title,
             'username': f"@{username}",
             'description': descriptions.get(category, 'Интересный контент каждый день'),
-            'subscribers': base_subscribers,
+            'subscriber': base_subscriber,
             'avg_views': avg_views,
             'engagement_rate': round(engagement_rate, 1),
             'category': category,
             'verified': abs(hash(username + 'verified')) % 100 < 15,  # 15% каналов верифицированы
             'avatar_letter': username[0].upper() if username else 'T',
             'last_post_date': (datetime.now() - timedelta(hours=abs(hash(username + 'time')) % 48)).isoformat(),
-            'estimated_cpm': self.calculate_estimated_cpm(base_subscribers, engagement_rate),
-            'audience_quality': self.estimate_audience_quality(base_subscribers, engagement_rate)
+            'estimated_cpm': self.calculate_estimated_cpm(base_subscriber, engagement_rate),
+            'audience_quality': self.estimate_audience_quality(base_subscriber, engagement_rate)
         }
     
-    def calculate_estimated_cpm(self, subscribers: int, engagement_rate: float) -> float:
+    def calculate_estimated_cpm(self, subscriber: int, engagement_rate: float) -> float:
         """
         Расчет ориентировочной стоимости за 1000 просмотров
         """
         base_cpm = 50  # Базовая CPM в рублях
         
         # Корректировки на основе размера канала
-        if subscribers > 100000:
+        if subscriber > 100000:
             base_cpm *= 1.5
-        elif subscribers > 50000:
+        elif subscriber > 50000:
             base_cpm *= 1.3
-        elif subscribers < 5000:
+        elif subscriber < 5000:
             base_cpm *= 0.7
         
         # Корректировка на основе вовлеченности
@@ -312,7 +312,7 @@ class TelegramChannelAnalyzer:
         
         return round(base_cpm, 2)
     
-    def estimate_audience_quality(self, subscribers: int, engagement_rate: float) -> str:
+    def estimate_audience_quality(self, subscriber: int, engagement_rate: float) -> str:
         """
         Оценка качества аудитории
         """
@@ -357,23 +357,23 @@ class TelegramChannelAnalyzer:
                 scraped_data = self.get_channel_info_via_scraping(username)
             
             # Объединяем полученные данные
-            base_subscribers = None
+            base_subscriber = None
             title = None
             description = None
             
             if api_data:
                 title = api_data.get('title')
                 description = api_data.get('description')
-                base_subscribers = api_data.get('member_count', 0)
+                base_subscriber = api_data.get('member_count', 0)
                 
             elif scraped_data:
                 title = scraped_data.get('title')
                 description = scraped_data.get('description')
-                if 'subscribers_text' in scraped_data:
-                    base_subscribers = self.parse_subscriber_count(scraped_data['subscribers_text'])
+                if 'subscriber_text' in scraped_data:
+                    base_subscriber = self.parse_subscriber_count(scraped_data['subscriber_text'])
             
             # Генерируем полную статистику
-            stats = self.generate_realistic_stats(username, base_subscribers)
+            stats = self.generate_realistic_stats(username, base_subscriber)
             
             # Переопределяем данными из API/скрапинга если они есть
             if title:

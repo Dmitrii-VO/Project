@@ -253,14 +253,14 @@ def calculate_recommendation_score(channel: Dict[str, Any], offer_analysis: Dict
             score += 5
         
         # Размер аудитории (15 баллов максимум)
-        subscribers = channel.get('subscriber_count', 0)
-        if subscribers > 50000:
+        subscriber = channel.get('subscriber_count', 0)
+        if subscriber > 50000:
             score += 15
-        elif subscribers > 10000:
+        elif subscriber > 10000:
             score += 12
-        elif subscribers > 5000:
+        elif subscriber > 5000:
             score += 8
-        elif subscribers > 1000:
+        elif subscriber > 1000:
             score += 5
         
         # Соответствие цене (15 баллов максимум)
@@ -303,11 +303,11 @@ def get_recommendation_reasons(channel: Dict[str, Any], offer_analysis: Dict[str
             reasons.append(f"Высокий рейтинг: {avg_rating:.1f}/5.0")
         
         # Большая аудитория
-        subscribers = channel.get('subscriber_count', 0)
-        if subscribers > 50000:
-            reasons.append(f"Большая аудитория: {subscribers:,} подписчиков")
-        elif subscribers > 10000:
-            reasons.append(f"Стабильная аудитория: {subscribers:,} подписчиков")
+        subscriber = channel.get('subscriber_count', 0)
+        if subscriber > 50000:
+            reasons.append(f"Большая аудитория: {subscriber:,} подписчиков")
+        elif subscriber > 10000:
+            reasons.append(f"Стабильная аудитория: {subscriber:,} подписчиков")
         
         # Активность
         recent_offers = channel.get('recent_offers_count', 0)

@@ -332,7 +332,7 @@ function applyFindFilters() {
         category: document.getElementById('findCategoryFilter')?.value || '',
         min_budget: parseFloat(document.getElementById('findBudgetMin')?.value) || null,
         max_budget: parseFloat(document.getElementById('findBudgetMax')?.value) || null,
-        min_subscribers: parseInt(document.getElementById('findMinSubscribers')?.value) || null
+        min_subscribers: parseInt(document.getElementById('findMinSubscriber')?.value) || null
     };
 
     Object.keys(filters).forEach(key => {
@@ -347,7 +347,7 @@ function applyFindFilters() {
 
 function clearFindFilters() {
     console.log('🗑️ Очистка фильтров...');
-    ['findOffersSearch', 'findCategoryFilter', 'findBudgetMin', 'findBudgetMax', 'findMinSubscribers']
+    ['findOffersSearch', 'findCategoryFilter', 'findBudgetMin', 'findBudgetMax', 'findMinSubscriber']
         .forEach(id => {
             const el = document.getElementById(id);
             if (el) el.value = '';
@@ -420,7 +420,7 @@ function renderAvailableOffers(offers) {
 
         const formattedPrice = Utils.formatPrice(price);
         const shortDescription = description.length > 200 ? description.substring(0, 200) + '...' : description;
-        const subscribersText = max_subscribers > 0 && max_subscribers !== 'Без ограничений'
+        const subscriberText = max_subscribers > 0 && max_subscribers !== 'Без ограничений'
             ? `${Utils.formatNumber(min_subscribers)}-${Utils.formatNumber(max_subscribers)}`
             : `${Utils.formatNumber(min_subscribers)}+`;
 
@@ -446,7 +446,7 @@ function renderAvailableOffers(offers) {
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
                     <div style="display: flex; gap: 16px; flex-wrap: wrap;">
                         <div style="font-size: 12px; color: #888;">📂 <strong style="color: #333;">${category}</strong></div>
-                        <div style="font-size: 12px; color: #888;">👥 <strong style="color: #333;">${subscribersText}</strong></div>
+                        <div style="font-size: 12px; color: #888;">👥 <strong style="color: #333;">${subscriberText}</strong></div>
                         <div style="font-size: 12px; color: #888;">📅 <strong style="color: #333;">${Utils.formatDate(created_at)}</strong></div>
                     </div>
                     <button class="btn btn-primary" style="padding: 12px 20px; font-size: 14px; margin-left: 12px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);" onclick="event.stopPropagation(); acceptOffer(${id})">✅ Откликнуться</button>
@@ -495,7 +495,7 @@ class OffersManager {
         });
 
         this.setupChips();
-        this.setupSubscribersSlider();
+        this.setupsubscriberlider();
         this.setupPreviewUpdaters();
     }
 
@@ -507,14 +507,14 @@ class OffersManager {
         });
     }
 
-    setupSubscribersSlider() {
-        const subscribersRange = document.querySelector('input[name="min_subscribers"]');
-        const subscribersValue = document.getElementById('subscribersValue');
+    setupsubscriberlider() {
+        const subscriberRange = document.querySelector('input[name="min_subscribers"]');
+        const subscriberValue = document.getElementById('subscriberValue');
 
-        if (subscribersRange && subscribersValue) {
-            subscribersRange.addEventListener('input', function() {
+        if (subscriberRange && subscriberValue) {
+            subscriberRange.addEventListener('input', function() {
                 const value = parseInt(this.value);
-                subscribersValue.textContent = value >= 1000000 ? '1M+' :
+                subscriberValue.textContent = value >= 1000000 ? '1M+' :
                                               value >= 1000 ? Math.round(value/1000) + 'K' :
                                               value.toString();
             });
@@ -915,7 +915,7 @@ const ResponseManager = {
         return responses.map(response => {
             const channelTitle = response.channel_title || 'Канал без названия';
             const channelUsername = response.channel_username || 'username';
-            const channelSubscribers = response.channel_subscribers || 0;
+            const channelsubscriber = response.channel_subscriber || 0;
             const message = response.message || '';
             const status = response.status || 'pending';
 
@@ -924,7 +924,7 @@ const ResponseManager = {
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
                         <div style="flex: 1;">
                             <h5 style="margin: 0 0 4px 0; color: #2d3748; font-size: 16px;">📺 ${channelTitle}</h5>
-                            <div style="font-size: 14px; color: #718096;">@${channelUsername} • 👥 ${Utils.formatNumber(channelSubscribers)} подписчиков</div>
+                            <div style="font-size: 14px; color: #718096;">@${channelUsername} • 👥 ${Utils.formatNumber(channelsubscriber)} подписчиков</div>
                         </div>
                         <div style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: #fed7d7; color: #c53030;">${this.getStatusText(status)}</div>
                     </div>

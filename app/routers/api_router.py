@@ -20,9 +20,8 @@ from .middleware import (
 api_bp = Blueprint('api', __name__)
 
 # === АУТЕНТИФИКАЦИЯ ===
-
 @api_bp.route('/auth/status')
-@cache_response(timeout=60)  # Кэшируем на 1 минуту
+@cache_response(timeout=60)
 def auth_status():
     """
     Проверка статуса аутентификации пользователя
@@ -31,6 +30,9 @@ def auth_status():
         JSON с информацией об аутентификации
     """
     try:
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        
         telegram_user_id = TelegramAuth.get_current_user_id()
         
         if not telegram_user_id:
@@ -48,21 +50,31 @@ def auth_status():
                 'message': 'User registration failed'
             }), 500
         
-        # Получаем дополнительную информацию о пользователе
-        from ..models.user import User
-        user = User.query.get(user_db_id)
+        # Получаем информацию о пользователе через SQLite
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_db_id,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user:
+            return jsonify({
+                'authenticated': False,
+                'message': 'User not found'
+            }), 404
         
         return jsonify({
             'authenticated': True,
             'user': {
-                'id': user.id,
-                'telegram_id': user.telegram_id,
-                'username': user.username,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'user_type': user.user_type,
-                'balance': user.balance,
-                'created_at': user.created_at.isoformat() if user.created_at else None
+                'id': user['id'],
+                'telegram_id': user['telegram_id'],
+                'username': user.get('username', ''),
+                'first_name': user.get('first_name', ''),
+                'last_name': user.get('last_name', ''),
+                'is_admin': bool(user.get('is_admin', False)),
+                'created_at': user.get('created_at')
             }
         })
         
@@ -180,8 +192,8 @@ def logout():
 
 # === СИСТЕМНАЯ ИНФОРМАЦИЯ ===
 
-@api_bp.route('/status')
 @cache_response(timeout=30)  # Кэшируем на 30 секунд
+@api_bp.route('/status')
 def system_status():
     """
     Статус системы и основные метрики
@@ -190,22 +202,35 @@ def system_status():
         JSON с информацией о состоянии системы
     """
     try:
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        import time
+        
         # Проверяем подключение к БД
-        from ..models.database import db
-        db.session.execute('SELECT 1')
-        database_status = 'healthy'
+        try:
+            conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+            cursor = conn.cursor()
+            cursor.execute('SELECT 1')
+            database_status = 'healthy'
+        except Exception as e:
+            database_status = f'unhealthy: {str(e)}'
+            return jsonify({
+                'status': 'unhealthy',
+                'error': 'Database connection failed',
+                'timestamp': time.time()
+            }), 500
         
         # Получаем статистику
-        from ..models.user import User
-        from ..models.channels import Channel
-        from ..models.offer import Offer
+        cursor.execute("SELECT COUNT(*) as count FROM users")
+        user_count = cursor.fetchone()[0]
         
-        user_count = User.query.count()
-        channel_count = Channel.query.count()
-        offer_count = Offer.query.count()
+        cursor.execute("SELECT COUNT(*) as count FROM channels")
+        channel_count = cursor.fetchone()[0]
         
-        # Статистика безопасности
-        security_stats = get_security_stats()
+        cursor.execute("SELECT COUNT(*) as count FROM offers")
+        offer_count = cursor.fetchone()[0]
+        
+        conn.close()
         
         return jsonify({
             'status': 'healthy',
@@ -220,8 +245,7 @@ def system_status():
                 'channels': channel_count,
                 'offers': offer_count
             },
-            'security': security_stats,
-            'telegram_bot_configured': bool(current_app.config.get('TELEGRAM_BOT_TOKEN'))
+            'telegram_bot_configured': bool(AppConfig.BOT_TOKEN)
         })
         
     except Exception as e:
@@ -231,6 +255,7 @@ def system_status():
             'error': str(e),
             'timestamp': time.time()
         }), 500
+
 
 @api_bp.route('/config')
 @require_telegram_auth
@@ -275,7 +300,6 @@ def app_config():
         }), 500
 
 # === ПОЛЬЗОВАТЕЛЬСКИЕ ДАННЫЕ ===
-
 @api_bp.route('/user/profile')
 @require_telegram_auth
 def get_user_profile():
@@ -286,32 +310,47 @@ def get_user_profile():
         JSON с данными профиля пользователя
     """
     try:
-        from ..models.user import User
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        from app.models.database import get_user_id_from_request
         
-        user = User.query.get(g.current_user_id)
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Получаем пользователя
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
         
         if not user:
-            return jsonify({
-                'error': 'User not found'
-            }), 404
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
         
-        # Получаем статистику пользователя
-        from ..models.channels import Channel
-        from ..models.offer import Offer
+        user_db_id = user['id']
         
-        channels_count = Channel.query.filter_by(owner_id=user.id).count()
-        offers_count = Offer.query.filter_by(advertiser_id=user.id).count()
+        # Получаем статистику каналов
+        cursor.execute("SELECT COUNT(*) as count FROM channels WHERE owner_id = ?", (user_db_id,))
+        channels_count = cursor.fetchone()['count']
+        
+        # Получаем статистику офферов
+        cursor.execute("SELECT COUNT(*) as count FROM offers WHERE created_by = ?", (user_db_id,))
+        offers_count = cursor.fetchone()['count']
+        
+        conn.close()
         
         return jsonify({
             'user': {
-                'id': user.id,
-                'telegram_id': user.telegram_id,
-                'username': user.username,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'user_type': user.user_type,
-                'balance': user.balance,
-                'created_at': user.created_at.isoformat() if user.created_at else None
+                'id': user['id'],
+                'telegram_id': user['telegram_id'],
+                'username': user.get('username', ''),
+                'first_name': user.get('first_name', ''),
+                'last_name': user.get('last_name', ''),
+                'is_admin': bool(user.get('is_admin', False)),
+                'created_at': user.get('created_at')
             },
             'statistics': {
                 'channels_count': channels_count,
@@ -327,14 +366,13 @@ def get_user_profile():
 
 @api_bp.route('/user/profile', methods=['PUT'])
 @require_telegram_auth
-@rate_limit_decorator(max_requests=5, window=300)  # 5 обновлений за 5 минут
+@rate_limit_decorator(max_requests=5, window=300)
 def update_user_profile():
     """
     Обновление профиля пользователя
     
     Expected JSON:
     {
-        "user_type": "channel_owner" | "advertiser",
         "username": "новое_имя_пользователя"
     }
     
@@ -342,62 +380,74 @@ def update_user_profile():
         JSON с обновленными данными пользователя
     """
     try:
-        from ..models.user import User
-        from ..models.database import db
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        from app.models.database import get_user_id_from_request
         
         data = request.get_json()
         
         if not data:
-            return jsonify({
-                'error': 'No data provided'
-            }), 400
+            return jsonify({'error': 'No data provided'}), 400
         
-        user = User.query.get(g.current_user_id)
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Получаем пользователя
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
         
         if not user:
-            return jsonify({
-                'error': 'User not found'
-            }), 404
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_db_id = user['id']
         
         # Обновляем разрешенные поля
-        if 'user_type' in data:
-            if data['user_type'] in ['channel_owner', 'advertiser']:
-                user.user_type = data['user_type']
-            else:
-                return jsonify({
-                    'error': 'Invalid user_type'
-                }), 400
-        
         if 'username' in data:
+            new_username = data['username']
+            
             # Проверяем уникальность username
-            existing_user = User.query.filter(
-                User.username == data['username'],
-                User.id != user.id
-            ).first()
+            cursor.execute("""
+                SELECT id FROM users 
+                WHERE username = ? AND id != ?
+            """, (new_username, user_db_id))
             
-            if existing_user:
-                return jsonify({
-                    'error': 'Username already taken'
-                }), 400
+            if cursor.fetchone():
+                conn.close()
+                return jsonify({'error': 'Username already taken'}), 400
             
-            user.username = data['username']
+            # Обновляем username
+            cursor.execute("""
+                UPDATE users 
+                SET username = ?, updated_at = CURRENT_TIMESTAMP 
+                WHERE id = ?
+            """, (new_username, user_db_id))
         
         # Сохраняем изменения
-        db.session.commit()
+        conn.commit()
         
-        current_app.logger.info(f"User {user.telegram_id} updated profile")
+        # Получаем обновленные данные
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_db_id,))
+        updated_user = cursor.fetchone()
+        conn.close()
+        
+        current_app.logger.info(f"User {telegram_user_id} updated profile")
         
         return jsonify({
             'success': True,
             'message': 'Profile updated successfully',
             'user': {
-                'id': user.id,
-                'telegram_id': user.telegram_id,
-                'username': user.username,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'user_type': user.user_type,
-                'balance': user.balance
+                'id': updated_user['id'],
+                'telegram_id': updated_user['telegram_id'],
+                'username': updated_user.get('username', ''),
+                'first_name': updated_user.get('first_name', ''),
+                'last_name': updated_user.get('last_name', ''),
+                'is_admin': bool(updated_user.get('is_admin', False))
             }
         })
         
@@ -406,37 +456,35 @@ def update_user_profile():
         return jsonify({
             'error': 'Internal server error'
         }), 500
-
 # === ПОИСК И ФИЛЬТРАЦИЯ ===
 
-@api_bp.route('/search')
 @require_telegram_auth
 @rate_limit_decorator(max_requests=20, window=60)  # 20 поисковых запросов в минуту
+@api_bp.route('/search', methods=['GET'])
 def global_search():
     """
-    Глобальный поиск по каналам и офферам
+    Глобальный поиск по системе
     
     Query params:
-    - q: поисковый запрос
+    - query: поисковый запрос (обязательный)
     - type: тип поиска (channels, offers, all)
-    - limit: количество результатов (по умолчанию 10)
+    - limit: максимальное количество результатов (по умолчанию 20)
     
     Returns:
         JSON с результатами поиска
     """
     try:
-        query = request.args.get('q', '').strip()
-        search_type = request.args.get('type', 'all')
-        limit = min(int(request.args.get('limit', 10)), 50)  # Максимум 50 результатов
+        import sqlite3
+        from app.config.telegram_config import AppConfig
         
-        if not query:
-            return jsonify({
-                'error': 'Search query is required'
-            }), 400
+        query = request.args.get('query', '').strip()
+        search_type = request.args.get('type', 'all').lower()
+        limit = min(int(request.args.get('limit', 20)), 50)
         
-        if len(query) < 2:
+        if not query or len(query) < 2:
             return jsonify({
-                'error': 'Search query must be at least 2 characters'
+                'error': 'Query too short',
+                'message': 'Search query must be at least 2 characters'
             }), 400
         
         results = {
@@ -445,42 +493,50 @@ def global_search():
             'offers': []
         }
         
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
         # Поиск по каналам
         if search_type in ['channels', 'all']:
-            from ..models.channels import Channel
+            cursor.execute("""
+                SELECT id, title, username, subscriber_count, category
+                FROM channels 
+                WHERE is_verified = 1 
+                AND (title LIKE ? OR username LIKE ?)
+                LIMIT ?
+            """, (f'%{query}%', f'%{query}%', limit))
             
-            channels = Channel.query.filter(
-                Channel.is_verified == True,
-                Channel.channel_name.ilike(f'%{query}%')
-            ).limit(limit).all()
-            
+            channels = cursor.fetchall()
             results['channels'] = [{
-                'id': channel.id,
-                'channel_name': channel.channel_name,
-                'channel_username': channel.channel_username,
-                'subscribers_count': channel.subscribers_count,
-                'category': channel.category,
-                'price_per_post': channel.price_per_post
+                'id': channel['id'],
+                'channel_name': channel['title'],
+                'channel_username': channel['username'],
+                'subscriber_count': channel['subscriber_count'],
+                'category': channel['category']
             } for channel in channels]
         
         # Поиск по офферам
         if search_type in ['offers', 'all']:
-            from ..models.offer import Offer
+            cursor.execute("""
+                SELECT id, title, description, price, category, created_at
+                FROM offers 
+                WHERE status = 'active' 
+                AND title LIKE ?
+                LIMIT ?
+            """, (f'%{query}%', limit))
             
-            offers = Offer.query.filter(
-                Offer.status == 'active',
-                Offer.title.ilike(f'%{query}%')
-            ).limit(limit).all()
-            
+            offers = cursor.fetchall()
             results['offers'] = [{
-                'id': offer.id,
-                'title': offer.title,
-                'description': offer.description,
-                'budget': offer.budget,
-                'category': offer.category,
-                'created_at': offer.created_at.isoformat() if offer.created_at else None
+                'id': offer['id'],
+                'title': offer['title'],
+                'description': offer['description'],
+                'price': offer['price'],
+                'category': offer['category'],
+                'created_at': offer['created_at']
             } for offer in offers]
         
+        conn.close()
         return jsonify(results)
         
     except ValueError:
@@ -492,6 +548,8 @@ def global_search():
         return jsonify({
             'error': 'Internal server error'
         }), 500
+
+
 
 # === СТАТИСТИКА И АНАЛИТИКА ===
 
@@ -506,121 +564,91 @@ def dashboard_stats():
         JSON с основными метриками пользователя
     """
     try:
-        from ..models.user import User
-        from ..models.channels import Channel
-        from ..models.offer import Offer
-        from ..models.response import Response
-        from ..models.database import db
-        from sqlalchemy import func
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        from app.models.database import get_user_id_from_request
         from datetime import datetime, timedelta
         
-        user = User.query.get(g.current_user_id)
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
+        
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Получаем пользователя
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
         
         if not user:
-            return jsonify({
-                'error': 'User not found'
-            }), 404
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
         
-        # Базовая статистика
-        stats = {
-            'user_type': user.user_type,
-            'balance': user.balance
-        }
+        user_db_id = user['id']
         
-        # Статистика для владельцев каналов
-        if user.user_type == 'channel_owner':
-            # Количество каналов
-            channels_count = Channel.query.filter_by(owner_id=user.id).count()
-            verified_channels = Channel.query.filter_by(
-                owner_id=user.id, 
-                is_verified=True
-            ).count()
-            
-            # Общее количество подписчиков
-            total_subscribers = db.session.query(
-                func.sum(Channel.subscribers_count)
-            ).filter_by(owner_id=user.id).scalar() or 0
-            
-            # Активные отклики на каналы
-            active_responses = Response.query.join(Channel).filter(
-                Channel.owner_id == user.id,
-                Response.status == 'pending'
-            ).count()
-            
-            stats.update({
-                'channels': {
-                    'total': channels_count,
-                    'verified': verified_channels,
-                    'total_subscribers': total_subscribers
-                },
-                'responses': {
-                    'active': active_responses
-                }
-            })
+        # Статистика каналов пользователя
+        cursor.execute("""
+            SELECT COUNT(*) as total_channels,
+                   COUNT(CASE WHEN is_verified = 1 THEN 1 END) as verified_channels,
+                   COALESCE(SUM(subscriber_count), 0) as total_subscribers
+            FROM channels 
+            WHERE owner_id = ?
+        """, (user_db_id,))
         
-        # Статистика для рекламодателей
-        elif user.user_type == 'advertiser':
-            # Количество офферов
-            offers_count = Offer.query.filter_by(advertiser_id=user.id).count()
-            active_offers = Offer.query.filter_by(
-                advertiser_id=user.id,
-                status='active'
-            ).count()
-            
-            # Общий бюджет офферов
-            total_budget = db.session.query(
-                func.sum(Offer.budget)
-            ).filter_by(advertiser_id=user.id).scalar() or 0
-            
-            # Отклики на офферы
-            responses_count = Response.query.join(Offer).filter(
-                Offer.advertiser_id == user.id
-            ).count()
-            
-            stats.update({
-                'offers': {
-                    'total': offers_count,
-                    'active': active_offers,
-                    'total_budget': total_budget
-                },
-                'responses': {
-                    'received': responses_count
-                }
-            })
+        channel_stats = cursor.fetchone()
         
-        # Активность за последние 30 дней
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        # Статистика офферов пользователя
+        cursor.execute("""
+            SELECT COUNT(*) as total_offers,
+                   COUNT(CASE WHEN status = 'active' THEN 1 END) as active_offers,
+                   COALESCE(SUM(price), 0) as total_budget
+            FROM offers 
+            WHERE created_by = ?
+        """, (user_db_id,))
         
-        if user.user_type == 'channel_owner':
-            recent_responses = Response.query.join(Channel).filter(
-                Channel.owner_id == user.id,
-                Response.created_at >= thirty_days_ago
-            ).count()
-            stats['recent_activity'] = {
-                'responses_last_30_days': recent_responses
+        offer_stats = cursor.fetchone()
+        
+        # Статистика откликов
+        cursor.execute("""
+            SELECT COUNT(*) as total_responses,
+                   COUNT(CASE WHEN status = 'accepted' THEN 1 END) as accepted_responses
+            FROM offer_responses 
+            WHERE user_id = ?
+        """, (user_db_id,))
+        
+        response_stats = cursor.fetchone()
+        
+        conn.close()
+        
+        return jsonify({
+            'user_id': telegram_user_id,
+            'channels': {
+                'total': channel_stats['total_channels'],
+                'verified': channel_stats['verified_channels'],
+                'total_subscribers': channel_stats['total_subscribers']
+            },
+            'offers': {
+                'total': offer_stats['total_offers'],
+                'active': offer_stats['active_offers'],
+                'total_budget': float(offer_stats['total_budget'])
+            },
+            'responses': {
+                'total': response_stats['total_responses'],
+                'accepted': response_stats['accepted_responses'],
+                'acceptance_rate': (response_stats['accepted_responses'] / response_stats['total_responses'] * 100) if response_stats['total_responses'] > 0 else 0
             }
-        else:
-            recent_offers = Offer.query.filter(
-                Offer.advertiser_id == user.id,
-                Offer.created_at >= thirty_days_ago
-            ).count()
-            stats['recent_activity'] = {
-                'offers_last_30_days': recent_offers
-            }
-        
-        return jsonify(stats)
+        })
         
     except Exception as e:
         current_app.logger.error(f"Error getting dashboard stats: {e}")
         return jsonify({
             'error': 'Internal server error'
         }), 500
-
 # === УВЕДОМЛЕНИЯ ===
-
 @api_bp.route('/notifications')
 @require_telegram_auth
-@cache_response(timeout=60)  # Кэшируем на 1 минуту
+@cache_response(timeout=60)
 def get_notifications():
     """
     Получение уведомлений для пользователя
@@ -633,68 +661,90 @@ def get_notifications():
         JSON с уведомлениями пользователя
     """
     try:
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        from app.models.database import get_user_id_from_request
+        
         limit = min(int(request.args.get('limit', 20)), 100)
         unread_only = request.args.get('unread_only', '').lower() == 'true'
         
-        # Пока используем простую систему уведомлений
-        # В будущем можно создать отдельную модель Notification
+        telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'error': 'Unauthorized'}), 401
         
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Получаем пользователя
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
+        
+        if not user:
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
+        
+        user_db_id = user['id']
         notifications = []
         
-        # Уведомления для владельцев каналов
-        if hasattr(g, 'current_user_id'):
-            from ..models.user import User
-            user = User.query.get(g.current_user_id)
-            
-            if user and user.user_type == 'channel_owner':
-                # Новые отклики на каналы
-                from ..models.response import Response
-                from ..models.channels import Channel
-                
-                new_responses = Response.query.join(Channel).filter(
-                    Channel.owner_id == user.id,
-                    Response.status == 'pending'
-                ).order_by(Response.created_at.desc()).limit(limit).all()
-                
-                for response in new_responses:
-                    notifications.append({
-                        'id': f"response_{response.id}",
-                        'type': 'new_response',
-                        'title': 'Новый отклик на ваш канал',
-                        'message': f'Получен отклик на канал {response.channel.channel_name}',
-                        'timestamp': response.created_at.isoformat() if response.created_at else None,
-                        'unread': True,
-                        'data': {
-                            'response_id': response.id,
-                            'channel_id': response.channel_id,
-                            'offer_id': response.offer_id
-                        }
-                    })
-            
-            elif user and user.user_type == 'advertiser':
-                # Уведомления для рекламодателей
-                from ..models.response import Response
-                from ..models.offer import Offer
-                
-                responses_to_offers = Response.query.join(Offer).filter(
-                    Offer.advertiser_id == user.id,
-                    Response.status == 'pending'
-                ).order_by(Response.created_at.desc()).limit(limit).all()
-                
-                for response in responses_to_offers:
-                    notifications.append({
-                        'id': f"offer_response_{response.id}",
-                        'type': 'offer_response',
-                        'title': 'Отклик на ваш оффер',
-                        'message': f'Канал {response.channel.channel_name} откликнулся на ваш оффер',
-                        'timestamp': response.created_at.isoformat() if response.created_at else None,
-                        'unread': True,
-                        'data': {
-                            'response_id': response.id,
-                            'channel_id': response.channel_id,
-                            'offer_id': response.offer_id
-                        }
-                    })
+        # Уведомления для владельцев каналов - новые отклики
+        cursor.execute("""
+            SELECT r.id, r.offer_id, r.created_at, r.status,
+                   c.title as channel_name, c.id as channel_id
+            FROM offer_responses r
+            JOIN channels c ON r.channel_id = c.id  
+            WHERE c.owner_id = ? AND r.status = 'pending'
+            ORDER BY r.created_at DESC
+            LIMIT ?
+        """, (user_db_id, limit))
+        
+        responses = cursor.fetchall()
+        
+        for response in responses:
+            notifications.append({
+                'id': f"response_{response['id']}",
+                'type': 'new_response',
+                'title': 'Новый отклик на ваш канал',
+                'message': f'Получен отклик на канал {response["channel_name"]}',
+                'timestamp': response['created_at'],
+                'unread': True,
+                'data': {
+                    'response_id': response['id'],
+                    'channel_id': response['channel_id'],
+                    'offer_id': response['offer_id']
+                }
+            })
+        
+        # Уведомления для рекламодателей - отклики на офферы
+        cursor.execute("""
+            SELECT r.id, r.offer_id, r.channel_id, r.created_at,
+                   c.title as channel_name, o.title as offer_title
+            FROM offer_responses r
+            JOIN channels c ON r.channel_id = c.id
+            JOIN offers o ON r.offer_id = o.id
+            WHERE o.created_by = ? AND r.status = 'pending'
+            ORDER BY r.created_at DESC
+            LIMIT ?
+        """, (user_db_id, limit))
+        
+        offer_responses = cursor.fetchall()
+        
+        for response in offer_responses:
+            notifications.append({
+                'id': f"offer_response_{response['id']}",
+                'type': 'offer_response', 
+                'title': 'Отклик на ваш оффер',
+                'message': f'Канал {response["channel_name"]} откликнулся на ваш оффер "{response["offer_title"]}"',
+                'timestamp': response['created_at'],
+                'unread': True,
+                'data': {
+                    'response_id': response['id'],
+                    'channel_id': response['channel_id'],
+                    'offer_id': response['offer_id']
+                }
+            })
+        
+        conn.close()
         
         # Сортируем по времени
         notifications.sort(key=lambda x: x['timestamp'] or '', reverse=True)
@@ -714,7 +764,6 @@ def get_notifications():
         return jsonify({
             'error': 'Internal server error'
         }), 500
-
 # === СЛУЖЕБНЫЕ ЭНДПОИНТЫ ===
 
 @api_bp.route('/upload', methods=['POST'])
