@@ -711,7 +711,7 @@ def respond_to_offer(offer_id):
                                                INSERT INTO offer_responses (offer_id, user_id, channel_id, message,
                                                                             status,
                                                                             channel_title, channel_username,
-                                                                            channel_subscriber, created_at, updated_at)
+                                                                            channel_subscribers, created_at, updated_at)
                                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                                                """, (
                                                    offer_id, user['id'], channel['id'], message, 'pending',
@@ -773,7 +773,7 @@ def get_offer_responses(offer_id):
                         'updated_at': response['updated_at'],
                         'channel_title': response.get('channel_title', 'Канал без названия'),
                         'channel_username': response.get('channel_username', 'unknown'),
-                        'channel_subscriber': response.get('channel_subscriber', 0),
+                        'channel_subscribers': response.get('channel_subscribers', 0),
                         'channel_owner_name': response['channel_owner_name'].strip() or 'Пользователь',
                         'channel_owner_username': response['channel_owner_username'] or '',
                         'channel_owner_telegram_id': response['channel_owner_telegram_id']
