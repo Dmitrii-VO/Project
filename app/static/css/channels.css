@@ -697,7 +697,7 @@ body {
     width: 100% !important;
     height: 100% !important;
     z-index: 99999 !important;
-    display: flex !important;
+    display: flex none;
     align-items: center !important;
     justify-content: center !important;
     padding: 20px !important;

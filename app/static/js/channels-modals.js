@@ -181,9 +181,9 @@ async function confirmChannelDeletion() {
 }
 
 // Функции модального окна верификации:
-function showVerificationModal(channelId, channelName, channelUsername) {
+function showVerificationModal(channelId, channelName, channelUsername) {        
             console.log(`🔐 Показываем верификацию для канала ${channelId}`);
-
+            
             verificationChannelData = { id: channelId, name: channelName, username: channelUsername };
 
             const content = document.getElementById('verificationContent');
