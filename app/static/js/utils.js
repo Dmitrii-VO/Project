@@ -251,6 +251,63 @@ const DOM = {
     }
 };
 
+/**
+ * УНИВЕРСАЛЬНАЯ СИСТЕМА МОДАЛЬНЫХ ОКОН
+ */
+
+/**
+ * Универсальная функция закрытия модальных окон
+ */
+function closeModal() {
+    const modals = document.querySelectorAll('.modal, [data-modal="true"]');
+    
+    modals.forEach(modal => {
+        // Анимация исчезновения (если нужна)
+        modal.style.opacity = '0';
+        
+        setTimeout(() => {
+            // Удаляем из DOM
+            if (modal.parentNode) {
+                modal.parentNode.removeChild(modal);
+            }
+        }, 200);
+    });
+    
+    // Восстанавливаем прокрутку страницы
+    document.body.style.overflow = 'auto';
+    
+    console.log('✅ Все модальные окна закрыты');
+}
+
+/**
+ * Глобальные обработчики для модальных окон
+ */
+function initModalHandlers() {
+    // Обработчик клавиши Escape
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            closeModal();
+        }
+    });
+    
+    console.log('🔧 Обработчики модальных окон инициализированы');
+}
+
+function goBack() {
+    if (window.history.length > 1) {
+        window.history.back();
+    } else {
+        window.location.href = '/';
+    }
+}
+
+// Инициализируем обработчики при загрузке DOM
+document.addEventListener('DOMContentLoaded', initModalHandlers);
+window.goBack = goBack;
+// Делаем функции глобально доступными
+window.closeModal = closeModal;
+window.initModalHandlers = initModalHandlers;
+
 // Глобальный экспорт утилит
 window.API = API;
 window.UI = UI;

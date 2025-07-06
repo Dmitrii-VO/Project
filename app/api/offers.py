@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import sqlite3
+import uuid
 from datetime import datetime
 from app.models.database import db_manager
 from flask import Blueprint, request, jsonify
@@ -809,11 +810,11 @@ def update_response_status_route(response_id):
         # Получаем данные отклика
         response_data = execute_db_query('''
             SELECT or_resp.*,
-                   o.created_by,
-                   o.title as offer_title,
-                   o.price as offer_price,
-                   o.budget_total,
-                   u.telegram_id as author_telegram_id
+                o.created_by,
+                o.title as offer_title,
+                o.price as offer_price,
+                o.budget_total,
+                u.telegram_id as author_telegram_id
             FROM offer_responses or_resp
             JOIN offers o ON or_resp.offer_id = o.id
             JOIN users u ON o.created_by = u.id
@@ -847,17 +848,23 @@ def update_response_status_route(response_id):
                     updated_at = ?,
                     admin_message = 'Автоматически отклонен (выбран другой канал)'
                 WHERE offer_id = ?
-                  AND id != ? AND status = 'pending'
+                AND id != ? AND status = 'pending'
             ''', (datetime.now().isoformat(), response_data['offer_id'], response_id))
 
+            # Генерируем уникальный ID контракта
+            
+            contract_uuid = str(uuid.uuid4())
+
             # Создаем контракт
-            contract_id = execute_db_query('''
-                INSERT INTO contracts (offer_id, response_id, advertiser_id, publisher_id,
-                                     status, price, placement_deadline, created_at)
-                VALUES (?, ?, ?, ?, 'active', ?, 
-                        datetime('now', '+7 days'), CURRENT_TIMESTAMP)
-            ''', (response_data['offer_id'], response_id, response_data['created_by'], 
-                  response_data['channel_owner_id'], response_data['proposed_price']))
+            execute_db_query('''
+                INSERT INTO contracts (id, offer_id, response_id, advertiser_id, publisher_id,
+                                    status, price, placement_deadline, monitoring_end, created_at)
+                VALUES (?, ?, ?, ?, ?, 'active', ?, 
+                        datetime('now', '+7 days'), datetime('now', '+14 days'), CURRENT_TIMESTAMP)
+            ''', (contract_uuid, response_data['offer_id'], response_id, response_data['created_by'], 
+                response_data['user_id'], response_data.get('offer_price', 0)))
+            
+            contract_id = contract_uuid
 
         result = {
             'success': True,

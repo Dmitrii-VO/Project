@@ -31,20 +31,22 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
 }
 function closeDeleteModal() {
     console.log('❌ Закрываем модальное окно удаления');
-
-    document.getElementById('deleteChannelModal').style.display = 'none';
-    document.body.style.overflow = 'auto';
+    
+    // Используем универсальную функцию
+    closeModal();
+    
+    // Дополнительная логика для этого конкретного модального окна
     channelToDelete = null;
-
-    // Сброс состояния кнопки
     const confirmBtn = document.getElementById('confirmDeleteBtn');
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = '🗑️ Удалить канал';
+    if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = '🗑️ Удалить канал';
+    }
 }
 // Закрытие модального окна по клику на оверлей
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('modal-overlay')) {
-        closeDeleteModal();
+        closeModal();
     }
 });
 async function confirmChannelDeletion() {
@@ -180,12 +182,7 @@ function showVerificationModal(channelId, channelName, channelUsername) {
             document.getElementById('verificationModal').style.display = 'flex';
             document.body.style.overflow = 'hidden';
         }
-function closeVerificationModal() {
-            console.log('❌ Закрываем окно верификации');
-            document.getElementById('verificationModal').style.display = 'none';
-            document.body.style.overflow = 'auto';
-            verificationChannelData = null;
-        }
+
 async function startVerification() {
     if (!verificationChannelData) {
         console.error('❌ Нет данных канала для верификации');
@@ -234,7 +231,7 @@ async function startVerification() {
         }
 
         // Закрываем модальное окно верификации
-        closeVerificationModal();
+        closeModal();
 
         // Показываем инструкции как при добавлении канала
         const verificationCode = result.verification_code || result.channel?.verification_code;
@@ -468,7 +465,7 @@ async function checkVerificationStatus() {
                 if (data.success && data.channel && (data.channel.is_verified || data.channel.status === 'verified')) {
                     // Канал верифицирован!
                     showSuccessNotification('🎉 Канал успешно верифицирован!');
-                    closeVerificationModal();
+                    closeModal();
 
                     // Обновляем список каналов
                     setTimeout(() => {
@@ -577,12 +574,7 @@ function createModal() {
             `;
             return modal;
         }
-function closeModal() {
-            const modal = document.querySelector('.modal-overlay');
-            if (modal) {
-                modal.remove();
-            }
-        }
+
 function retryVerification(channelId) {
     closeModal();
     if (channelId) {
@@ -713,19 +705,8 @@ async function startChannelVerification(channelId, channelName, channelUsername)
 function showVerificationInstructions(verificationCode, channelUsername) {
     // Создаем модальное окно
     const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed; 
-        top: 0; 
-        left: 0; 
-        width: 100%; 
-        height: 100%;
-        background: rgba(0,0,0,0.8); 
-        z-index: 10000;
-        display: flex; 
-        align-items: center; 
-        justify-content: center;
-        padding: 20px;
-    `;
+    modal.className = 'modal';
+    modal.style.background = 'rgba(0,0,0,0.8)';
 
     modal.innerHTML = `
         <div style="
@@ -871,7 +852,7 @@ function showVerificationInstructions(verificationCode, channelUsername) {
     // Автоматическое закрытие через 30 секунд
     setTimeout(() => {
         if (document.body.contains(modal)) {
-            closeVerificationModal(modal);
+            closeModal(modal);
             if (typeof showNotification === 'function') {
                 showNotification('info', '⏰ Окно автоматически закрыто. Не забудьте опубликовать код в канале!');
             }
@@ -883,7 +864,7 @@ function showVerificationInstructions(verificationCode, channelUsername) {
     // Закрытие по клику на фон
     modal.addEventListener('click', function(e) {
         if (e.target === modal) {
-            closeVerificationModal(modal);
+            closeModal(modal);
         }
     });
 }
@@ -892,7 +873,7 @@ function showVerificationInstructions(verificationCode, channelUsername) {
  */
 function closeVerificationModalAndRefresh(element) {
     // Закрываем модальное окно
-    closeVerificationModal(element);
+    closeModal(element);
 
     // Показываем уведомление что код нужно опубликовать
     if (typeof showNotification === 'function') {
@@ -912,7 +893,6 @@ window.closeVerificationModalAndRefresh = closeVerificationModalAndRefresh;
 // Делаем функции глобально доступными для onclick
 window.closeDeleteModal = closeDeleteModal;
 window.confirmChannelDeletion = confirmChannelDeletion;
-window.closeVerificationModal = closeVerificationModal;
 window.startVerification = startVerification;
 window.showDeleteConfirmation = showDeleteConfirmation;
 window.startChannelVerification = startChannelVerification;

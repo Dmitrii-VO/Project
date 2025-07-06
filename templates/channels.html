@@ -243,11 +243,11 @@
 
     <!-- Модальное окно верификации -->
     <div id="verificationModal" class="modal" style="display: none;">
-        <div class="modal-overlay" onclick="closeVerificationModal()"></div>
+        <div class="modal-overlay" onclick="closeModal()"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <h3>🔐 Подтвердите владение каналом</h3>
-                <button class="modal-close" onclick="closeVerificationModal()">&times;</button>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="verificationContent">
@@ -255,7 +255,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeVerificationModal()">
+                <button class="btn btn-secondary" onclick="closeModal()">
                     Отмена
                 </button>
                 <button class="btn btn-primary" id="startVerificationBtn" onclick="startVerification()">
@@ -272,7 +272,7 @@
 <script src="static/js/channels-ui.js"></script>
 <script src="static/js/channels-modals.js"></script>
 <script src="static/js/channels-forms.js"></script>
-
+<script src="static/js/utils.js"></script>
 <script>
 // Инициализация Telegram WebApp
 if (window.Telegram && window.Telegram.WebApp) {

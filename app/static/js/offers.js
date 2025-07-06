@@ -774,17 +774,14 @@ const ResponseManager = {
 
     showResponseModal(offerId, offer, verifiedChannels) {
         const modal = document.createElement('div');
-        modal.style.cssText = `
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); display: flex; align-items: center;
-            justify-content: center; z-index: 1000;
-        `;
+        modal.className = 'modal';
+        modal.style.background = 'rgba(0,0,0,0.5)';
 
         modal.innerHTML = `
             <div style="background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h3 style="margin: 0; color: #2d3748; font-size: 20px;">📝 Отклик на оффер</h3>
-                    <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+                    <button onclick="closeModal()" class="modal-close">&times;</button>
                 </div>
                 
                 <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
@@ -883,18 +880,15 @@ const ResponseManager = {
     },
 
     showResponsesModal(offer, responses) {
-    const modal = document.createElement('div');
-    modal.style.cssText = `
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0,0,0,0.8); display: flex; align-items: center;
-        justify-content: center; z-index: 9999; padding: 20px;
-    `;
+        const modal = document.createElement('div');
+        modal.className = 'modal';
+        modal.style.background = 'rgba(0,0,0,0.8)';
 
     modal.innerHTML = `
         <div style="background: white; border-radius: 12px; padding: 24px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; position: relative;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                 <h3 style="margin: 0; color: #2d3748; font-size: 20px;">💬 Отклики на оффер "${offer.title}"</h3>
-                <button onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666; padding: 5px;">&times;</button>
+                <button onclick="closeModal()" class="modal-close">&times;</button>
             </div>
             
             <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
@@ -1434,12 +1428,6 @@ async function loadUserContracts() {
     await ContractManager.loadUserContracts();
 }
 
-// Утилиты
-function closeResponseModal() {
-    document.querySelector('div[style*="position: fixed"]')?.remove();
-    document.body.style.overflow = 'auto';
-}
-
 function setupOffersSearch() {
     const searchInput = document.getElementById('offersSearch');
     if (searchInput) {
@@ -1450,14 +1438,6 @@ function setupOffersSearch() {
                 card.style.display = title.includes(searchTerm) ? 'block' : 'none';
             });
         });
-    }
-}
-
-function goBack() {
-    if (window.history.length > 1) {
-        window.history.back();
-    } else {
-        window.location.href = '/';
     }
 }
 

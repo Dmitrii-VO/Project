@@ -97,11 +97,8 @@ document.getElementById('addChannelForm').addEventListener('submit', async funct
         if (verificationCode) {
             // Создаем модальное окно с инструкциями
             const modal = document.createElement('div');
-            modal.style.cssText = `
-position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-background: rgba(0,0,0,0.8); z-index: 10000;
-display: flex; align-items: center; justify-content: center;
-`;
+            modal.className = 'modal';
+            modal.style.background = 'rgba(0,0,0,0.8)';
 
 modal.innerHTML = `
     <div style="

@@ -627,27 +627,7 @@
             tg.ready();
             tg.expand();
         }
-
-        // Back button functionality
-        function goBack() {
-    try {
-        console.log('🔙 Переход на главную страницу');
-
-        // ВСЕГДА переходим на главную страницу, даже в Telegram WebApp
-        window.location.href = '/';
-
-    } catch (error) {
-        console.error('Ошибка при переходе на главную:', error);
-        // Дополнительная попытка
-        try {
-            window.location.replace('/');
-        } catch (e) {
-            // Крайний случай - перезагрузка с главной
-            window.location = '/';
-        }
-    }
-}
-
+       
         // Navigation functionality
         function showSection(section) {
             // Remove active class from all nav cards
@@ -680,5 +660,6 @@
             loadAnalyticsData();
         });
     </script>
+    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 </body>
 </html>
