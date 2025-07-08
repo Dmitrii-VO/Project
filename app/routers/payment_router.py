@@ -604,9 +604,9 @@ def create_withdrawal():
         return jsonify({'error': 'Internal server error'}), 500
 
 
-@payment_bp.route('/webhook/telegram', methods=['POST'])
+
 @rate_limit_decorator(max_requests=100, window=60)  # 100 webhook'ов в минуту
-def telegram_payment_webhook():
+def process_payment_update(update):
     """
     Webhook для обработки платежей от Telegram
 

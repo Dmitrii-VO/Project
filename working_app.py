@@ -55,7 +55,6 @@ def create_app() -> Flask:
     register_blueprints(app)
     register_middleware(app)
     register_error_handlers(app)
-    
     register_system_routes(app)
 
     return app
@@ -64,7 +63,7 @@ def create_app() -> Flask:
 def register_blueprints(app: Flask) -> None:
     """Регистрация Blueprint'ов"""
     app.register_blueprint(offers_bp, url_prefix='/api/offers')
-    app.register_blueprint(main_bp)
+    app.register_blueprint(main_bp, url_prefix='/routers/main_router')
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
 
 
@@ -435,23 +434,172 @@ def register_system_routes(app: Flask) -> None:
 
     @app.route('/webhook/telegram', methods=['POST'])
     def telegram_webhook():
-        """Обработка Telegram webhook"""
+        """
+        ЕДИНЫЙ WEBHOOK для всех типов Telegram обновлений
+        Маршрутизирует обновления по типам в соответствующие обработчики
+        """
         try:
             update = request.get_json()
             
             if not update:
                 return jsonify({'ok': True})
 
-            logger.info(f"Received Telegram update: {update.get('update_id', 'unknown')}")
+            logger.info(f"🔔 Получено Telegram обновление: {update.get('update_id', 'unknown')}")
             
-            # Здесь можно добавить обработку конкретных типов обновлений
-            # Например, сообщения, callback_query и т.д.
+            # === ОБРАБОТКА ПЛАТЕЖЕЙ ===
+            if 'pre_checkout_query' in update or ('message' in update and 'successful_payment' in update.get('message', {})):
+                logger.info("💳 Обрабатываем платежное обновление")
+                return handle_payment_webhook(update)
+            
+            # === ОБРАБОТКА СООБЩЕНИЙ В КАНАЛАХ (верификация) ===
+            if 'channel_post' in update:
+                logger.info("📢 Обрабатываем сообщение в канале")
+                return handle_channel_verification(update)
+            
+            # === ОБРАБОТКА ЛИЧНЫХ СООБЩЕНИЙ БОТУ ===
+            if 'message' in update:
+                message = update['message']
+                
+                # Команда /start
+                if message.get('text') == '/start':
+                    logger.info("🚀 Обрабатываем команду /start")
+                    return handle_start_command(update)
+                
+                # Пересланные сообщения для верификации
+                if 'forward_from_chat' in message:
+                    logger.info("📤 Обрабатываем пересланное сообщение")
+                    return handle_forwarded_message(update)
+            
+            # === ОБРАБОТКА CALLBACK QUERY ===
+            if 'callback_query' in update:
+                logger.info("🔘 Обрабатываем callback query")
+                return handle_callback_query(update)
+            
+            # Если тип обновления не определен - просто возвращаем OK
+            logger.info(f"❓ Неопределенный тип обновления: {list(update.keys())}")
+            return jsonify({'ok': True})
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка webhook: {e}")
+            return jsonify({'ok': True})  # Всегда возвращаем ok для Telegram
+
+    def handle_payment_webhook(update):
+        """Обработка платежных обновлений"""
+        try:
+            from app.routers.payment_router import process_payment_update
+            return process_payment_update(update)
+        except ImportError:
+            logger.warning("⚠️ Payment router не найден")
+            return jsonify({'ok': True})
+
+    def handle_channel_verification(update):
+        """Обработка верификации каналов через channel_post"""
+        try:
+            message = update['channel_post']
+            chat = message.get('chat', {})
+            chat_id = str(chat.get('id'))
+            text = message.get('text', '')
+
+            logger.info(f"📢 Сообщение из канала {chat_id}: {text[:50]}...")
+
+            # Проверяем коды верификации
+            result = execute_db_query(
+                "SELECT * FROM channels WHERE telegram_id = ? AND is_verified = 0 AND verification_code IS NOT NULL",
+                (chat_id,),
+                fetch_all=True
+            )
+
+            for channel in result:
+                if channel['verification_code'] in text:
+                    # Верифицируем канал
+                    execute_db_query(
+                        "UPDATE channels SET is_verified = 1, verified_at = ? WHERE id = ?",
+                        (datetime.utcnow().isoformat(), channel['id'])
+                    )
+                    logger.info(f"✅ Канал {channel['id']} автоматически верифицирован")
+
+            return jsonify({'ok': True})
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка верификации канала: {e}")
+            return jsonify({'ok': True})
+
+    def handle_start_command(update):
+        """Обработка команды /start"""
+        try:
+            import requests
+            
+            message = update['message']
+            from_user_id = str(message['from']['id'])
+            
+            bot_token = AppConfig.BOT_TOKEN
+            if not bot_token:
+                return jsonify({'ok': True})
+            
+            send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            
+            welcome_message = """👋 <b>Добро пожаловать!</b>
+
+    Я помогу вам верифицировать ваши Telegram каналы.
+
+    <b>Как это работает:</b>
+    1️⃣ Добавьте канал в Mini App
+    2️⃣ Получите код верификации  
+    3️⃣ Опубликуйте код в вашем канале
+    4️⃣ Переслать сообщение с кодом мне
+
+    После успешной верификации вы получите уведомление прямо здесь!"""
+
+            requests.post(send_url, json={
+                'chat_id': from_user_id,
+                'text': welcome_message,
+                'parse_mode': 'HTML'
+            }, timeout=5)
             
             return jsonify({'ok': True})
 
         except Exception as e:
-            logger.error(f"Webhook error: {e}")
-            return jsonify({'ok': True})  # Всегда возвращаем ok для Telegram
+            logger.error(f"❌ Ошибка /start: {e}")
+            return jsonify({'ok': True})
+
+    def handle_forwarded_message(update):
+        """Обработка пересланных сообщений для верификации"""
+        try:
+            message = update['message']
+            forwarded_chat = message.get('forward_from_chat', {})
+            chat_id = str(forwarded_chat.get('id', ''))
+            text = message.get('text', '')
+            
+            if chat_id and text:
+                # Логика верификации через пересланные сообщения
+                result = execute_db_query(
+                    "SELECT * FROM channels WHERE telegram_id = ? AND is_verified = 0",
+                    (chat_id,),
+                    fetch_one=True
+                )
+                
+                if result and result['verification_code'] in text:
+                    execute_db_query(
+                        "UPDATE channels SET is_verified = 1, verified_at = ? WHERE id = ?",
+                        (datetime.utcnow().isoformat(), result['id'])
+                    )
+                    logger.info(f"✅ Канал {result['id']} верифицирован через пересылку")
+
+            return jsonify({'ok': True})
+
+        except Exception as e:
+            logger.error(f"❌ Ошибка пересылки: {e}")
+            return jsonify({'ok': True})
+
+    def handle_callback_query(update):
+        """Обработка inline кнопок"""
+        try:
+            # Здесь можно добавить обработку inline кнопок
+            return jsonify({'ok': True})
+        except Exception as e:
+            logger.error(f"❌ Ошибка callback: {e}")
+            return jsonify({'ok': True})
+
 
     # === СЛУЖЕБНЫЕ МАРШРУТЫ ===
 

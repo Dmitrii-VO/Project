@@ -1,13 +1,17 @@
 """
 Минимальный API для каналов без проблемных импортов
 """
-from flask import Blueprint, request, jsonify
+import os
+import random
+import re
+import time
+from flask import Blueprint, current_app, request, jsonify, g
 import logging
 import sqlite3
-import os
-import re
-import random
+
 from datetime import datetime
+from app.config.telegram_config import AppConfig
+from app.models.database import execute_db_query
 from app.services.telegram_verification import verify_channel
 
 # Настройка логирования
@@ -19,205 +23,673 @@ channels_bp = Blueprint('channels', __name__)
 # Путь к базе данных
 DATABASE_PATH = 'telegram_mini_app.db'
 
-
-def get_db_connection():
-    """Получение соединения с базой данных"""
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def extract_username_from_url(url):
-    """Извлекает username из различных форматов URL Telegram"""
-    # Убираем пробелы
-    url = url.strip()
-
-    # Если это уже чистый username
-    if not url.startswith('http') and not url.startswith('@'):
-        return url.lstrip('@')
-
-    # Паттерны для извлечения username
-    patterns = [
-        r'https?://t\.me/([a-zA-Z0-9_]+)',  # https://t.me/username
-        r'https?://telegram\.me/([a-zA-Z0-9_]+)',  # https://telegram.me/username
-        r'@([a-zA-Z0-9_]+)',  # @username
-        r'^([a-zA-Z0-9_]+)$'  # просто username
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            username = match.group(1)
-            logger.info(f"🔍 Извлечен username: {username} из URL: {url}")
-            return username
-
-    # Если ничего не найдено, возвращаем как есть
-    logger.warning(f"⚠️ Не удалось извлечь username из: {url}")
-    return url.lstrip('@')
+# Добавьте этот эндпоинт в channels.py
 
 
-@channels_bp.route('/my', methods=['GET'])
-def get_my_channels():
-    """Получение каналов пользователя"""
+
+class ChannelValidator:
+    """Класс для валидации данных каналов"""
+
+    @staticmethod
+    def validate_channel_data(data):
+        """Валидация основных данных канала"""
+        errors = []
+
+        # Проверка обязательных полей
+        required_fields = ['channel_id', 'channel_name']
+        for field in required_fields:
+            if not data.get(field):
+                errors.append(f'{field} is required')
+
+        # Валидация channel_id
+        channel_id = data.get('channel_id', '')
+        if channel_id:
+            if not (channel_id.startswith('@') or channel_id.startswith('-100')):
+                errors.append('Invalid channel_id format')
+
+        # Валидация цены
+        price = data.get('price_per_post')
+        if price is not None:
+            try:
+                price = float(price)
+                if price < 0:
+                    errors.append('Price cannot be negative')
+                elif price > 1000000:
+                    errors.append('Price too high (max: 1,000,000)')
+            except (ValueError, TypeError):
+                errors.append('Invalid price format')
+
+        # Валидация категории
+        valid_categories = [
+            'technology', 'business', 'entertainment', 'news',
+            'education', 'lifestyle', 'sports', 'gaming', 'other'
+        ]
+        category = data.get('category')
+        if category and category not in valid_categories:
+            errors.append(f'Invalid category. Allowed: {", ".join(valid_categories)}')
+
+        return errors
+
+# === API ЭНДПОИНТЫ ===
+
+@channels_bp.route('/', methods=['GET'])
+def get_channels():
+    """
+    ФУНКЦИЯ 1: Получение списка каналов
+    ИСПРАВЛЕНО: убран SQLAlchemy, исправлены имена полей
+    """
     try:
-        telegram_user_id = request.headers.get('X-Telegram-User-Id')
+        # Параметры пагинации
+        page = max(int(request.args.get('page', 1)), 1)
+        limit = min(int(request.args.get('limit', 20)), 100)
+        offset = (page - 1) * limit
 
-        if not telegram_user_id:
-            return jsonify({
-                'success': False,
-                'error': 'X-Telegram-User-Id header is required'
-            }), 400
+        # Фильтры
+        category = request.args.get('category')
+        min_subscribers = request.args.get('min_subscribers', type=int)
+        max_price = request.args.get('max_price', type=float)
+        verified_only = request.args.get('verified_only', '').lower() == 'true'
+        search = request.args.get('search', '').strip()
 
-        logger.info(f"🔍 Получение каналов для Telegram ID: {telegram_user_id}")
-
-        # Подключение к базе данных
-        conn = sqlite3.connect('telegram_mini_app.db')
+        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # ИСПРАВЛЕНО: Получаем каналы с подробной информацией
-        cursor.execute("""
-                       SELECT c.*,
-                              u.username as owner_username
-                       FROM channels c
-                                LEFT JOIN users u ON c.owner_id = u.id
-                       WHERE u.telegram_id = ?
-                       ORDER BY c.created_at DESC
-                       """, (telegram_user_id,))
+        # Базовый запрос
+        sql = """
+            SELECT c.id, c.telegram_id, c.title, c.username, c.subscriber_count, 
+                   c.category, c.is_verified, c.created_at, c.owner_id,
+                   u.username as owner_username, u.first_name as owner_name
+            FROM channels c 
+            JOIN users u ON c.owner_id = u.id 
+            WHERE c.is_active = 1
+        """
+        count_sql = "SELECT COUNT(*) as total FROM channels c WHERE c.is_active = 1"
+        params = []
 
+        # Применяем фильтры
+        if verified_only:
+            sql += " AND c.is_verified = 1"
+            count_sql += " AND c.is_verified = 1"
+
+        if category:
+            sql += " AND c.category = ?"
+            count_sql += " AND c.category = ?"
+            params.append(category)
+
+        if min_subscribers:
+            # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
+            sql += " AND c.subscriber_count >= ?"
+            count_sql += " AND c.subscriber_count >= ?"
+            params.append(min_subscribers)
+
+        if search:
+            sql += " AND (c.title LIKE ? OR c.username LIKE ?)"
+            count_sql += " AND (c.title LIKE ? OR c.username LIKE ?)"
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term])
+
+        # Получаем общее количество
+        cursor.execute(count_sql, params)
+        total_count = cursor.fetchone()['total']
+
+        # Добавляем сортировку и пагинацию
+        # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
+        sql += " ORDER BY c.subscriber_count DESC LIMIT ? OFFSET ?"
+        params.extend([limit, offset])
+
+        cursor.execute(sql, params)
         channels = cursor.fetchall()
         conn.close()
 
-        logger.info(f"📊 Найдено каналов в БД: {len(channels)}")
-
-        # ИСПРАВЛЕНО: Преобразуем в список словарей с правильными полями
-        channels_list = []
+        # Формируем ответ
+        channels_data = []
         for channel in channels:
-            # Получаем реальное количество подписчиков из БД
-            subscriber_count = channel['subscriber_count']
-
-            # Отладочная информация
-            logger.info(f"📈 Канал {channel['title']}: subscriber_count в БД = {subscriber_count}")
-
-            channel_dict = {
+            channels_data.append({
                 'id': channel['id'],
-                'telegram_id': channel['telegram_id'],
-                'title': channel['title'],
-                'username': channel['username'],
-
-                # ИСПРАВЛЕНО: Правильное получение подписчиков
-                'subscriber_count': subscriber_count or 0,  # ✅ Из БД
-                'description': channel['description'] or '',
-                'category': channel['category'] or 'general',
-                'language': channel['language'] or 'ru',
-                'is_verified': bool(channel['is_verified']),
-                'is_active': bool(channel['is_active']),
-                'created_at': channel['created_at'],
-                'updated_at': channel['updated_at'],
-                'verification_code': channel['verification_code'],
-                'status': channel['status'],
-                'verified_at': channel['verified_at'],
-                'owner_username': channel['owner_username'],
-
-                # Дополнительные поля для совместимости с фронтендом
+                'channel_id': channel['telegram_id'],
                 'channel_name': channel['title'],
                 'channel_username': channel['username'],
-
-                # Поля которых нет в БД - добавляем значения по умолчанию
-                'is_public': True,
-                'accepts_ads': True,
-                'invite_link': f'https://t.me/{channel["username"].lstrip("@")}' if channel['username'] else None,
-                'photo_url': None,
-                'avg_engagement_rate': 0.0,
-                'price_per_post': 0,
-
-                # Добавляем статистику
-                'offers_count': get_channel_offers_count(channel['id']),
-                'posts_count': get_channel_posts_count(channel['id'])
-            }
-            channels_list.append(channel_dict)
-
-        logger.info(f"✅ Возвращаем {len(channels_list)} каналов")
+                # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
+                'subscriber_count': channel['subscriber_count'] or 0,
+                'category': channel['category'],
+                'price_per_post': 0.0,  # Заглушка
+                'is_verified': bool(channel['is_verified']),
+                'created_at': channel['created_at'],
+                'owner': {
+                    'username': channel['owner_username'],
+                    'first_name': channel['owner_name']
+                }
+            })
 
         return jsonify({
-            'success': True,
-            'channels': channels_list,
-            'total': len(channels_list)
+            'channels': channels_data,
+            'pagination': {
+                'page': page,
+                'limit': limit,
+                'total': total_count,
+                'pages': (total_count + limit - 1) // limit,
+                'has_next': offset + limit < total_count,
+                'has_prev': page > 1
+            },
+            'filters_applied': {
+                'category': category,
+                'min_subscribers': min_subscribers,
+                'max_price': max_price,
+                'verified_only': verified_only,
+                'search': search
+            }
         })
 
     except Exception as e:
-        logger.error(f"❌ Ошибка получения каналов: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
+        current_app.logger.error(f"Error getting channels: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@channels_bp.route('/<int:channel_id>', methods=['GET'])
+def get_channel(channel_id):
+    """
+    ФУНКЦИЯ 2: Получение информации о конкретном канале
+    ИСПРАВЛЕНО: убран SQLAlchemy, исправлены имена полей
+    """
+    try:
+        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT c.*, u.username as owner_username, u.first_name as owner_name
+            FROM channels c
+            JOIN users u ON c.owner_id = u.id
+            WHERE c.id = ?
+        """, (channel_id,))
+        
+        channel = cursor.fetchone()
+        conn.close()
+
+        if not channel:
+            return jsonify({'error': 'Channel not found'}), 404
+
+        # Базовая информация
+        channel_data = {
+            'id': channel['id'],
+            'channel_id': channel['telegram_id'],
+            'channel_name': channel['title'],
+            'channel_username': channel['username'],
+            # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
+            'subscriber_count': channel['subscriber_count'] or 0,
+            'category': channel['category'],
+            'description': channel.get('description', ''),
+            'language': channel.get('language', 'ru'),
+            'price_per_post': 0.0,  # Заглушка
+            'is_verified': bool(channel['is_verified']),
+            'is_active': bool(channel['is_active']),
+            'created_at': channel['created_at'],
+            'verified_at': channel.get('verified_at'),
+            'owner': {
+                'username': channel['owner_username'],
+                'first_name': channel['owner_name']
+            }
+        }
+
         return jsonify({
-            'success': False,
-            'error': str(e)
+            'success': True,
+            'channel': channel_data
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting channel {channel_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@channels_bp.route('/<int:channel_id>/verify', methods=['PUT'])
+def verify_channel(channel_id):
+    """
+    Верификация владения каналом
+
+    Args:
+        channel_id: ID канала
+
+    Returns:
+        JSON с результатом верификации
+    """
+    try:
+        from ..models.channels import Channel
+        from ..models.database import db
+
+        # Находим канал
+        channel = Channel.query.filter_by(
+            id=channel_id,
+            owner_id=g.current_user_id
+        ).first()
+
+        if not channel:
+            return jsonify({
+                'error': 'Channel not found or access denied'
+            }), 404
+
+        if channel.is_verified:
+            return jsonify({
+                'success': True,
+                'message': 'Channel is already verified'
+            })
+
+        # Проверяем верификацию через Telegram API
+        verification_result = verify_channel(
+            channel.channel_id,
+            channel.verification_code
+        )
+
+        is_verified = verification_result.get('success', False) and verification_result.get('found', False)
+
+        if is_verified:
+            channel.is_verified = True
+            db.session.commit()
+
+            current_app.logger.info(
+                f"Channel {channel_id} verified by user {g.telegram_user_id}"
+            )
+
+            return jsonify({
+                'success': True,
+                'message': 'Channel verified successfully',
+                'channel': {
+                    'id': channel.id,
+                    'channel_name': channel.channel_name,
+                    'is_verified': channel.is_verified
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Verification failed',
+                'instructions': (
+                    f"Please post this verification code in your channel: {channel.verification_code}\n"
+                    "Make sure the code is visible in a recent message and try again."
+                )
+            }), 400
+
+    except Exception as e:
+        current_app.logger.error(f"Error verifying channel {channel_id}: {e}")
+        return jsonify({
+            'error': 'Internal server error'
         }), 500
 
 
-# ДОБАВЛЯЕМ вспомогательные функции:
-def get_channel_offers_count(channel_id: int) -> int:
-    """Получение количества офферов для канала"""
+@channels_bp.route('/<int:channel_id>', methods=['DELETE'])
+def delete_channel(channel_id):
+    """
+    Удаление канала
+
+    Args:
+        channel_id: ID канала
+
+    Returns:
+        JSON с результатом удаления
+    """
     try:
-        conn = sqlite3.connect('telegram_mini_app.db')
-        cursor = conn.cursor()
+        from ..models.channels import Channel
+        from ..models.response import Response
+        from ..models.database import db
 
-        # Проверяем таблицу responses
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='responses'")
-        if cursor.fetchone():
-            cursor.execute("""
-                           SELECT COUNT(DISTINCT r.offer_id)
-                           FROM responses r
-                           WHERE r.channel_id = ?
-                           """, (channel_id,))
-            result = cursor.fetchone()
-            count = result[0] if result else 0
-        else:
-            count = 0
+        # Находим канал
+        channel = Channel.query.filter_by(
+            id=channel_id,
+            owner_id=g.current_user_id
+        ).first()
 
-        conn.close()
-        return count
+        if not channel:
+            return jsonify({
+                'error': 'Channel not found or access denied'
+            }), 404
+
+        # Проверяем активные отклики
+        active_responses = Response.query.filter_by(
+            channel_id=channel_id,
+            status='pending'
+        ).count()
+
+        if active_responses > 0:
+            return jsonify({
+                'error': 'Cannot delete channel with pending responses',
+                'active_responses_count': active_responses,
+                'message': 'Please resolve all pending responses before deleting the channel'
+            }), 400
+
+        # Удаляем связанные отклики
+        Response.query.filter_by(channel_id=channel_id).delete()
+
+        # Удаляем канал
+        channel_name = channel.channel_name
+        db.session.delete(channel)
+        db.session.commit()
+
+        current_app.logger.info(
+            f"Channel {channel_id} ({channel_name}) deleted by user {g.telegram_user_id}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Channel "{channel_name}" deleted successfully'
+        })
 
     except Exception as e:
-        logger.error(f"Error getting offers count for channel {channel_id}: {e}")
-        return 0
+        current_app.logger.error(f"Error deleting channel {channel_id}: {e}")
+        return jsonify({
+            'error': 'Internal server error'
+        }), 500
 
 
-def get_channel_posts_count(channel_id: int) -> int:
-    """Получение количества постов канала"""
+@channels_bp.route('/<int:channel_id>/responses', methods=['GET'])
+def get_channel_responses(channel_id):
+    """
+    ФУНКЦИЯ 6: Получение откликов канала
+    ИСПРАВЛЕНО: убран SQLAlchemy
+    """
     try:
-        from datetime import datetime
+        user_id = getattr(g, 'current_user_id', None)
 
-        conn = sqlite3.connect('telegram_mini_app.db')
-        cursor = conn.cursor()
+        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
+        # Проверяем права доступа к каналу
+        channel = execute_db_query(
+            'SELECT * FROM channels WHERE id = ? AND owner_id = ?',
+            (channel_id, user_id),
+            fetch_one=True
+        )
 
-        # Проверяем таблицу posts
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='posts'")
-        if cursor.fetchone():
-            cursor.execute("SELECT COUNT(*) FROM posts WHERE channel_id = ?", (channel_id,))
-            result = cursor.fetchone()
-            count = result[0] if result else 0
-        else:
-            # Примерный подсчет по дате создания канала
-            cursor.execute("SELECT created_at FROM channels WHERE id = ?", (channel_id,))
-            result = cursor.fetchone()
+        if not channel:
+            return jsonify({'error': 'Channel not found or access denied'}), 404
 
-            if result and result[0]:
-                try:
-                    created_at = datetime.fromisoformat(result[0].replace('Z', '+00:00'))
-                    days_active = (datetime.now() - created_at).days
-                    count = max(0, days_active // 7)  # Примерно 1 пост в неделю
-                except:
-                    count = 0
-            else:
-                count = 0
+        # Получаем отклики
+        responses = execute_db_query("""
+            SELECT or.*, o.title as offer_title, u.username, u.first_name
+            FROM offer_responses or
+            JOIN offers o ON or.offer_id = o.id
+            JOIN users u ON or.user_id = u.id
+            WHERE or.channel_id = ?
+            ORDER BY or.created_at DESC
+        """, (channel_id,), fetch_all=True)
 
-        conn.close()
-        return count
+        responses_data = []
+        for response in responses:
+            responses_data.append({
+                'id': response['id'],
+                'offer_id': response['offer_id'],
+                'offer_title': response['offer_title'],
+                'message': response['message'],
+                'status': response['status'],
+                'channel_username': response.get('channel_username', ''),
+                'channel_title': response.get('channel_title', ''),
+                # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
+                'channel_subscriber_count': response.get('channel_subscribers', 0),
+                'created_at': response['created_at'],
+                'updated_at': response['updated_at'],
+                'user': {
+                    'username': response['username'],
+                    'first_name': response['first_name']
+                }
+            })
+
+        return jsonify({
+            'success': True,
+            'responses': responses_data,
+            'total': len(responses_data)
+        })
 
     except Exception as e:
-        logger.error(f"Error getting posts count for channel {channel_id}: {e}")
-        return 0
+        current_app.logger.error(f"Error getting channel responses: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
+
+@channels_bp.route('/<int:channel_id>/responses/<int:response_id>', methods=['PUT'])
+def update_response_status(channel_id, response_id):
+    """
+    ФУНКЦИЯ 7: Обновление статуса отклика
+    ИСПРАВЛЕНО: убран SQLAlchemy
+    """
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        new_status = data.get('status')
+        if new_status not in ['accepted', 'rejected']:
+            return jsonify({'error': 'Invalid status'}), 400
+
+        user_id = getattr(g, 'current_user_id', None)
+
+        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
+        # Проверяем доступ к каналу
+        channel = execute_db_query(
+            'SELECT * FROM channels WHERE id = ? AND owner_id = ?',
+            (channel_id, user_id),
+            fetch_one=True
+        )
+
+        if not channel:
+            return jsonify({'error': 'Channel not found or access denied'}), 404
+
+        # Находим отклик
+        response = execute_db_query(
+            'SELECT * FROM offer_responses WHERE id = ? AND channel_id = ?',
+            (response_id, channel_id),
+            fetch_one=True
+        )
+
+        if not response:
+            return jsonify({'error': 'Response not found'}), 404
+
+        if response['status'] != 'pending':
+            return jsonify({'error': f'Response already {response["status"]}'}), 400
+
+        # Обновляем статус
+        execute_db_query("""
+            UPDATE offer_responses 
+            SET status = ?, admin_message = ?, updated_at = ?
+            WHERE id = ?
+        """, (
+            new_status,
+            data.get('message', ''),
+            datetime.utcnow().isoformat(),
+            response_id
+        ))
+
+        current_app.logger.info(
+            f"Response {response_id} status updated to {new_status} by user {g.telegram_user_id}"
+        )
+
+        return jsonify({
+            'success': True,
+            'message': f'Response {new_status} successfully',
+            'response': {
+                'id': response_id,
+                'status': new_status,
+                'message': data.get('message', ''),
+                'updated_at': time.time()
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error updating response status: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@channels_bp.route('/categories', methods=['GET'])
+def get_categories():
+    """
+    ФУНКЦИЯ 8: Получение категорий каналов
+    ИСПРАВЛЕНО: убран SQLAlchemy
+    """
+    try:
+        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем статистику по категориям
+        cursor.execute("""
+            SELECT category, 
+                   COUNT(*) as channel_count,
+                   AVG(subscriber_count) as avg_subscribers,
+                   SUM(CASE WHEN is_verified = 1 THEN 1 ELSE 0 END) as verified_count
+            FROM channels 
+            WHERE is_active = 1 
+            GROUP BY category
+            ORDER BY channel_count DESC
+        """)
+
+        categories_stats = cursor.fetchall()
+        conn.close()
+
+        categories_data = []
+        for category in categories_stats:
+            categories_data.append({
+                'name': category['category'],
+                'display_name': category['category'].title(),
+                'channel_count': category['channel_count'],
+                # ✅ ИСПРАВЛЕНО: avg_subscribers вместо avg_subscribers_count
+                'avg_subscriber_count': int(category['avg_subscribers'] or 0),
+                'verified_count': category['verified_count'],
+                'verification_rate': round(
+                    (category['verified_count'] / category['channel_count'] * 100) 
+                    if category['channel_count'] > 0 else 0, 1
+                )
+            })
+
+        return jsonify({
+            'success': True,
+            'categories': categories_data,
+            'total': len(categories_data)
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting categories: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+@channels_bp.route('/stats', methods=['GET'])
+def get_channels_stats():
+    """
+    Получение общей статистики по каналам (SQLite версия)
+
+    Returns:
+        JSON с общей статистикой
+    """
+    try:
+        # Общая статистика каналов
+        total_channels_result = execute_db_query(
+            "SELECT COUNT(*) as total FROM channels WHERE is_active = 1",
+            fetch_one=True
+        )
+        total_channels = total_channels_result['total'] if total_channels_result else 0
+
+        verified_channels_result = execute_db_query(
+            "SELECT COUNT(*) as verified FROM channels WHERE is_verified = 1 AND is_active = 1",
+            fetch_one=True
+        )
+        verified_channels = verified_channels_result['verified'] if verified_channels_result else 0
+
+        # Статистика по подписчикам (только для верифицированных каналов)
+        subscriber_stats_result = execute_db_query("""
+            SELECT 
+                COALESCE(SUM(subscriber_count), 0) as total_subscribers,
+                COALESCE(AVG(subscriber_count), 0) as avg_subscribers,
+                COALESCE(MAX(subscriber_count), 0) as max_subscribers
+            FROM channels 
+            WHERE is_verified = 1 AND is_active = 1
+        """, fetch_one=True)
+
+        subscriber_stats = subscriber_stats_result or {
+            'total_subscribers': 0,
+            'avg_subscribers': 0,
+            'max_subscribers': 0
+        }
+
+        # Топ категории (только верифицированные каналы)
+        top_categories_result = execute_db_query("""
+            SELECT 
+                category,
+                COUNT(*) as count
+            FROM channels 
+            WHERE is_verified = 1 AND is_active = 1
+            GROUP BY category 
+            ORDER BY COUNT(*) DESC 
+            LIMIT 5
+        """, fetch_all=True)
+
+        top_categories = top_categories_result or []
+
+        # Дополнительная статистика по статусам
+        status_stats_result = execute_db_query("""
+            SELECT 
+                status,
+                COUNT(*) as count
+            FROM channels
+            WHERE is_active = 1
+            GROUP BY status
+        """, fetch_all=True)
+
+        status_stats = status_stats_result or []
+
+        # Статистика по языкам
+        language_stats_result = execute_db_query("""
+            SELECT 
+                language,
+                COUNT(*) as count
+            FROM channels
+            WHERE is_verified = 1 AND is_active = 1
+            GROUP BY language
+            ORDER BY COUNT(*) DESC
+            LIMIT 3
+        """, fetch_all=True)
+
+        language_stats = language_stats_result or []
+
+        return jsonify({
+            'channels': {
+                'total': total_channels,
+                'verified': verified_channels,
+                'verification_rate': round((verified_channels / total_channels * 100), 2) if total_channels > 0 else 0,
+                'active': total_channels
+            },
+            'subscribers': {
+                'total': int(subscriber_stats['total_subscribers']),
+                'average': int(subscriber_stats['avg_subscribers']),
+                'maximum': int(subscriber_stats['max_subscribers'])
+            },
+            'categories': {
+                'top_categories': [
+                    {
+                        'category': cat['category'] or 'other',
+                        'count': cat['count']
+                    } for cat in top_categories
+                ]
+            },
+            'status_distribution': [
+                {
+                    'status': stat['status'] or 'unknown',
+                    'count': stat['count']
+                } for stat in status_stats
+            ],
+            'languages': {
+                'top_languages': [
+                    {
+                        'language': lang['language'] or 'unknown',
+                        'count': lang['count']
+                    } for lang in language_stats
+                ]
+            },
+            'metadata': {
+                'cache_timeout': 300,
+                'generated_at': datetime.utcnow().isoformat()
+            }
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting channels stats: {e}")
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e) if current_app.debug else 'Failed to retrieve channel statistics'
+        }), 500
 
 @channels_bp.route('/analyze', methods=['POST'])
 def analyze_channel():
@@ -323,6 +795,108 @@ def analyze_channel():
             'success': False,
             'error': f'Внутренняя ошибка сервера: {str(e)}'
         }), 500
+
+
+@channels_bp.route('/my', methods=['GET'])
+def get_my_channels():
+    """
+    ФУНКЦИЯ 3: Получение каналов текущего пользователя
+    ИСПРАВЛЕНО: убран SQLAlchemy, исправлены имена полей
+    """
+    try:
+        telegram_user_id = getattr(g, 'telegram_user_id', None)
+        user_id = getattr(g, 'current_user_id', None)
+
+        if not user_id:
+            return jsonify({'error': 'User not authenticated'}), 401
+
+        current_app.logger.info(f"Получение каналов для пользователя ID: {user_id}")
+
+        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT id, telegram_id, title, username, subscriber_count, category,
+                   is_verified, verification_code, created_at, status
+            FROM channels
+            WHERE owner_id = ?
+            ORDER BY created_at DESC
+        """, (user_id,))
+
+        channels_data = cursor.fetchall()
+        conn.close()
+
+        current_app.logger.info(f"Найдено каналов: {len(channels_data)}")
+
+        # ✅ ИСПРАВЛЕНО: Преобразуем в список словарей с правильными именами полей
+        channels_list = []
+        for channel in channels_data:
+            channel_dict = {
+                'id': channel['id'],
+                'channel_id': channel['telegram_id'],
+                'channel_name': channel['title'] or 'Неизвестный канал',
+                'title': channel['title'] or 'Неизвестный канал',
+                'channel_username': channel['username'],
+                'username': channel['username'],
+                # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
+                'subscriber_count': channel['subscriber_count'] or 0,
+                'category': channel['category'] or 'other',
+                'price_per_post': 0.0,
+                'is_verified': bool(channel['is_verified']),
+                'verification_code': channel['verification_code'] if not channel['is_verified'] else None,
+                'created_at': channel['created_at'],
+                'status': channel['status'] or 'pending',
+                'offers_count': get_channel_offers_count(channel['id']),
+                'posts_count': get_channel_posts_count(channel['id'])
+            }
+            channels_list.append(channel_dict)
+
+        return jsonify({
+            'success': True,
+            'channels': channels_list,
+            'total': len(channels_list)
+        })
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting my channels: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@channels_bp.route('/<int:channel_id>/update-stats', methods=['PUT', 'POST'])
+def update_channel_stats(channel_id):
+    """Обновление статистики канала данными от фронтенда"""
+
+    logger.info(f"📊 Обновление статистики канала {channel_id}")
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'JSON данные обязательны'}), 400
+
+    # Получаем telegram_user_id из заголовков
+    telegram_user_id = request.headers.get('X-Telegram-User-Id')
+    if not telegram_user_id:
+        return jsonify({'success': False, 'error': 'Не авторизован'}), 401
+
+    conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Проверяем права на канал
+    cursor.execute("""
+                    SELECT c.id, c.title, c.username, c.subscriber_count
+                    FROM channels c
+                            JOIN users u ON c.owner_id = u.id
+                    WHERE c.id = ?
+                        AND u.telegram_id = ?
+                    """, (channel_id, telegram_user_id))
+
+    channel = cursor.fetchone()
+    if not channel:
+        conn.close()
+        return jsonify({'success': False, 'error': 'Канал не найден'}), 404
+    logger.info(f"✅ Канал найден: {channel['title']} (ID: {channel_id})")
 
 
 @channels_bp.route('', methods=['POST'])
@@ -531,387 +1105,6 @@ def add_channel():
         }), 500
 
 
-@channels_bp.route('/<int:channel_id>', methods=['DELETE'])
-def delete_channel(channel_id):
-    """Удаление канала"""
-    try:
-        logger.info(f"🗑️ Попытка удаления канала {channel_id}")
-
-        # Получаем telegram_user_id из заголовков
-        telegram_user_id = request.headers.get('X-Telegram-User-Id')
-        logger.info(f"👤 Telegram User ID: {telegram_user_id}")
-
-        if not telegram_user_id:
-            logger.warning("❌ Не указан Telegram User ID")
-            return jsonify({
-                'success': False,
-                'error': 'Не указан Telegram User ID'
-            }), 400
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Проверяем права на удаление
-        logger.info(f"🔍 Проверяем права на канал {channel_id}")
-        cursor.execute("""
-            SELECT c.id, c.title, c.username 
-            FROM channels c
-            JOIN users u ON c.owner_id = u.id
-            WHERE c.id = ? AND u.telegram_id = ?
-        """, (channel_id, telegram_user_id))
-
-        channel = cursor.fetchone()
-
-        if not channel:
-            logger.warning(f"❌ Канал {channel_id} не найден для пользователя {telegram_user_id}")
-
-            # Проверяем, существует ли канал вообще
-            cursor.execute("SELECT id, title FROM channels WHERE id = ?", (channel_id,))
-            any_channel = cursor.fetchone()
-
-            conn.close()
-
-            if any_channel:
-                return jsonify({
-                    'success': False,
-                    'error': 'У вас нет прав на удаление этого канала'
-                }), 403
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': 'Канал не найден'
-                }), 404
-
-        channel_title = channel['title'] if channel['title'] else f'ID {channel_id}'
-        logger.info(f"✅ Канал найден: {channel_title}")
-
-        # Удаляем связанные данные
-        logger.info(f"🔄 Удаление связанных данных")
-
-        # 1. Удаляем ответы на офферы (если таблица существует)
-        try:
-            cursor.execute("""
-                DELETE FROM offer_responses 
-                WHERE offer_id IN (
-                    SELECT id FROM offers WHERE channel_id = ?
-                )
-            """, (channel_id,))
-            logger.info(f"✅ Удалены ответы на офферы: {cursor.rowcount}")
-        except sqlite3.Error as e:
-            logger.debug(f"Ошибка удаления ответов: {e}")
-
-        # 2. Удаляем офферы (если таблица существует)
-        try:
-            cursor.execute("DELETE FROM offers WHERE channel_id = ?", (channel_id,))
-            logger.info(f"✅ Удалены офферы: {cursor.rowcount}")
-        except sqlite3.Error as e:
-            logger.debug(f"Ошибка удаления офферов: {e}")
-
-        # 3. Удаляем уведомления (если таблица существует)
-        try:
-            cursor.execute("""
-                DELETE FROM notifications 
-                WHERE data LIKE '%"channel_id":' || ? || '%'
-            """, (channel_id,))
-            logger.info(f"✅ Удалены уведомления: {cursor.rowcount}")
-        except sqlite3.Error as e:
-            logger.debug(f"Ошибка удаления уведомлений: {e}")
-
-        # 4. Удаляем сам канал
-        logger.info(f"🗑️ Удаляем канал {channel_id}")
-        cursor.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
-        deleted_count = cursor.rowcount
-
-        # Подтверждаем изменения
-        conn.commit()
-        conn.close()
-
-        logger.info(f"🎯 Удалено строк: {deleted_count}")
-
-        if deleted_count > 0:
-            logger.info(f"✅ Канал {channel_id} ({channel_title}) успешно удален")
-            return jsonify({
-                'success': True,
-                'message': f'Канал "{channel_title}" успешно удален'
-            })
-        else:
-            logger.error(f"❌ Канал {channel_id} не был удален")
-            return jsonify({
-                'success': False,
-                'error': 'Канал не был удален'
-            }), 500
-
-    except Exception as e:
-        logger.error(f"💥 Критическая ошибка удаления канала {channel_id}: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return jsonify({
-            'success': False,
-            'error': f'Внутренняя ошибка сервера: {str(e)}'
-        }), 500
-
-
-@channels_bp.route('/webhook', methods=['POST'])
-def telegram_webhook():
-    """Webhook для получения обновлений от Telegram"""
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'ok': True})
-
-        # Проверка пересланных сообщений для верификации
-        if 'message' in data:
-            message = data['message']
-
-            # Обработка команды /start
-            if 'text' in message and message['text'] == '/start':
-                from_user_id = str(message['from']['id'])
-
-                try:
-                    import requests
-                    bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
-                    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-                    welcome_message = """👋 <b>Добро пожаловать!</b>
-
-                    Я помогу вам верифицировать ваши Telegram каналы.
-
-                    <b>Как это работает:</b>
-                    1️⃣ Добавьте канал в Mini App
-                    2️⃣ Получите код верификации
-                    3️⃣ Опубликуйте код в вашем канале
-                    4️⃣ Переслать сообщение с кодом мне
-
-                    После успешной верификации вы получите уведомление прямо здесь!"""
-
-                    # Создаем клавиатуру для приветствия
-                    welcome_keyboard = {
-                        "inline_keyboard": [
-                            [
-                                {
-                                    "text": "🚀 Открыть Mini App",
-                                    "web_app": {
-                                        "url": f"{os.environ.get('WEBAPP_URL', 'https://your-domain.com')}"
-                                    }
-                                }
-                            ]
-                        ]
-                    }
-
-                    requests.post(send_url, json={
-                        'chat_id': from_user_id,
-                        'text': welcome_message,
-                        'parse_mode': 'HTML',
-                        'reply_markup': welcome_keyboard
-                    }, timeout=5)
-                except:
-                    pass
-
-            # Проверка пересланных сообщений
-            elif 'forward_from_chat' in message:
-                forward_chat = message['forward_from_chat']
-
-                # Проверяем, что это канал
-                if forward_chat.get('type') == 'channel':
-                    chat_id = str(forward_chat.get('id'))
-                    chat_username = forward_chat.get('username', '').lower()
-                    from_user_id = str(message['from']['id'])
-
-                    # Получаем текст пересланного сообщения
-                    forward_text = message.get('text', '')
-
-                    logger.info(f"📩 Пересланное сообщение из @{chat_username}: {forward_text[:50]}...")
-
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
-
-                    # Ищем канал с кодом верификации в пересланном тексте
-                    cursor.execute("""
-                        SELECT c.id, c.title, c.verification_code, c.username
-                        FROM channels c
-                        JOIN users u ON c.owner_id = u.id
-                        WHERE u.telegram_id = ?
-                        AND c.is_verified = 0
-                        AND c.verification_code IS NOT NULL
-                    """, (from_user_id,))
-
-                    channels = cursor.fetchall()
-
-                    # Проверяем каждый канал пользователя
-                    for channel in channels:
-                        # Проверяем, есть ли код верификации в тексте
-                        if channel['verification_code'] in forward_text:
-                            # И совпадает ли username канала
-                            if (channel['username'].lower() == chat_username or
-                                    channel['username'].lower() == f'@{chat_username}' or
-                                    channel['telegram_id'] == chat_id):
-
-                                # Верифицируем канал
-                                cursor.execute("""
-                                    UPDATE channels
-                                    SET is_verified = 1,
-                                        verified_at = ?,
-                                        status = 'verified',
-                                        telegram_id = ?
-                                    WHERE id = ?
-                                """, (datetime.now().isoformat(), chat_id, channel['id']))
-
-                                conn.commit()
-                                logger.info(f"✅ Канал '{channel['title']}' верифицирован!")
-
-                                # Отправляем уведомление ПОЛЬЗОВАТЕЛЮ В БОТ
-                                try:
-                                    import requests
-                                    bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
-                                    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-                                    success_message = f"""✅ <b>Канал успешно верифицирован!</b>
-
-                                    📺 <b>Канал:</b> {channel['title']}
-                                    🔗 <b>Username:</b> @{channel['username']}
-                                    📅 <b>Дата:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}
-
-                                    Теперь вы можете:
-                                    - Получать предложения от рекламодателей
-                                    - Устанавливать цены за размещение
-                                    - Просматривать статистику канала
-
-                                    Перейдите в <a href="https://t.me/miniappsmatchbot/start?startapp=channels">Mini App</a> для управления каналом."""
-
-                                    # НА:
-                                    # Получаем данные пользователя
-                                    cursor.execute("""
-                                                   SELECT first_name, last_name, username
-                                                   FROM users
-                                                   WHERE telegram_id = ?
-                                                   """, (from_user_id,))
-                                    user_data = cursor.fetchone()
-
-                                    # Форматируем имя пользователя
-                                    if user_data:
-                                        user_name_parts = []
-                                        if user_data['first_name']:
-                                            user_name_parts.append(user_data['first_name'])
-                                        if user_data['last_name']:
-                                            user_name_parts.append(user_data['last_name'])
-                                        full_name = ' '.join(user_name_parts) if user_name_parts else user_data[
-                                                                                                          'username'] or 'Пользователь'
-                                    else:
-                                        full_name = 'Пользователь'
-
-                                    # Форматируем дату добавления канала
-                                    try:
-                                        # Парсим дату создания канала
-                                        created_at = datetime.fromisoformat(
-                                            channel['created_at'].replace('Z', '+00:00'))
-                                        formatted_date = created_at.strftime('%d.%m.%Y в %H:%M')
-                                    except:
-                                        formatted_date = 'Недавно'
-
-
-                                    success_message = f"""✅ <b>Канал успешно верифицирован!</b>
-
-                                    📺 <b>Канал:</b> {channel['title']}
-                                    👤 <b>Пользователь:</b> {full_name}
-                                    📅 <b>Дата добавления:</b> {formatted_date}
-
-                                    🎉 <b>Поздравляем!</b> Ваш канал верифицирован!
-
-                                    Теперь вы можете:
-                                    - Получать предложения от рекламодателей
-                                    - Устанавливать цены за размещение
-                                    - Просматривать статистику канала
-                                    - Управлять настройками"""
-
-                                    # Создаем клавиатуру с кнопкой Mini App
-                                    keyboard = {
-                                        "inline_keyboard": [
-                                            [
-                                                {
-                                                    "text": "🚀 Открыть Mini App",
-                                                    "web_app": {
-                                                        "url": f"{os.environ.get('WEBAPP_URL', 'https://your-domain.com')}/channels"
-                                                    }
-                                                }
-                                            ]
-                                        ]
-                                    }
-
-                                    requests.post(send_url, json={
-                                        'chat_id': from_user_id,
-                                        'text': success_message,
-                                        'parse_mode': 'HTML',
-                                        'reply_markup': keyboard
-                                    }, timeout=5)
-                                except Exception as e:
-                                    logger.error(f"Ошибка отправки уведомления: {e}")
-
-                                conn.close()
-                                return jsonify({'ok': True})
-
-                    # Если код не найден, отправляем подсказку
-                    try:
-                        import requests
-                        bot_token = os.environ.get('BOT_TOKEN', '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8')
-                        send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-
-                        requests.post(send_url, json={
-                            'chat_id': from_user_id,
-                            'text': '❌ Код верификации не найден в пересланном сообщении.\n\nУбедитесь, что вы переслали сообщение с кодом верификации из вашего канала.',
-                            'parse_mode': 'HTML'
-                        }, timeout=5)
-                    except:
-                        pass
-
-                    conn.close()
-
-        return jsonify({'ok': True})
-
-    except Exception as e:
-        logger.error(f"❌ Ошибка webhook: {e}")
-        return jsonify({'ok': True})
-
-
-@channels_bp.route('/test', methods=['GET'])
-def test_channels_api():
-    """Тестовый эндпоинт для проверки работы API"""
-    try:
-        # Проверяем подключение к БД
-        if not os.path.exists(DATABASE_PATH):
-            return jsonify({
-                'success': False,
-                'error': f'База данных не найдена: {DATABASE_PATH}'
-            }), 500
-
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Проверяем количество каналов
-        cursor.execute("SELECT COUNT(*) as count FROM channels")
-        channels_count = cursor.fetchone()['count']
-
-        # Проверяем количество пользователей
-        cursor.execute("SELECT COUNT(*) as count FROM users")
-        users_count = cursor.fetchone()['count']
-
-        conn.close()
-
-        return jsonify({
-            'success': True,
-            'message': 'Channels API работает!',
-            'stats': {
-                'channels': channels_count,
-                'users': users_count
-            }
-        })
-
-    except Exception as e:
-        logger.error(f"❌ Ошибка тестирования API: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
 @channels_bp.route('/<int:channel_id>/verify', methods=['PUT', 'POST'])
 def verify_channel_endpoint(channel_id):
     """Верификация канала"""
@@ -1031,39 +1224,110 @@ def debug_channel(channel_id):
         return jsonify({'error': str(e)}), 500
 
 
-# Добавьте этот эндпоинт в channels.py
 
-@channels_bp.route('/<int:channel_id>/update-stats', methods=['PUT', 'POST'])
-def update_channel_stats(channel_id):
-    """Обновление статистики канала данными от фронтенда"""
+def extract_username_from_url(url):
+    """Извлекает username из различных форматов URL Telegram"""
+    # Убираем пробелы
+    url = url.strip()
 
-    logger.info(f"📊 Обновление статистики канала {channel_id}")
+    # Если это уже чистый username
+    if not url.startswith('http') and not url.startswith('@'):
+        return url.lstrip('@')
 
-    data = request.get_json()
-    if not data:
-        return jsonify({'success': False, 'error': 'JSON данные обязательны'}), 400
+    # Паттерны для извлечения username
+    patterns = [
+        r'https?://t\.me/([a-zA-Z0-9_]+)',  # https://t.me/username
+        r'https?://telegram\.me/([a-zA-Z0-9_]+)',  # https://telegram.me/username
+        r'@([a-zA-Z0-9_]+)',  # @username
+        r'^([a-zA-Z0-9_]+)$'  # просто username
+    ]
 
-    # Получаем telegram_user_id из заголовков
-    telegram_user_id = request.headers.get('X-Telegram-User-Id')
-    if not telegram_user_id:
-        return jsonify({'success': False, 'error': 'Не авторизован'}), 401
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            username = match.group(1)
+            logger.info(f"🔍 Извлечен username: {username} из URL: {url}")
+            return username
 
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # Если ничего не найдено, возвращаем как есть
+    logger.warning(f"⚠️ Не удалось извлечь username из: {url}")
+    return url.lstrip('@')
 
-    # Проверяем права на канал
-    cursor.execute("""
-                    SELECT c.id, c.title, c.username, c.subscriber_count
-                    FROM channels c
-                            JOIN users u ON c.owner_id = u.id
-                    WHERE c.id = ?
-                        AND u.telegram_id = ?
-                    """, (channel_id, telegram_user_id))
 
-    channel = cursor.fetchone()
-    if not channel:
+def get_db_connection():
+    """Получение соединения с базой данных"""
+    conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+# Инициализация Blueprint
+def init_channel_routes():
+    """Инициализация маршрутов каналов"""
+    current_app.logger.info("✅ Channel routes initialized")
+
+
+def get_channel_offers_count(channel_id: int) -> int:
+    """Получение количества офферов для канала"""
+    try:
+        import sqlite3
+        conn = sqlite3.connect('telegram_mini_app.db')
+        cursor = conn.cursor()
+
+        # Проверяем таблицу responses (отклики на офферы)
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='responses'")
+        if cursor.fetchone():
+            cursor.execute("""
+                           SELECT COUNT(DISTINCT r.offer_id)
+                           FROM responses r
+                           WHERE r.channel_id = ?
+                           """, (channel_id,))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+        else:
+            count = 0
+
         conn.close()
-        return jsonify({'success': False, 'error': 'Канал не найден'}), 404
-    logger.info(f"✅ Канал найден: {channel['title']} (ID: {channel_id})")
+        return count
 
+    except Exception as e:
+        current_app.logger.error(f"Error getting offers count for channel {channel_id}: {e}")
+        return 0
+
+
+def get_channel_posts_count(channel_id: int) -> int:
+    """Получение количества постов канала"""
+    try:
+        import sqlite3
+        from datetime import datetime
+
+        conn = sqlite3.connect('telegram_mini_app.db')
+        cursor = conn.cursor()
+
+        # Проверяем таблицу posts
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='posts'")
+        if cursor.fetchone():
+            cursor.execute("SELECT COUNT(*) FROM posts WHERE channel_id = ?", (channel_id,))
+            result = cursor.fetchone()
+            count = result[0] if result else 0
+        else:
+            # Примерный подсчет по дате создания канала
+            cursor.execute("SELECT created_at FROM channels WHERE id = ?", (channel_id,))
+            result = cursor.fetchone()
+
+            if result and result[0]:
+                try:
+                    created_at = datetime.fromisoformat(result[0].replace('Z', '+00:00'))
+                    days_active = (datetime.now() - created_at).days
+                    count = max(0, days_active // 7)  # Примерно 1 пост в неделю
+                except:
+                    count = 0
+            else:
+                count = 0
+
+        conn.close()
+        return count
+
+    except Exception as e:
+        current_app.logger.error(f"Error getting posts count for channel {channel_id}: {e}")
+        return 0
 
