@@ -1,7 +1,9 @@
 class ChannelAnalyzer {
             constructor() {
                 this.apiUrl = '/api/analyzer';
-                
+                // ✅ ДОБАВИТЬ получение токена
+                this.telegramBotToken = null;
+                this.initializeBotToken();
             }
 
             async analyzeChannel(url) {
@@ -13,41 +15,24 @@ class ChannelAnalyzer {
     this.showLoading();
 
     try {
-        // ✅ ПЕРВЫМ ДЕЛОМ пробуем Telegram Bot API
-        console.log('🤖 Пробуем получить данные через Telegram Bot API...');
-        return await this.getTelegramChannelInfo(username);
-
-    } catch (telegramError) {
-        console.log('❌ Telegram Bot API не сработал:', telegramError.message);
-
-        try {
-            // 🔄 Fallback к серверу
-            console.log('🔄 Пробуем серверный анализатор...');
-            const response = await fetch(`${this.apiUrl}/analyze`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    channel_url: url
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    console.log('✅ Получены данные от сервера');
-                    return data;
-                } else {
-                    throw new Error(data.error || 'Сервер вернул ошибку');
-                }
-            } else {
-                throw new Error('Сервер недоступен');
-            }
-        } catch (serverError) {
-            console.error('❌ Ошибка сервера:', serverError);
-            throw new Error('Не удалось получить данные канала ни одним способом');
+        // ✅ СНАЧАЛА пробуем серверный анализатор (надежнее)
+        console.log('🔄 Пробуем серверный анализатор...');
+        const serverResult = await this.getFromServerAnalyzer(url);
+        
+        if (serverResult.success && serverResult.data) {
+            console.log('✅ Получены данные от сервера');
+            this.currentChannelData = serverResult.data;
+            return serverResult;
         }
+        
+        // ✅ Если сервер не помог, пробуем ручной ввод
+        console.log('🤔 Сервер вернул 0 подписчиков, предлагаем ручной ввод...');
+        return await this.showManualInputDialog(username, serverResult.data);
+        
+    } catch (error) {
+        console.error('❌ Все методы не сработали:', error);
+        // ✅ Последний резерв - ручной ввод с базовыми данными
+        return await this.showManualInputDialog(username, null);
     }
 }
 

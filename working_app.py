@@ -17,7 +17,7 @@ from app.routers.main_router import main_bp
 from app.api.channels import channels_bp
 import requests
 from flask import Flask, jsonify, request, render_template
-
+from app.api.channel_analyzer import analyzer_bp
 
 # Загрузка переменных окружения
 try:
@@ -65,8 +65,9 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(offers_bp, url_prefix='/api/offers')
     app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
-
-
+    app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
+    from app.api.channel_analyzer import init_analyzer
+    init_analyzer(AppConfig.BOT_TOKEN)
 # === MIDDLEWARE ===
 def register_middleware(app: Flask) -> None:
     """Регистрация middleware"""
