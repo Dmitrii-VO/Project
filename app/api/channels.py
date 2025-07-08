@@ -331,9 +331,44 @@ def add_channel():
     try:
         logger.info("➕ Попытка добавления нового канала")
 
+        # ✅ ПРАВИЛЬНЫЙ ПОРЯДОК: СНАЧАЛА ПОЛУЧАЕМ data
         data = request.get_json()
         if not data:
             return jsonify({'success': False, 'error': 'JSON data required'}), 400
+
+        # ✅ ИНИЦИАЛИЗИРУЕМ subscriber_count ИЗ ДАННЫХ
+        subscriber_count = data.get('subscriber_count', 0)
+        
+        # Проверяем разные варианты передачи данных о подписчиках
+        possible_subscriber_fields = [
+            'subscriber_count', 'subscribers_count', 'raw_subscriber_count', 'member_count'
+        ]
+
+        for field in possible_subscriber_fields:
+            value = data.get(field)
+            if value and isinstance(value, (int, str)) and str(value).replace('K', '').replace('M', '').replace('.', '').isdigit():
+                subscriber_count = value
+                logger.info(f"✅ Найдены подписчики в поле '{field}': {subscriber_count}")
+                break
+        
+        # ✅ ОБРАБОТКА СТРОКОВЫХ ЗНАЧЕНИЙ
+        if isinstance(subscriber_count, str):
+            try:
+                if subscriber_count.upper().endswith('K'):
+                    subscriber_count = int(float(subscriber_count[:-1]) * 1000)
+                elif subscriber_count.upper().endswith('M'):
+                    subscriber_count = int(float(subscriber_count[:-1]) * 1000000)
+                else:
+                    subscriber_count = int(subscriber_count)
+            except (ValueError, TypeError):
+                subscriber_count = 0
+
+        # Убеждаемся что это число
+        if not isinstance(subscriber_count, int):
+            subscriber_count = 0
+
+        logger.info(f"📊 Количество подписчиков для сохранения: {subscriber_count}")
+        logger.info(f"🔍 DEBUG: Полученные данные = {data}")
 
         # Получаем telegram_user_id из заголовков
         telegram_user_id = request.headers.get('X-Telegram-User-Id', '373086959')
@@ -375,139 +410,116 @@ def add_channel():
                                 JOIN users u ON c.owner_id = u.id
                        WHERE (c.username = ? OR c.username = ? OR c.telegram_id = ?)
                          AND u.telegram_id = ?
-                       """, (cleaned_username, f'@{cleaned_username}', cleaned_username, telegram_user_id))
+                       """, (cleaned_username, f"@{cleaned_username}", cleaned_username, telegram_user_id))
 
         existing_channel = cursor.fetchone()
 
-        # Если канал существует и это НЕ повторная верификация - ошибка
         if existing_channel and not is_reverify:
-            logger.warning(f"❌ Канал @{cleaned_username} уже добавлен (ID: {existing_channel['id']})")
             conn.close()
-            return jsonify({
-                'success': False,
-                'error': f'Канал @{cleaned_username} уже добавлен'
-            }), 409
-
-        # Если это повторная верификация существующего канала
-        if existing_channel and is_reverify:
-            logger.info(f"🔄 Повторная верификация канала @{cleaned_username}")
-
-            # Генерируем новый код верификации
-            import secrets
-            new_verification_code = f'VERIFY_{secrets.token_hex(4).upper()}'
-
-            # Обновляем код верификации в существующем канале
-            cursor.execute("""
-                           UPDATE channels
-                           SET verification_code = ?,
-                               status            = 'pending',
-                               is_verified       = FALSE,
-                               updated_at        = ?
-                           WHERE id = ?
-                           """, (new_verification_code, datetime.now().isoformat(), existing_channel['id']))
-
-            conn.commit()
-            conn.close()
-
-            logger.info(f"✅ Новый код верификации для канала {existing_channel['id']}: {new_verification_code}")
-
-            return jsonify({
-                'success': True,
-                'message': 'Новый код верификации сгенерирован',
-                'verification_code': new_verification_code,
-                'channel': {
-                    'id': existing_channel['id'],
-                    'username': cleaned_username,
-                    'title': existing_channel['title'],
-                    'verification_code': new_verification_code,
-                    'status': 'pending'
-                }
-            })
-
-        # Парсим число подписчиков если это строка (например "12.5K")
-        if isinstance(subscriber_count, str):
-            try:
-                # Обрабатываем форматы типа "12.5K", "1.2M"
-                if subscriber_count.upper().endswith('K'):
-                    subscriber_count = int(float(subscriber_count[:-1]) * 1000)
-                elif subscriber_count.upper().endswith('M'):
-                    subscriber_count = int(float(subscriber_count[:-1]) * 1000000)
-                else:
-                    subscriber_count = int(subscriber_count)
-            except (ValueError, TypeError):
-                subscriber_count = 0
-
-        # Убеждаемся что это число
-        if not isinstance(subscriber_count, int):
-            subscriber_count = 0
-
-        logger.info(f"📊 Количество подписчиков от фронтенда: {subscriber_count}")
-        logger.info(f"🔍 DEBUG: Полученные данные = {data}")
-        logger.info(f"🔍 DEBUG: channel_data = {data.get('channel_data', 'НЕТ')}")
+            if existing_channel['is_verified']:
+                logger.info(f"✅ Канал уже верифицирован")
+                return jsonify({
+                    'success': True,
+                    'already_exists': True,
+                    'is_verified': True,
+                    'message': 'Канал уже добавлен и верифицирован',
+                    'channel': {
+                        'id': existing_channel['id'],
+                        'title': existing_channel['title'],
+                        'username': cleaned_username,
+                        'status': existing_channel['status']
+                    }
+                })
+            else:
+                logger.info(f"⚠️ Канал существует но не верифицирован")
+                return jsonify({
+                    'success': True,
+                    'already_exists': True,
+                    'is_verified': False,
+                    'message': 'Канал уже добавлен, но требует верификации',
+                    'verification_code': existing_channel['verification_code'],
+                    'channel': {
+                        'id': existing_channel['id'],
+                        'title': existing_channel['title'],
+                        'username': cleaned_username,
+                        'status': existing_channel['status']
+                    }
+                })
 
         # Генерируем код верификации
         import secrets
         verification_code = f'VERIFY_{secrets.token_hex(4).upper()}'
         logger.info(f"📝 Сгенерирован код верификации: {verification_code}")
 
-        # ✅ СОХРАНЯЕМ КАНАЛ С ДАННЫМИ ОТ ФРОНТЕНДА
-        subscriber_count = 0
-
-        # Проверяем разные варианты передачи данных о подписчиках
-        possible_subscriber_fields = ['subscriber_count'
-        ]
-
-        for field in possible_subscriber_fields:
-            value = data.get(field)
-            if value and isinstance(value, (int, str)) and str(value).isdigit():
-                subscriber_count = int(value)
-                logger.info(f"✅ Найдены подписчики в поле '{field}': {subscriber_count}")
-                break
-
-        logger.info(f"📊 Итоговое количество подписчиков для сохранения: {subscriber_count}")
-
-        # ✅ ИСПРАВЛЕНО: Правильное определение telegram_id
+        # ✅ ПРАВИЛЬНОЕ ОПРЕДЕЛЕНИЕ telegram_id
         telegram_channel_id = data.get('telegram_id') or data.get('channel_id') or cleaned_username
 
-        # Добавляем канал в БД
-        cursor.execute("""
-                       INSERT INTO channels (telegram_id, title, username, description, category,
-                                             subscriber_count, language, is_verified, is_active,
-                                             owner_id, created_at, updated_at, status, verification_code)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                       """, (
-                           telegram_channel_id,  # ✅ ИСПРАВЛЕНО
-                           data.get('title', f'Канал @{cleaned_username}'),
-                           cleaned_username,
-                           data.get('description', 'Описание канала'),
-                           data.get('category', 'general'),
-                           subscriber_count,  # ✅ ИСПРАВЛЕНО: используем вычисленное значение
-                           'ru',
-                           False,
-                           True,
-                           user_db_id,
-                           datetime.now().isoformat(),
-                           datetime.now().isoformat(),
-                           'pending',
-                           verification_code
-                       ))
+        # Получаем дополнительные данные
+        title = data.get('title', f'Канал @{cleaned_username}')
+        description = data.get('description', '')
+        category = data.get('category', 'other')
 
-        channel_id = cursor.lastrowid
+        current_time = datetime.now().isoformat()
+
+        if existing_channel and is_reverify:
+            # Обновляем существующий канал для повторной верификации
+            logger.info(f"🔄 Обновляем канал для повторной верификации")
+            
+            cursor.execute("""
+                           UPDATE channels 
+                           SET verification_code = ?, 
+                               status = 'pending',
+                               updated_at = ?,
+                               subscriber_count = ?
+                           WHERE id = ?
+                           """, (verification_code, current_time, subscriber_count, existing_channel['id']))
+            
+            channel_id = existing_channel['id']
+            logger.info(f"✅ Канал {channel_id} обновлен для повторной верификации")
+        else:
+            # Добавляем новый канал в БД
+            logger.info(f"➕ Добавляем новый канал в базу данных")
+            
+            cursor.execute("""
+                           INSERT INTO channels (telegram_id, title, username, description, category,
+                                                 subscriber_count, language, is_verified, is_active,
+                                                 owner_id, created_at, updated_at, status, verification_code)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           """, (
+                telegram_channel_id, title, cleaned_username, description, category,
+                subscriber_count, 'ru', False, True,
+                user_db_id, current_time, current_time, 'pending', verification_code
+            ))
+
+            channel_id = cursor.lastrowid
+            logger.info(f"✅ Канал добавлен в БД с ID: {channel_id}")
+
         conn.commit()
         conn.close()
 
-        logger.info(f"✅ Канал добавлен с ID: {channel_id}, подписчиков: {subscriber_count}")
-
-        return jsonify({
+        # Возвращаем успешный ответ
+        response_data = {
             'success': True,
-            'message': f'Канал @{cleaned_username} добавлен',
+            'message': 'Канал успешно добавлен! Теперь подтвердите владение.',
+            'verification_code': verification_code,
             'channel': {
                 'id': channel_id,
+                'title': title,
                 'username': cleaned_username,
-                'verification_code': verification_code,
-                'subscriber_count': subscriber_count  # Возвращаем для подтверждения
-            }
-        }), 201
+                'subscriber_count': subscriber_count,
+                'status': 'pending',
+                'verification_code': verification_code
+            },
+            'instructions': [
+                f'1. Перейдите в ваш канал @{cleaned_username}',
+                f'2. Опубликуйте сообщение с кодом: {verification_code}',
+                '3. Переслать это сообщение нашему боту',
+                '4. Дождитесь подтверждения верификации'
+            ]
+        }
+
+        logger.info(f"🎉 Канал {cleaned_username} успешно добавлен!")
+        return jsonify(response_data)
 
     except Exception as e:
         logger.error(f"💥 Ошибка добавления канала: {e}")
