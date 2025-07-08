@@ -118,7 +118,6 @@ def get_channels():
             params.append(category)
 
         if min_subscribers:
-            # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
             sql += " AND c.subscriber_count >= ?"
             count_sql += " AND c.subscriber_count >= ?"
             params.append(min_subscribers)

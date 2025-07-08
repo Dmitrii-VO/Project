@@ -27,7 +27,6 @@
             <div class="tab-nav" style="display: none;">
                 <!-- Скрытые табы для совместимости с JS -->
                 <button class="tab-btn active" data-tab="channels">Мои каналы</button>
-                <button class="tab-btn" data-tab="offers">Входящие предложения</button>
                 <button class="tab-btn" data-tab="add-channel">Добавить канал</button>
                 <button class="tab-btn" data-tab="analytics">Аналитика</button>
             </div>
@@ -41,15 +40,6 @@
                     <p>Список ваших подключенных каналов</p>
                 </div>
             </div>
-
-            <div class="nav-card" data-tab="offers" onclick="switchTab('offers')">
-                <div class="nav-icon">📬</div>
-                <div class="nav-content">
-                    <h3>Входящие предложения</h3>
-                    <p>Предложения от рекламодателей</p>
-                </div>
-            </div>
-
             <div class="nav-card" data-tab="add-channel" onclick="switchTab('add-channel')">
                 <div class="nav-icon">➕</div>
                 <div class="nav-content">
@@ -87,19 +77,6 @@
                     <button class="btn btn-primary" onclick="switchTab('add-channel')">
                         ➕ Добавить канал
                     </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tab: Входящие предложения -->
-        <div class="tab-content" id="offers">
-            <div class="empty-state">
-                <div class="stat-icon">📬</div>
-                <h3>Входящие предложения</h3>
-                <p>Здесь будут отображаться предложения от рекламодателей для ваших каналов.</p>
-                <div style="background: var(--bg-secondary); padding: 16px; border-radius: var(--border-radius-sm); margin-top: 16px;">
-                    <strong>Пока предложений нет</strong><br>
-                    После добавления и верификации каналов здесь появятся предложения от рекламодателей.
                 </div>
             </div>
         </div>

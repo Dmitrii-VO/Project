@@ -1,7 +1,7 @@
 class ChannelAnalyzer {
             constructor() {
                 this.apiUrl = '/api/analyzer';
-                this.telegramBotToken = '6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8';
+                
             }
 
             async analyzeChannel(url) {
@@ -667,68 +667,6 @@ class SubscriberDebugger {
 
 // 🚀 Инициализация отладчика
 const subscriberDebugger = new SubscriberDebugger();
-
-// 🔧 ИСПРАВЛЕННАЯ ФУНКЦИЯ getTelegramChannelInfo с отладкой
-async function getTelegramChannelInfoWithDebug(username) {
-    try {
-        console.log('🤖 Запрос к Telegram API для:', username);
-
-        const telegramUrl = `https://api.telegram.org/bot6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8/getChat?chat_id=@${username}`;
-        const response = await fetch(telegramUrl);
-        const data = await response.json();
-
-        subscriberDebugger.debugSubscriberData(data, 'Telegram getChat API');
-
-        if (data.ok && data.result) {
-            const channelInfo = data.result;
-
-            // Получаем количество участников
-            const membersResponse = await fetch(
-                `https://api.telegram.org/bot6712109516:AAHL23ltolowG5kYTfkTKDadg2Io1Rd0WT8/getChatMemberCount?chat_id=@${username}`
-            );
-            const membersData = await membersResponse.json();
-
-            subscriberDebugger.debugSubscriberData(membersData, 'Telegram getChatMemberCount API');
-
-            const memberCount = membersData.ok ? membersData.result : 0;
-
-            console.log('🔢 Финальное количество участников:', memberCount);
-
-            const result = {
-                success: true,
-                data: {
-                    username: channelInfo.username ? `@${channelInfo.username}` : `@${username}`,
-                    title: channelInfo.title || `Канал @${username}`,
-                    avatar_letter: (channelInfo.title || username).charAt(0).toUpperCase(),
-
-                    // ✅ ИСПРАВЛЕНИЕ: Добавляем ВСЕ варианты полей для подписчиков
-                    subscribers: formatSubscriberCount(memberCount),
-                    subscriber_count: memberCount,           // ✅ Для backend
-                    subscribers_count: memberCount,          // ✅ Для совместимости
-                    raw_subscriber_count: memberCount,       // ✅ Сырое число
-                    member_count: memberCount,               // ✅ Альтернативное поле
-
-                    verified: channelInfo.is_verified || false,
-                    category: suggestCategory(channelInfo.title || username),
-                    description: channelInfo.description || `Telegram канал @${username}`,
-                    engagement_rate: calculateEngagementRate(memberCount),
-                    channel_type: channelInfo.type,
-                    invite_link: channelInfo.invite_link,
-                    photo: channelInfo.photo ? channelInfo.photo.big_file_id : null,
-                    raw_data: channelInfo
-                }
-            };
-
-            subscriberDebugger.debugSubscriberData(result, 'Финальный результат getTelegramChannelInfo');
-            return result;
-        } else {
-            throw new Error(data.description || 'Канал не найден или недоступен');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка Telegram API:', error);
-        throw error;
-    }
-}
 
 // 🔧 Вспомогательные функции (добавьте если их нет)
 function formatSubscriberCount(count) {

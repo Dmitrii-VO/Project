@@ -630,59 +630,6 @@ class TelegramChannelService:
         except Exception as e:
             raise TelegramAPIError(f"Ошибка получения информации о канале: {str(e)}")
 
-    @staticmethod
-    def verify_channel_ownership(channel_id: str, verification_code: str) -> bool:
-        """Верификация владения каналом через проверку кода"""
-        try:
-            # Получаем последние сообщения из канала
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getUpdates"
-            response = requests.get(url, timeout=TELEGRAM_API_TIMEOUT)
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('ok'):
-                    updates = data.get('result', [])
-
-                    # Ищем код верификации в сообщениях канала
-                    for update in updates[-50:]:  # Проверяем последние 50 обновлений
-                        message = update.get('message', {})
-                        chat = message.get('chat', {})
-
-                        if str(chat.get('id')) == str(channel_id):
-                            text = message.get('text', '')
-                            if verification_code in text:
-                                return True
-
-            return False
-
-        except Exception as e:
-            print(f"Ошибка верификации канала: {e}")
-            return False
-
-    @staticmethod
-    def get_channel_members_count(channel_id: str) -> int:
-        """Получение количества участников канала"""
-        try:
-            url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getChatMembersCount"
-            response = requests.get(
-                url,
-                params={'chat_id': channel_id},
-                timeout=TELEGRAM_API_TIMEOUT
-            )
-
-            if response.status_code == 200:
-                data = response.json()
-                if data.get('ok'):
-                    return data['result']
-
-            return 0
-
-        except Exception as e:
-            print(f"Ошибка получения количества участников: {e}")
-            return 0
-
-
-
 class ChannelStatistics:
     """Класс для работы со статистикой каналов"""
 
