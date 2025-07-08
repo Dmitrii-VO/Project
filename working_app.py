@@ -66,8 +66,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
     app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
-    from app.api.channel_analyzer import init_analyzer
-    init_analyzer(AppConfig.BOT_TOKEN)
+
 # === MIDDLEWARE ===
 def register_middleware(app: Flask) -> None:
     """Регистрация middleware"""
