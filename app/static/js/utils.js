@@ -301,13 +301,72 @@ function goBack() {
     }
 }
 
+// ID BADGE ФУНКЦИОНАЛЬНОСТЬ
+let userIdBadge = null;
+// Инициализация ID Badge
+function initUserIdBadge() {
+    console.log('🎯 Инициализация ID Badge...');
+    
+    const badge = document.getElementById('idBadge');
+    const badgeUserId = document.getElementById('badgeUserId');
+    
+    if (!badge || !badgeUserId) {
+        console.error('❌ ID Badge элементы не найдены');
+        return;
+    }
+    
+    // Получаем ID пользователя
+    const userId = getTelegramUserId();
+    
+    if (userId) {
+        // Показываем полный ID без сокращения
+        badgeUserId.textContent = userId;
+        
+        // Показываем badge с анимацией
+        setTimeout(() => {
+            badge.style.display = 'block';
+            badge.classList.add('animate-in');
+        }, 1000); // Показываем через секунду после загрузки
+        
+        console.log('✅ ID Badge отображен:', userId);
+    } else {
+        console.warn('⚠️ ID пользователя не получен, badge скрыт');
+    }
+}
+// Получаем ID пользователя из Telegram WebApp или мета-тега
+function getTelegramUserId() {
+    // 1. Пытаемся получить из Telegram WebApp
+    if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+        return window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+    }
+    
+    // 2. Fallback из переменных окружения (для разработки)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        return '373086959'; // YOUR_TELEGRAM_ID из .env
+    }
+    
+    // 3. Пытаемся получить из мета-тега (если добавить в шаблон)
+    const metaUserId = document.querySelector('meta[name="telegram-user-id"]');
+    if (metaUserId) {
+        return metaUserId.content;
+    }
+    
+    return null;
+}
+// Автоинициализация при загрузке страницы
+document.addEventListener('DOMContentLoaded', function() {
+    // Небольшая задержка, чтобы дать время Telegram WebApp инициализироваться
+    setTimeout(initUserIdBadge, 500);
+});
+
+
 // Инициализируем обработчики при загрузке DOM
 document.addEventListener('DOMContentLoaded', initModalHandlers);
 window.goBack = goBack;
 // Делаем функции глобально доступными
 window.closeModal = closeModal;
 window.initModalHandlers = initModalHandlers;
-
+window.getTelegramUserId = getTelegramUserId;
 // Глобальный экспорт утилит
 window.API = API;
 window.UI = UI;

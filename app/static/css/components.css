@@ -255,3 +255,58 @@
         padding: var(--spacing-md);
     }
 }
+
+/* ID BADGE - значок с ID пользователя */
+.id-badge {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'Courier New', monospace;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    user-select: none;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    min-width: 120px;
+    text-align: center;
+}
+
+.id-badge::before {
+    content: '🆔';
+    margin-right: 4px;
+    font-size: 10px;
+}
+
+/* Мобильная адаптация */
+@media (max-width: 768px) {
+    .id-badge {
+        top: 12px;
+        right: 12px;
+        padding: 6px 10px;
+        font-size: 10px;
+        min-width: 100px;
+    }
+}
+
+/* Анимация появления */
+.id-badge.animate-in {
+    animation: badgeSlideIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badgeSlideIn {
+    0% {
+        opacity: 0;
+        transform: translateX(100px) translateY(-20px) scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) translateY(0) scale(1);
+    }
+}

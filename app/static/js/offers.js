@@ -12,20 +12,6 @@ if (window.Telegram?.WebApp) {
 
 // ===== УТИЛИТЫ =====
 const Utils = {
-    getTelegramUserId() {
-        console.log('🔍 Получение Telegram User ID...');
-
-        if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-            const userId = window.Telegram.WebApp.initDataUnsafe.user.id.toString();
-            console.log('✅ User ID из Telegram WebApp:', userId);
-            return userId;
-        }
-
-        const fallbackId = '373086959';
-        console.log('⚠️ Используем fallback User ID:', fallbackId);
-        return fallbackId;
-    },
-
     formatPrice(price) {
         const numericPrice = typeof price === 'string'
             ? parseFloat(price.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
@@ -103,7 +89,7 @@ const ApiClient = {
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json',
-                'X-Telegram-User-Id': Utils.getTelegramUserId()
+                'X-Telegram-User-Id': getTelegramUserId() // Используем глобальную функцию для получения ID
             }
         };
 
