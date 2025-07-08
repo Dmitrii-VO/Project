@@ -24,7 +24,7 @@ class TelegramVerificationService:
         if not self.bot_token:
             logger.warning("⚠️ BOT_TOKEN не настроен - верификация будет работать в тестовом режиме")
 
-    def verify_channel_ownership(self, channel_id: str, verification_code: str) -> Dict[str, Any]:
+    def verify_channel(self, channel_id: str, verification_code: str) -> Dict[str, Any]:
         """
         ЕДИНСТВЕННОЕ МЕСТО проверки кода верификации!
 
@@ -170,7 +170,7 @@ class TelegramVerificationService:
 
                     logger.debug(f"📝 Проверено сообщение {message.get('message_id')}: код не найден")
 
-            # Проверяем обычные сообщения (для групп)
+            # Проверяем обычные сообщения (для групп и личных чатов, включая пересланные)
             elif 'message' in update:
                 message = update['message']
                 chat = message.get('chat', {})
@@ -178,6 +178,19 @@ class TelegramVerificationService:
 
                 messages_checked += 1
 
+                # Проверяем пересланные сообщения из каналов
+                forward_from_chat = message.get('forward_from_chat')
+                if forward_from_chat and self._is_target_channel(forward_from_chat, channel_id):
+                    if verification_code in text:
+                        return {
+                            'found': True,
+                            'message_id': message.get('message_id'),
+                            'message_text': text,
+                            'chat_id': forward_from_chat.get('id'),
+                            'chat_username': forward_from_chat.get('username')
+                        }
+
+                # Обычная проверка для сообщений из групп/чатов
                 if self._is_target_channel(chat, channel_id):
                     # ВОТ ОНА - ВТОРАЯ ПРОВЕРКА! 🎯
                     if verification_code in text:
@@ -273,16 +286,6 @@ class TelegramVerificationService:
 # === ГЛОБАЛЬНЫЙ ЭКЗЕМПЛЯР ===
 # Создаем единственный экземпляр сервиса
 verification_service = TelegramVerificationService()
-
-
-# === ПРОСТАЯ ФУНКЦИЯ ДЛЯ ИСПОЛЬЗОВАНИЯ ===
-def verify_channel(channel_id: str, verification_code: str) -> Dict[str, Any]:
-    """
-    Простая функция для верификации канала
-    Использует единый сервис внутри
-    """
-    return verification_service.verify_channel_ownership(channel_id, verification_code)
-
 
 # === ЭКСПОРТ ===
 __all__ = [

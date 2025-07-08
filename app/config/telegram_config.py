@@ -264,11 +264,11 @@ class AppConfig:
     # === TELEGRAM НАСТРОЙКИ ===
     BOT_TOKEN: Optional[str] = BOT_TOKEN
     YOUR_TELEGRAM_ID: int = int(os.environ.get('YOUR_TELEGRAM_ID', 373086959))
-    WEBAPP_URL: Optional[str] = os.environ.get('WEBAPP_URL', 'http://localhost:5000')
+    WEBAPP_URL: Optional[str] = os.environ.get('WEBAPP_URL', '')
 
     # === ПЛАТЕЖНАЯ СИСТЕМА ===
-    TELEGRAM_PAYMENT_TOKEN: Optional[str] = os.environ.get('TELEGRAM_PAYMENT_TOKEN')
-    WEBHOOK_SECRET: str = os.environ.get('WEBHOOK_SECRET', 'your-webhook-secret-here')
+    TELEGRAM_PAYMENT_TOKEN: Optional[str] = os.environ.get('')
+    WEBHOOK_SECRET: str = os.environ.get('WEBHOOK_SECRET', '')
 
     # === НАСТРОЙКИ ПРОИЗВОДИТЕЛЬНОСТИ ===
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB

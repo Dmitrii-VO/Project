@@ -39,7 +39,7 @@ __all__ = [
               'payout_system',
               'advanced_matching_algorithm',
               'notifications_system',
-              'telegram_webhooks'
+              'telegram_webhook'
           ] + VERIFICATION_SERVICES  # Добавляем новые сервисы
 
 
@@ -58,7 +58,7 @@ def get_available_services():
         'payout_system',
         'advanced_matching_algorithm',
         'notifications_system',
-        'telegram_webhooks',
+        'telegram_webhook',
         'telegram_verification'  # Добавляем проверку нового сервиса
     ]
 

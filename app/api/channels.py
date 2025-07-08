@@ -12,7 +12,8 @@ import sqlite3
 from datetime import datetime
 from app.config.telegram_config import AppConfig
 from app.models.database import execute_db_query
-from app.services.telegram_verification import verify_channel
+from app.services.telegram_verification import TelegramVerificationService
+
 
 # Настройка логирования
 logger = logging.getLogger(__name__)
@@ -24,8 +25,6 @@ channels_bp = Blueprint('channels', __name__)
 DATABASE_PATH = 'telegram_mini_app.db'
 
 # Добавьте этот эндпоинт в channels.py
-
-
 
 class ChannelValidator:
     """Класс для валидации данных каналов"""
@@ -243,114 +242,40 @@ def get_channel(channel_id):
         return jsonify({'error': 'Internal server error'}), 500
 
 
-@channels_bp.route('/<int:channel_id>/verify', methods=['PUT'])
-def verify_channel(channel_id):
-    """
-    Верификация владения каналом
-
-    Args:
-        channel_id: ID канала
-
-    Returns:
-        JSON с результатом верификации
-    """
-    try:
-        from ..models.channels import Channel
-        from ..models.database import db
-
-        # Находим канал
-        channel = Channel.query.filter_by(
-            id=channel_id,
-            owner_id=g.current_user_id
-        ).first()
-
-        if not channel:
-            return jsonify({
-                'error': 'Channel not found or access denied'
-            }), 404
-
-        if channel.is_verified:
-            return jsonify({
-                'success': True,
-                'message': 'Channel is already verified'
-            })
-
-        # Проверяем верификацию через Telegram API
-        verification_result = verify_channel(
-            channel.channel_id,
-            channel.verification_code
-        )
-
-        is_verified = verification_result.get('success', False) and verification_result.get('found', False)
-
-        if is_verified:
-            channel.is_verified = True
-            db.session.commit()
-
-            current_app.logger.info(
-                f"Channel {channel_id} verified by user {g.telegram_user_id}"
-            )
-
-            return jsonify({
-                'success': True,
-                'message': 'Channel verified successfully',
-                'channel': {
-                    'id': channel.id,
-                    'channel_name': channel.channel_name,
-                    'is_verified': channel.is_verified
-                }
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Verification failed',
-                'instructions': (
-                    f"Please post this verification code in your channel: {channel.verification_code}\n"
-                    "Make sure the code is visible in a recent message and try again."
-                )
-            }), 400
-
-    except Exception as e:
-        current_app.logger.error(f"Error verifying channel {channel_id}: {e}")
-        return jsonify({
-            'error': 'Internal server error'
-        }), 500
-
-
 @channels_bp.route('/<int:channel_id>', methods=['DELETE'])
 def delete_channel(channel_id):
-    """
-    Удаление канала
-
-    Args:
-        channel_id: ID канала
-
-    Returns:
-        JSON с результатом удаления
-    """
     try:
-        from ..models.channels import Channel
-        from ..models.response import Response
-        from ..models.database import db
+        # Получаем telegram_user_id из заголовков
+        telegram_user_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_user_id:
+            return jsonify({'error': 'User not authenticated'}), 401
+
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем user_id по telegram_id
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
+        if not user:
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
+
+        user_id = user['id']
 
         # Находим канал
-        channel = Channel.query.filter_by(
-            id=channel_id,
-            owner_id=g.current_user_id
-        ).first()
-
+        cursor.execute("SELECT * FROM channels WHERE id = ? AND owner_id = ?", (channel_id, user_id))
+        channel = cursor.fetchone()
         if not channel:
-            return jsonify({
-                'error': 'Channel not found or access denied'
-            }), 404
+            conn.close()
+            return jsonify({'error': 'Channel not found or access denied'}), 404
 
-        # Проверяем активные отклики
-        active_responses = Response.query.filter_by(
-            channel_id=channel_id,
-            status='pending'
-        ).count()
+        # Проверяем активные отклики (pending responses)
+        cursor.execute("SELECT COUNT(*) as cnt FROM offer_responses WHERE channel_id = ? AND status = 'pending'", (channel_id,))
+        active_responses = cursor.fetchone()['cnt']
 
         if active_responses > 0:
+            conn.close()
             return jsonify({
                 'error': 'Cannot delete channel with pending responses',
                 'active_responses_count': active_responses,
@@ -358,20 +283,22 @@ def delete_channel(channel_id):
             }), 400
 
         # Удаляем связанные отклики
-        Response.query.filter_by(channel_id=channel_id).delete()
+        cursor.execute("DELETE FROM offer_responses WHERE channel_id = ?", (channel_id,))
 
         # Удаляем канал
-        channel_name = channel.channel_name
-        db.session.delete(channel)
-        db.session.commit()
+        channel_name = channel['title']
+        cursor.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
+
+        conn.commit()
+        conn.close()
 
         current_app.logger.info(
-            f"Channel {channel_id} ({channel_name}) deleted by user {g.telegram_user_id}"
+            f"Channel {channel_id} ({channel_name}) deleted by user {telegram_user_id}"
         )
 
         return jsonify({
             'success': True,
-            'message': f'Channel "{channel_name}" deleted successfully'
+            'message': f'Channel \"{channel_name}\" deleted successfully'
         })
 
     except Exception as e:
@@ -1156,7 +1083,7 @@ def verify_channel_endpoint(channel_id):
         logger.info(f"🔍 Проверяем {channel_username} с кодом {verification_code}")
 
         # Вызываем сервис верификации
-        verification_result = verify_channel(channel_username, verification_code)
+        verification_result = TelegramVerificationService.verify_channel(channel_username, verification_code)
 
         if verification_result.get('success') and verification_result.get('found'):
             # Обновляем статус
@@ -1227,8 +1154,6 @@ def debug_channel(channel_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-
-
 def extract_username_from_url(url):
     """Извлекает username из различных форматов URL Telegram"""
     # Убираем пробелы
@@ -1256,7 +1181,6 @@ def extract_username_from_url(url):
     # Если ничего не найдено, возвращаем как есть
     logger.warning(f"⚠️ Не удалось извлечь username из: {url}")
     return url.lstrip('@')
-
 
 def get_db_connection():
     """Получение соединения с базой данных"""

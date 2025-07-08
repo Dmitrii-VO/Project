@@ -563,33 +563,55 @@ def register_system_routes(app: Flask) -> None:
             return jsonify({'ok': True})
 
     def handle_forwarded_message(update):
-        """Обработка пересланных сообщений для верификации"""
+        """Обработка пересланных сообщений для верификации с расширенным логом"""
         try:
-            message = update['message']
+            message = update.get('message', {})
             forwarded_chat = message.get('forward_from_chat', {})
-            chat_id = str(forwarded_chat.get('id', ''))
             text = message.get('text', '')
-            
-            if chat_id and text:
-                # Логика верификации через пересланные сообщения
+
+            logger.info("📨 Получено пересланное сообщение:")
+            logger.info(f"  🔹 Текст: {text}")
+            logger.info(f"  🔹 forward_from_chat: {forwarded_chat}")
+
+            chat_id = str(forwarded_chat.get('id', ''))
+            username = forwarded_chat.get('username', '')
+
+            result = None
+
+            if chat_id:
+                logger.info(f"🔍 Пытаемся найти канал по telegram_id = {chat_id}")
                 result = execute_db_query(
                     "SELECT * FROM channels WHERE telegram_id = ? AND is_verified = 0",
                     (chat_id,),
                     fetch_one=True
                 )
-                
-                if result and result['verification_code'] in text:
-                    execute_db_query(
-                        "UPDATE channels SET is_verified = 1, verified_at = ? WHERE id = ?",
-                        (datetime.utcnow().isoformat(), result['id'])
-                    )
-                    logger.info(f"✅ Канал {result['id']} верифицирован через пересылку")
+
+            if not result and username:
+                logger.info(f"🔍 Пытаемся найти канал по username = {username}")
+                result = execute_db_query(
+                    "SELECT * FROM channels WHERE username = ? AND is_verified = 0",
+                    (username,),
+                    fetch_one=True
+                )
+
+            if not result:
+                logger.warning("❌ Канал не найден в базе по ID или username")
+            elif result['verification_code'] not in text:
+                logger.warning(f"❌ Код верификации не найден в тексте. Ожидали: {result['verification_code']}")
+            else:
+                execute_db_query(
+                    "UPDATE channels SET is_verified = 1, verified_at = ? WHERE id = ?",
+                    (datetime.utcnow().isoformat(), result['id'])
+                )
+                logger.info(f"✅ Канал {result['id']} успешно верифицирован через пересылку")
 
             return jsonify({'ok': True})
 
         except Exception as e:
-            logger.error(f"❌ Ошибка пересылки: {e}")
+            logger.error(f"❌ Ошибка при обработке пересланного сообщения: {e}", exc_info=True)
             return jsonify({'ok': True})
+
+
 
     def handle_callback_query(update):
         """Обработка inline кнопок"""
@@ -716,13 +738,31 @@ def main():
     logger.info(f"📱 BOT_TOKEN: {'✅ Настроен' if AppConfig.BOT_TOKEN else '❌ Отсутствует'}")
     logger.info(f"🗄️ База данных: {AppConfig.DATABASE_PATH}")
     logger.info(f"🌐 Запуск на: http://{host}:{port}")
-    
 
     # Показываем статистику маршрутов
     total_routes = len(list(app.url_map.iter_rules()))
     offers_routes = len([r for r in app.url_map.iter_rules() if '/api/offers' in r.rule])
     logger.info(f"📊 Всего маршрутов: {total_routes} (offers: {offers_routes})")
     logger.info("=" * 60)
+    logger.info(f"📡 WEBAPP_URL = {AppConfig.WEBAPP_URL}")
+
+    # === Установка Webhook для Telegram ===
+    try:
+        bot_token = AppConfig.BOT_TOKEN
+        webhook_url = f"{AppConfig.WEBAPP_URL}/webhook/telegram"
+
+        response = requests.get(
+            f"https://api.telegram.org/bot{bot_token}/setWebhook",
+            params={'url': webhook_url},
+            timeout=10
+        )
+
+        if response.status_code == 200 and response.json().get("ok"):
+            logger.info(f"✅ Webhook успешно установлен: {webhook_url}")
+        else:
+            logger.error(f"❌ Не удалось установить webhook: {response.text}")
+    except Exception as e:
+        logger.error(f"❌ Ошибка установки webhook: {e}")
 
     try:
         app.run(
