@@ -796,7 +796,6 @@ def analyze_channel():
             'error': f'Внутренняя ошибка сервера: {str(e)}'
         }), 500
 
-
 @channels_bp.route('/my', methods=['GET'])
 def get_my_channels():
     """
@@ -804,22 +803,29 @@ def get_my_channels():
     ИСПРАВЛЕНО: убран SQLAlchemy, исправлены имена полей
     """
     try:
-        telegram_user_id = getattr(g, 'telegram_user_id', None)
-        user_id = getattr(g, 'current_user_id', None)
-
-        if not user_id:
+        # Получаем telegram_user_id из заголовков (универсально для фронта)
+        telegram_user_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_user_id:
             return jsonify({'error': 'User not authenticated'}), 401
 
-        current_app.logger.info(f"Получение каналов для пользователя ID: {user_id}")
+        current_app.logger.info(f"Получение каналов для пользователя telegram_id: {telegram_user_id}")
 
-        # ✅ ИСПРАВЛЕНО: Чистый SQLite вместо SQLAlchemy
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
+        # Получаем user_id по telegram_id
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
+        if not user:
+            conn.close()
+            return jsonify({'success': True, 'channels': [], 'total': 0})
+
+        user_id = user['id']
+
         cursor.execute("""
             SELECT id, telegram_id, title, username, subscriber_count, category,
-                   is_verified, verification_code, created_at, status
+                    is_verified, verification_code, created_at, status
             FROM channels
             WHERE owner_id = ?
             ORDER BY created_at DESC
@@ -830,7 +836,6 @@ def get_my_channels():
 
         current_app.logger.info(f"Найдено каналов: {len(channels_data)}")
 
-        # ✅ ИСПРАВЛЕНО: Преобразуем в список словарей с правильными именами полей
         channels_list = []
         for channel in channels_data:
             channel_dict = {
@@ -840,7 +845,6 @@ def get_my_channels():
                 'title': channel['title'] or 'Неизвестный канал',
                 'channel_username': channel['username'],
                 'username': channel['username'],
-                # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
                 'subscriber_count': channel['subscriber_count'] or 0,
                 'category': channel['category'] or 'other',
                 'price_per_post': 0.0,

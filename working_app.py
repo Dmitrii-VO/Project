@@ -63,7 +63,7 @@ def create_app() -> Flask:
 def register_blueprints(app: Flask) -> None:
     """Регистрация Blueprint'ов"""
     app.register_blueprint(offers_bp, url_prefix='/api/offers')
-    app.register_blueprint(main_bp, url_prefix='/routers/main_router')
+    app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
 
 
