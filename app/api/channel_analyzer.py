@@ -394,40 +394,19 @@ class TelegramChannelAnalyzer:
             return "Низкое"
     
     async def analyze_channel(self, channel_url: str) -> Dict[str, Any]:
-        username = None  # Объявляем переменную в начале
-        
         try:
             # Парсим URL
             username = self.parse_channel_url(channel_url)
             if not username:
-                return {
-                    'success': False,
-                    'error': 'Неверный формат ссылки на канал'
-                }
+                return {'success': False, 'error': 'Неверный формат ссылки на канал'}
             
-            # ✅ ВАЛИДАЦИЯ username ПОСЛЕ его объявления
-            if len(username) < 3 or len(username) > 32:
-                logger.warning(f"❌ Невалидный username: '{username}'")
-                return {
-                    'success': False,
-                    'error': f'Невалидное имя канала: {username}'
-                }
-            
-            if not re.match(r'^[a-zA-Z0-9_]+$', username):
-                logger.warning(f"❌ Username содержит недопустимые символы: '{username}'")
-                return {
-                    'success': False,
-                    'error': f'Имя канала содержит недопустимые символы: {username}'
-                }
-            
-            logger.info(f"🔍 АНАЛИЗИРУЕМ: @{username}")
+            logger.info(f"🔍 Анализируем: @{username}")
             
             # Проверяем кэш
             cache_key = f"channel_{username}"
             if cache_key in self.cache:
                 cached_data, timestamp = self.cache[cache_key]
                 if datetime.now().timestamp() - timestamp < self.cache_ttl:
-                    logger.info(f"✅ Кэш для @{username}")
                     return cached_data
             
             # Инициализируем переменные
@@ -437,71 +416,47 @@ class TelegramChannelAnalyzer:
             data_source = 'not_found'
             
             # ШАГ 1: Bot API
-            logger.info(f"🤖 Пробуем Bot API...")
             try:
                 api_data = await self.get_channel_info_via_api(username)
                 if api_data:
                     title = api_data.get('title', '').strip()
                     description = api_data.get('description', '').strip()
-                    
-                    # ✅ ИСПРАВЛЕНО: Читаем member_count вместо members_count
                     member_count = api_data.get('member_count', 0)
-                    
-                    logger.info(f"📊 Bot API данные: title='{title}', member_count={member_count}")
                     
                     if member_count is not None:
                         base_subscriber = member_count
                         data_source = 'bot_api'
                         logger.info(f"✅ Bot API: {base_subscriber} подписчиков")
-                    else:
-                        logger.warning(f"⚠️ Bot API: member_count = {member_count} (нет данных о подписчиках)")
             except Exception as e:
-                logger.warning(f"⚠️ Bot API ошибка: {e}")
+                logger.warning(f"Bot API ошибка: {e}")
             
-            # ШАГ 2: Веб-скрапинг (только если Bot API не дал результат)
+            # ШАГ 2: Веб-скрапинг (если Bot API не дал результат)
             if not base_subscriber:
-                logger.info(f"🕷️ Пробуем веб-скрапинг...")
                 try:
                     scraped_data = self.get_channel_info_via_scraping(username)
                     if scraped_data:
-                        # Обновляем title и description если их нет
                         if not title:
                             title = scraped_data.get('title', '').strip()
                         if not description:
                             description = scraped_data.get('description', '').strip()
                         
-                        # Ищем подписчиков
                         if scraped_data.get('raw_subscriber_count', 0) > 0:
                             base_subscriber = scraped_data['raw_subscriber_count']
                             data_source = 'scraping'
                             logger.info(f"✅ Скрапинг: {base_subscriber} подписчиков")
                 except Exception as e:
-                    logger.error(f"❌ Скрапинг ошибка: {e}")
+                    logger.error(f"Скрапинг ошибка: {e}")
             
             # ШАГ 3: Формируем результат
-            if not base_subscriber:
-                logger.warning(f"❌ НЕ НАЙДЕНЫ реальные данные для @{username}")
-            
-            # Генерируем статистику
             stats = self.generate_realistic_stats(username, base_subscriber)
             
             # Добавляем найденные данные
-            if title and title.strip():
+            if title:
                 stats['title'] = title
-            if description and description.strip():
+            if description:
                 stats['description'] = description
             
             stats['data_source'] = data_source
-            
-            # ✅ ФИНАЛЬНАЯ ПРОВЕРКА: предотвращаем безумные числа
-            final_count = stats.get('subscriber_count', 0)
-            if final_count > 10000000000:  # Больше 10М
-                logger.error(f"🚨 ОБНАРУЖЕНО БЕЗУМНОЕ ЧИСЛО: {final_count}! Обнуляем.")
-                # Обнуляем все поля подписчиков
-                for field in ['subscribers', 'subscriber_count', 'raw_subscriber_count', 'member_count', 'subscribers_count']:
-                    stats[field] = 0
-                stats['data_source'] = 'error_corrected'
-                final_count = 0
             
             result = {
                 'success': True,
@@ -512,21 +467,15 @@ class TelegramChannelAnalyzer:
             # Кэшируем
             self.cache[cache_key] = (result, datetime.now().timestamp())
             
-            logger.info(f"🎯 РЕЗУЛЬТАТ: @{username} = {final_count} подписчиков ({data_source})")
+            logger.info(f"🎯 Результат: @{username} = {stats.get('subscriber_count', 0)} подписчиков ({data_source})")
             
             return result
             
         except Exception as e:
-            error_msg = f"Ошибка анализа канала: {str(e)}"
-            logger.error(f"❌ {error_msg}")
-            
-            # Безопасное имя для ошибки
-            safe_username = username if username else 'unknown'
-            
+            logger.error(f"Ошибка анализа: {e}")
             return {
                 'success': False,
-                'error': error_msg,
-                'username': safe_username
+                'error': f'Ошибка анализа канала: {str(e)}'
             }
 
 # Создаем глобальный экземпляр анализатора
