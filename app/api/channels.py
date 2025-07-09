@@ -215,7 +215,6 @@ def get_channel(channel_id):
             'channel_id': channel['telegram_id'],
             'channel_name': channel['title'],
             'channel_username': channel['username'],
-            # ✅ ИСПРАВЛЕНО: subscriber_count вместо subscribers_count
             'subscriber_count': channel['subscriber_count'] or 0,
             'category': channel['category'],
             'description': channel.get('description', ''),
@@ -842,10 +841,13 @@ def add_channel():
 
         # ✅ ИНИЦИАЛИЗИРУЕМ subscriber_count ИЗ ДАННЫХ
         subscriber_count = data.get('subscriber_count', 0)
-        
+
         # Проверяем разные варианты передачи данных о подписчиках
         possible_subscriber_fields = [
-            'subscriber_count', 'subscribers_count', 'raw_subscriber_count', 'member_count'
+            'subscriber_count',     # Основное поле для БД
+            'subscribers_count',    # Для совместимости 
+            'raw_subscriber_count', # Из анализатора
+            'member_count'          # ✅ ДОБАВИТЬ: Из Bot API
         ]
 
         for field in possible_subscriber_fields:
