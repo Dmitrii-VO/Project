@@ -5,64 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Аналитика - Telegram Mini App</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Существующие стили -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/offers.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/offers_management.css') }}">
+    
+    <!-- Chart.js для графиков -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    
     <style>
-        /* ТОЧНО ТЕ ЖЕ CSS ПЕРЕМЕННЫЕ, ЧТО В INDEX.HTML */
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-            --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-
-            --primary-color: #667eea;
-            --secondary-color: #764ba2;
-            --success-color: #4facfe;
-            --warning-color: #ff9a56;
-            --danger-color: #ff6b6b;
-
-            --text-primary: #2d3748;
-            --text-secondary: #718096;
-            --text-muted: #a0aec0;
-            --bg-primary: #ffffff;
-            --bg-secondary: #f7fafc;
-            --border-color: #e2e8f0;
-
-            --border-radius: 12px;
-            --border-radius-sm: 6px;
-            --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: var(--font-family);
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 12px;
-        }
-
-        /* HERO SECTION В СТИЛЕ INDEX.HTML */
+        /* Стили для страницы аналитики */
         .hero-section {
-            text-align: center;
-            padding: 24px 16px;
-            background: var(--primary-gradient);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
+            padding: 20px;
             border-radius: var(--border-radius);
-            margin-bottom: 20px;
+            margin-bottom: 24px;
+            text-align: center;
             position: relative;
             overflow: hidden;
         }
@@ -129,7 +91,7 @@
             transform: translateY(-50%) scale(1.05);
         }
 
-        /* STATS GRID В СТИЛЕ INDEX.HTML */
+        /* STATS GRID */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -189,7 +151,7 @@
             letter-spacing: 0.5px;
         }
 
-        /* NAVIGATION GRID В СТИЛЕ INDEX.HTML */
+        /* NAVIGATION GRID */
         .navigation-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -243,15 +205,14 @@
             opacity: 0.8;
             margin: 0;
             font-size: 12px;
-            line-height: 1.4;
         }
 
         /* CHARTS CONTAINER */
         .charts-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 16px;
-            margin-bottom: 24px;
+            gap: 20px;
+            margin-bottom: 32px;
         }
 
         .chart-card {
@@ -264,37 +225,42 @@
 
         .chart-header {
             margin-bottom: 16px;
-            text-align: center;
         }
 
         .chart-title {
             font-size: 18px;
             font-weight: 700;
-            color: var(--text-primary);
+            color: #2d3748;
             margin-bottom: 4px;
         }
 
         .chart-subtitle {
-            color: var(--text-secondary);
+            color: #718096;
             font-size: 14px;
+            margin: 0;
+        }
+
+        .chart-container {
+            height: 300px;
+            position: relative;
         }
 
         .chart-placeholder {
-            height: 200px;
-            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
-            border-radius: var(--border-radius-sm);
+            height: 300px;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: var(--text-muted);
-            font-size: 14px;
-            border: 2px dashed var(--border-color);
+            background: #f7fafc;
+            border-radius: var(--border-radius-sm);
+            color: #a0aec0;
+            font-size: 18px;
+            font-weight: 600;
         }
 
-        /* LOADING */
+        /* LOADING STATES */
         .loading {
-            color: var(--text-muted);
-            font-size: 12px;
+            color: #a0aec0;
+            font-size: 14px;
             animation: pulse 1.5s infinite;
         }
 
@@ -303,7 +269,6 @@
             50% { opacity: 0.5; }
         }
 
-        /* ANIMATIONS */
         @keyframes bounceIn {
             0% { transform: scale(0.3); opacity: 0; }
             50% { transform: scale(1.05); }
@@ -312,133 +277,14 @@
         }
 
         @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        /* МОБИЛЬНАЯ АДАПТИВНОСТЬ КАК В INDEX.HTML */
+        /* RESPONSIVE */
         @media (max-width: 768px) {
             .container {
                 padding: 8px;
-            }
-
-            .hero-section {
-                padding: 16px 12px;
-                margin-bottom: 16px;
-                border-radius: 8px;
-            }
-
-            .hero-icon {
-                font-size: 2rem;
-                margin-bottom: 8px;
-            }
-
-            .hero-title {
-                font-size: 24px;
-                margin-bottom: 6px;
-                line-height: 1.3;
-            }
-
-            .hero-subtitle {
-                font-size: 14px;
-                line-height: 1.4;
-            }
-
-            .back-btn {
-                left: 12px;
-                padding: 6px 10px;
-                font-size: 12px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 8px;
-                margin-bottom: 20px;
-            }
-
-            .stat-card {
-                padding: 12px;
-                border-radius: 8px;
-            }
-
-            .stat-icon {
-                font-size: 1.25rem;
-                margin-bottom: 6px;
-            }
-
-            .stat-number {
-                font-size: 18px;
-                margin-bottom: 4px;
-                min-height: 24px;
-            }
-
-            .stat-label {
-                font-size: 10px;
-                font-weight: 500;
-            }
-
-            .navigation-grid {
-                grid-template-columns: 1fr;
-                gap: 8px;
-                margin-bottom: 16px;
-            }
-
-            .nav-card {
-                padding: 12px;
-                gap: 8px;
-                border-radius: 8px;
-            }
-
-            .nav-card:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            }
-
-            .nav-icon {
-                font-size: 1.25rem;
-                width: 20px;
-            }
-
-            .nav-content h3 {
-                font-size: 14px;
-                margin-bottom: 2px;
-                line-height: 1.3;
-            }
-
-            .nav-content p {
-                font-size: 11px;
-                line-height: 1.4;
-            }
-
-            .charts-container {
-                grid-template-columns: 1fr;
-                gap: 12px;
-            }
-
-            .chart-card {
-                padding: 16px;
-            }
-
-            .chart-placeholder {
-                height: 150px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .container {
-                padding: 6px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 6px;
-                margin-bottom: 16px;
             }
 
             .hero-section {
@@ -453,43 +299,40 @@
                 font-size: 20px;
             }
 
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 8px;
+                margin-bottom: 20px;
+            }
+
+            .stat-card {
+                padding: 12px;
+                border-radius: 8px;
+            }
+
+            .navigation-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+                margin-bottom: 16px;
+            }
+
             .nav-card {
-                padding: 8px;
-                gap: 6px;
+                padding: 12px;
+                gap: 8px;
+                border-radius: 8px;
             }
 
-            .stat-card {
-                padding: 8px;
+            .charts-container {
+                grid-template-columns: 1fr;
+                gap: 12px;
             }
 
-            .stat-icon {
-                margin-bottom: 4px;
+            .chart-card {
+                padding: 16px;
             }
 
-            .stat-number {
-                margin-bottom: 2px;
-            }
-        }
-
-        /* Touch устройства */
-        @media (max-width: 768px) {
-            .nav-card,
-            .stat-card {
-                min-height: 44px;
-                touch-action: manipulation;
-            }
-
-            @media (hover: none) {
-                .nav-card:hover,
-                .stat-card:hover {
-                    transform: none;
-                    box-shadow: inherit;
-                }
-            }
-
-            body {
-                -webkit-text-size-adjust: 100%;
-                -ms-text-size-adjust: 100%;
+            .chart-placeholder {
+                height: 200px;
             }
         }
     </style>
@@ -583,83 +426,45 @@
                     <h3 class="chart-title">Динамика просмотров</h3>
                     <p class="chart-subtitle">За последние 30 дней</p>
                 </div>
-                <div class="chart-placeholder">
-                    📈 График будет загружен
+                <div class="chart-container">
+                    <canvas id="viewsChart"></canvas>
                 </div>
             </div>
 
             <div class="chart-card">
                 <div class="chart-header">
-                    <h3 class="chart-title">Распределение доходов</h3>
-                    <p class="chart-subtitle">По каналам</p>
+                    <h3 class="chart-title">Статусы предложений</h3>
+                    <p class="chart-subtitle">Распределение откликов</p>
                 </div>
-                <div class="chart-placeholder">
-                    🥧 Круговая диаграмма
-                </div>
-            </div>
-
-            <div class="chart-card">
-                <div class="chart-header">
-                    <h3 class="chart-title">Эффективность офферов</h3>
-                    <p class="chart-subtitle">CTR по категориям</p>
-                </div>
-                <div class="chart-placeholder">
-                    📊 Столбчатая диаграмма
+                <div class="chart-container">
+                    <canvas id="proposalsChart"></canvas>
                 </div>
             </div>
 
             <div class="chart-card">
                 <div class="chart-header">
-                    <h3 class="chart-title">Прогноз доходов</h3>
-                    <p class="chart-subtitle">На следующий месяц</p>
+                    <h3 class="chart-title">Расходы по дням</h3>
+                    <p class="chart-subtitle">Динамика трат</p>
                 </div>
-                <div class="chart-placeholder">
-                    📅 Прогнозная модель
+                <div class="chart-container">
+                    <canvas id="spendingChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Эффективность</h3>
+                    <p class="chart-subtitle">Ключевые показатели</p>
+                </div>
+                <div class="chart-container">
+                    <canvas id="efficiencyChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Telegram WebApp initialization
-        if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand();
-        }
-       
-        // Navigation functionality
-        function showSection(section) {
-            // Remove active class from all nav cards
-            document.querySelectorAll('.nav-card').forEach(card => {
-                card.classList.remove('active');
-            });
-
-            // Add active class to clicked card
-            event.currentTarget.classList.add('active');
-
-            console.log('Showing section:', section);
-
-            // Here you would typically load data for the selected section
-            // For now, just log the action
-        }
-
-        // Mock data loading
-        function loadAnalyticsData() {
-            // Simulate loading delay
-            setTimeout(() => {
-                document.getElementById('total-views').innerHTML = '1,234,567';
-                document.getElementById('click-rate').innerHTML = '3.45%';
-                document.getElementById('total-revenue').innerHTML = '₽ 45,230';
-                document.getElementById('conversion-rate').innerHTML = '2.1%';
-            }, 1000);
-        }
-
-        // Initialize analytics data
-        document.addEventListener('DOMContentLoaded', function() {
-            loadAnalyticsData();
-        });
-    </script>
+    <!-- Подключение скриптов -->
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
 </body>
 </html>
