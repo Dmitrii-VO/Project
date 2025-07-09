@@ -239,7 +239,6 @@ def get_channel(channel_id):
         current_app.logger.error(f"Error getting channel {channel_id}: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-
 @channels_bp.route('/<int:channel_id>', methods=['DELETE'])
 def delete_channel(channel_id):
     try:
@@ -305,7 +304,6 @@ def delete_channel(channel_id):
             'error': 'Internal server error'
         }), 500
 
-
 @channels_bp.route('/<int:channel_id>/responses', methods=['GET'])
 def get_channel_responses(channel_id):
     """
@@ -365,7 +363,6 @@ def get_channel_responses(channel_id):
     except Exception as e:
         current_app.logger.error(f"Error getting channel responses: {e}")
         return jsonify({'error': 'Internal server error'}), 500
-
 
 @channels_bp.route('/<int:channel_id>/responses/<int:response_id>', methods=['PUT'])
 def update_response_status(channel_id, response_id):
@@ -792,7 +789,6 @@ def get_my_channels():
         current_app.logger.error(f"Error getting my channels: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-
 @channels_bp.route('/<int:channel_id>/update-stats', methods=['PUT', 'POST'])
 def update_channel_stats(channel_id):
     """Обновление статистики канала данными от фронтенда"""
@@ -826,7 +822,6 @@ def update_channel_stats(channel_id):
         conn.close()
         return jsonify({'success': False, 'error': 'Канал не найден'}), 404
     logger.info(f"✅ Канал найден: {channel['title']} (ID: {channel_id})")
-
 
 @channels_bp.route('', methods=['POST'])
 def add_channel():
@@ -1036,7 +1031,6 @@ def add_channel():
             'error': f'Внутренняя ошибка сервера: {str(e)}'
         }), 500
 
-
 @channels_bp.route('/<int:channel_id>/verify', methods=['PUT', 'POST'])
 def verify_channel_endpoint(channel_id):
     """Верификация канала"""
@@ -1127,7 +1121,6 @@ def verify_channel_endpoint(channel_id):
     except Exception as e:
         logger.error(f"❌ Ошибка верификации: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
-
 
 @channels_bp.route('/debug/<int:channel_id>', methods=['GET'])
 def debug_channel(channel_id):

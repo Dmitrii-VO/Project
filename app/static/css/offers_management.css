@@ -1,0 +1,784 @@
+/* app/static/css/offers_management.css */
+/* Стили для управления офферами - используем существующие переменные */
+
+/* === МОДАЛЬНЫЕ ОКНА === */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--transition);
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.modal-overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+.modal-content {
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    max-width: 500px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    transform: scale(0.9) translateY(20px);
+    transition: var(--transition);
+}
+
+.modal-overlay.active .modal-content {
+    transform: scale(1) translateY(0);
+}
+
+.modal-content.large-modal {
+    max-width: 800px;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 24px 0;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 24px;
+}
+
+.modal-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: var(--transition);
+}
+
+.modal-close:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 0 24px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-top: 1px solid var(--border-color);
+    margin-top: 24px;
+    gap: 16px;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.selected-info {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* === ИНФОРМАЦИЯ ОБ ОФФЕРЕ === */
+.offer-info {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    padding: 20px;
+    margin-bottom: 24px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.offer-info h3 {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-size: 18px;
+}
+
+.offer-info p {
+    margin: 4px 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* === ФИЛЬТРЫ КАНАЛОВ === */
+.channels-filters {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+}
+
+.filter-group {
+    flex: 1;
+}
+
+.filter-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.form-select,
+.form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    font-size: 14px;
+    transition: var(--transition);
+    background: var(--bg-primary);
+}
+
+.form-select:focus,
+.form-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* === СПИСОК КАНАЛОВ === */
+.channels-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.channel-card {
+    background: var(--bg-primary);
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    padding: 16px;
+    transition: var(--transition);
+    cursor: pointer;
+}
+
+.channel-card:hover {
+    border-color: var(--primary-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.channel-card.selected {
+    border-color: var(--primary-color);
+    background: rgba(102, 126, 234, 0.05);
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.channel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.channel-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    cursor: pointer;
+}
+
+.channel-select-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-color);
+    cursor: pointer;
+}
+
+.channel-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+.verified-badge {
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.compatibility-score {
+    font-size: 12px;
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+.channel-info {
+    margin-bottom: 12px;
+}
+
+.channel-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    font-size: 12px;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.channel-link {
+    margin-bottom: 8px;
+}
+
+.channel-link a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.channel-link a:hover {
+    text-decoration: underline;
+}
+
+.channel-description {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.channel-status {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.proposal-status {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.proposal-status.status-not-sent {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.proposal-status.status-sent {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.proposal-status.status-accepted {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.proposal-status.status-rejected {
+    background: #ffebee;
+    color: #c62828;
+}
+
+.proposal-status.status-expired {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+/* === ДЕТАЛИ ОФФЕРА === */
+.offer-details-tabs {
+    width: 100%;
+}
+
+.tab-nav {
+    display: flex;
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 24px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px 16px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    border-bottom: 2px solid transparent;
+}
+
+.tab-btn.active {
+    color: var(--primary-color);
+    border-bottom-color: var(--primary-color);
+}
+
+.tab-btn:hover {
+    color: var(--primary-color);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* === СТАТИСТИКА === */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.stat-card {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-left: 4px solid var(--primary-color);
+}
+
+.stat-icon {
+    font-size: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    background: var(--primary-color);
+    color: white;
+    border-radius: 50%;
+}
+
+.stat-number {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* === ПРОГРЕСС-БАРЫ === */
+.offer-progress {
+    margin-top: 24px;
+}
+
+.progress-item {
+    margin-bottom: 16px;
+}
+
+.progress-label {
+    font-size: 14px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--border-color);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 4px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+.progress-fill.danger {
+    background: var(--danger-color);
+}
+
+.progress-value {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: right;
+}
+
+/* === СПИСОК ПРЕДЛОЖЕНИЙ === */
+.proposals-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.proposal-card {
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+    padding: 16px;
+    border-left: 4px solid var(--border-color);
+}
+
+.proposal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.proposal-header h4 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 16px;
+}
+
+.proposal-content {
+    margin-bottom: 12px;
+}
+
+.proposal-stats {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.rejection-reason {
+    background: rgba(255, 107, 107, 0.1);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    color: var(--danger-color);
+    margin-bottom: 8px;
+}
+
+.post-link a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.post-link a:hover {
+    text-decoration: underline;
+}
+
+.proposal-meta {
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.meta-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.meta-item.marked {
+    color: var(--warning-color);
+    font-weight: 500;
+}
+
+/* === АНАЛИТИКА === */
+.analytics-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.analytics-section h3 {
+    margin-bottom: 16px;
+    color: var(--text-primary);
+    font-size: 18px;
+}
+
+.analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+}
+
+.analytics-item {
+    text-align: center;
+    padding: 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+}
+
+.analytics-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.analytics-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.top-channels {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.top-channel-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: var(--bg-secondary);
+    border-radius: var(--border-radius-sm);
+}
+
+.channel-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.channel-info strong {
+    color: var(--text-primary);
+}
+
+.channel-info span {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.channel-performance {
+    font-weight: 500;
+    color: var(--primary-color);
+}
+
+/* === УВЕДОМЛЕНИЯ === */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--bg-primary);
+    border-radius: var(--border-radius-sm);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    z-index: 1100;
+    transform: translateX(100%);
+    transition: var(--transition);
+    border-left: 4px solid var(--primary-color);
+}
+
+.notification.show {
+    transform: translateX(0);
+}
+
+.notification.success {
+    border-left-color: var(--success-color);
+}
+
+.notification.error {
+    border-left-color: var(--danger-color);
+}
+
+.notification-icon {
+    font-size: 16px;
+}
+
+.notification-message {
+    font-size: 14px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+/* === ЗАГРУЗКА === */
+.loading-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 40px;
+}
+
+.loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border-color);
+    border-top: 3px solid var(--primary-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* === СТАТУСЫ ОФФЕРОВ === */
+.offer-status.status-draft {
+    background: #f0f0f0;
+    color: #666;
+}
+
+.offer-status.status-matching {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.offer-status.status-started {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.offer-status.status-active {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.offer-status.status-completed {
+    background: #e8f5e8;
+    color: #2e7d32;
+}
+
+.offer-status.status-cancelled {
+    background: #ffebee;
+    color: #c62828;
+}
+
+/* === АДАПТИВНОСТЬ === */
+@media (max-width: 768px) {
+    .modal-content {
+        margin: 10px;
+        max-width: none;
+        width: auto;
+    }
+    
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: 16px;
+    }
+    
+    .channels-filters {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .channel-stats {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .analytics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .top-channel-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .modal-actions {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* === УЛУЧШЕНИЯ КНОПОК === */
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn:disabled:hover {
+    transform: none;
+}
+
+/* === АНИМАЦИИ === */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.channel-card {
+    animation: fadeInUp 0.3s ease;
+}
+
+.proposal-card {
+    animation: fadeInUp 0.3s ease;
+}
+
+/* === SCROLLBAR === */
+.channels-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.channels-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.channels-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.channels-list::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}

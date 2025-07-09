@@ -18,6 +18,9 @@ from app.api.channels import channels_bp
 import requests
 from flask import Flask, jsonify, request, render_template
 from app.api.channel_analyzer import analyzer_bp
+from app.api.offers_management import offers_management_bp
+from app.api.proposals_management import proposals_management_bp
+from app.api.monitoring_statistics import monitoring_statistics_bp
 
 # Загрузка переменных окружения
 try:
@@ -66,6 +69,11 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
     app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
+    app.register_blueprint(offers_management_bp, url_prefix='/api/offers_management')
+    app.register_blueprint(proposals_management_bp, url_prefix='/api/proposals_management')
+    app.register_blueprint(monitoring_statistics_bp, url_prefix='/api/monitoring_statistics')
+                           
+
 
 # === MIDDLEWARE ===
 def register_middleware(app: Flask) -> None:
