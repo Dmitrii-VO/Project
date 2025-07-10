@@ -460,37 +460,40 @@ def register_system_routes(app: Flask) -> None:
     # === WEBHOOK МАРШРУТЫ ===
 
     @app.route('/webhook/telegram', methods=['POST'])
-    def telegram_webhook():
-        """
-        ЕДИНЫЙ WEBHOOK для всех типов Telegram обновлений
-        Маршрутизирует обновления по типам в соответствующие обработчики
-        """
+    def webhook():
+        """Обработчик webhook от Telegram"""
         try:
             update = request.get_json()
             
             if not update:
+                logger.warning("🚫 Пустой webhook")
                 return jsonify({'ok': True})
-
-            logger.info(f"🔔 Получено Telegram обновление: {update.get('update_id', 'unknown')}")
             
-            # === ОБРАБОТКА ПЛАТЕЖЕЙ ===
-            if 'pre_checkout_query' in update or ('message' in update and 'successful_payment' in update.get('message', {})):
-                logger.info("💳 Обрабатываем платежное обновление")
-                return handle_payment_webhook(update)
-                       
-            # === ОБРАБОТКА ЛИЧНЫХ СООБЩЕНИЙ БОТУ ===
+            logger.info(f"📨 Получен webhook: {update.get('update_id', 'unknown')}")
+            
+            # === ОБРАБОТКА СООБЕНИЙ ===
             if 'message' in update:
                 message = update['message']
+                telegram_id = message.get('from', {}).get('id')
+                text = message.get('text', '')
                 
-                # Команда /start
-                if message.get('text') == '/start':
-                    logger.info("🚀 Обрабатываем команду /start")
-                    return handle_start_command(update)
+                if not telegram_id:
+                    return jsonify({'ok': True})
                 
+                # === КОМАНДА /start ===
+                if text == '/start':
+                    return handle_start_command(update)    
+                            
                 # Пересланные сообщения для верификации
                 if 'forward_from_chat' in message:
                     logger.info("📤 Обрабатываем пересланное сообщение")
-                    return handle_forwarded_message(update)
+                    return handle_forwarded_message(update)     
+                           
+                # === ОБРАБОТКА КОМАНД ===
+                if text.startswith('/'):
+                    return handle_command(telegram_id, text)
+                                
+
             
             # === ОБРАБОТКА CALLBACK QUERY ===
             if 'callback_query' in update:
@@ -504,6 +507,47 @@ def register_system_routes(app: Flask) -> None:
         except Exception as e:
             logger.error(f"❌ Ошибка webhook: {e}")
             return jsonify({'ok': True})  # Всегда возвращаем ok для Telegram
+
+    def handle_command(telegram_id: int, text: str) -> dict:
+        """Новый роутер команд"""
+        try:
+            # Извлекаем команду (убираем / и возможные параметры)
+            command = text.strip().split()[0][1:]  # Убираем первый символ "/"
+            
+            logger.info(f"🎯 Обрабатываем команду: /{command} от пользователя {telegram_id}")
+            
+            # Проверяем, что telegram_bot инициализирован
+            if not hasattr(app, 'telegram_bot'):
+                logger.error("❌ telegram_bot не инициализирован")
+                return jsonify({'ok': True})
+            
+            # Обрабатываем команду через TelegramBotExtension
+            response_data = app.telegram_bot.process_command(command, telegram_id)
+            
+            # Отправляем ответ пользователю
+            success = app.telegram_bot.send_telegram_message(telegram_id, response_data)
+            
+            if success:
+                logger.info(f"✅ Команда /{command} успешно обработана")
+            else:
+                logger.error(f"❌ Ошибка отправки ответа на команду /{command}")
+            
+            return jsonify({'ok': True})
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка обработки команды {text}: {e}")
+            
+            # Отправляем сообщение об ошибке пользователю
+            try:
+                error_response = {
+                    'text': "❌ Произошла ошибка при обработке команды. Попробуйте позже.",
+                    'parse_mode': 'HTML'
+                }
+                app.telegram_bot.send_telegram_message(telegram_id, error_response)
+            except:
+                pass
+            
+            return jsonify({'ok': True})
 
     def handle_payment_webhook(update):
         """Обработка платежных обновлений"""
@@ -569,6 +613,46 @@ def register_system_routes(app: Flask) -> None:
             print(f"❌ Update: {update}")
             return {'ok': False}
         
+    @app.route('/api/telegram/set_commands', methods=['POST'])
+    def set_telegram_commands():
+        """Установка команд в меню Telegram бота"""
+        try:
+            if not hasattr(app, 'telegram_bot') or not app.telegram_bot.bot_token:
+                return jsonify({'error': 'BOT_TOKEN не настроен'}), 400
+            
+            # Получаем список команд
+            commands = app.telegram_bot.get_commands_list()
+            
+            # Формируем команды для Telegram API
+            telegram_commands = [
+                {"command": cmd["command"], "description": cmd["description"]}
+                for cmd in commands
+            ]
+            
+            # Добавляем базовые команды
+            telegram_commands.insert(0, {"command": "start", "description": "🚀 Запуск бота"})
+            
+            # Отправляем в Telegram API
+            url = f"https://api.telegram.org/bot{app.telegram_bot.bot_token}/setMyCommands"
+            data = {"commands": telegram_commands}
+            
+            response = requests.post(url, json=data, timeout=10)
+            
+            if response.status_code == 200 and response.json().get('ok'):
+                logger.info(f"✅ Команды установлены в Telegram: {len(telegram_commands)} шт.")
+                return jsonify({
+                    'success': True,
+                    'message': f'Установлено {len(telegram_commands)} команд',
+                    'commands': telegram_commands
+                })
+            else:
+                logger.error(f"❌ Ошибка установки команд: {response.text}")
+                return jsonify({'error': 'Ошибка установки команд в Telegram'}), 500
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка установки команд: {e}")
+            return jsonify({'error': str(e)}), 500   
+             
     def handle_forwarded_message(update):
         """Обработка пересланных сообщений для верификации каналов"""
         try:
