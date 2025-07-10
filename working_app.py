@@ -24,7 +24,7 @@ from app.api.monitoring_statistics import monitoring_statistics_bp
 from app.telegram.telegram_bot_commands import TelegramBotExtension
 from app.telegram.telegram_channel_parser import TelegramChannelParser
 from app.telegram.telegram_notifications import TelegramNotificationService
-from app.utils.notifications import NotificationService
+
 
 
 
@@ -70,7 +70,6 @@ def create_app() -> Flask:
     logger.info("✅ Компоненты приложения инициализированы")
     if AppConfig.TELEGRAM_INTEGRATION and AppConfig.BOT_TOKEN:
         try:
-            app.notеfication_service = NotificationService()
             app.telegram_notifications = TelegramNotificationService()
             app.telegram_parser = TelegramChannelParser()
             app.telegram_bot = TelegramBotExtension()   
@@ -604,7 +603,7 @@ def register_system_routes(app: Flask) -> None:
                 )
             
             # Теперь user содержит актуальные данные (включая фамилию)
-            NotificationService.send_welcome_notification(user)
+            TelegramNotificationService.send_welcome_notification(user)
             
             return {'ok': True}
             
@@ -656,8 +655,7 @@ def register_system_routes(app: Flask) -> None:
     def handle_forwarded_message(update):
         """Обработка пересланных сообщений для верификации каналов"""
         try:
-            from app.utils.notifications import NotificationService  # ← ДОБАВИТЬ
-            
+           
             message = update['message']
             text = message.get('text', '')
             forward_from_chat = message.get('forward_from_chat', {})
@@ -711,7 +709,7 @@ def register_system_routes(app: Flask) -> None:
                         logger.info(f"📨 Отправляем уведомление владельцу канала {result['id']}")
                         
                         # Отправляем уведомление о верификации
-                        notification_result = NotificationService.send_channel_notification(
+                        notification_result = TelegramNotificationService.send_channel_notification(
                             user=owner,
                             channel=result,
                             notification_type='verified'
