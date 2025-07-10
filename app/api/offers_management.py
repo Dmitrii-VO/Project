@@ -438,6 +438,7 @@ def select_channels_endpoint(offer_id: int):
         finally:
             conn.close()
         
+
         # Отправляем уведомления владельцам каналов
         # TODO: Реализовать отправку уведомлений через Telegram Bot
         

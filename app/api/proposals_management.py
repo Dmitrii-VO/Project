@@ -405,15 +405,21 @@ def get_incoming_proposals():
 @proposals_management_bp.route('/<int:proposal_id>/accept', methods=['POST'])
 def accept_proposal(proposal_id: int):
     """
-    Принятие предложения
-    
-    POST /api/proposals/{proposal_id}/accept
-    
+    Принятие предложения  
     Request Body:
     {
         "message": "Дополнительное сообщение (опционально)"
     }
     """
+    # Формируем запрос
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({
+            'error': 'Internal Server Error',
+            'message': 'Ошибка подключения к базе данных'
+        }), 500
+    
+    cursor = conn.cursor()
     try:
         # Получаем ID пользователя из запроса
         user_id = get_user_id_from_request()
@@ -479,7 +485,7 @@ def accept_proposal(proposal_id: int):
         
         # Отправляем уведомление рекламодателю
         send_notification_to_advertiser(proposal_id, 'accepted', message)
-        
+ 
         # Формируем ответ
         response = {
             'success': True,

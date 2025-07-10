@@ -21,6 +21,14 @@ from app.api.channel_analyzer import analyzer_bp
 from app.api.offers_management import offers_management_bp
 from app.api.proposals_management import proposals_management_bp
 from app.api.monitoring_statistics import monitoring_statistics_bp
+from app.telegram.telegram_bot_commands import TelegramBotExtension
+from app.telegram.telegram_channel_parser import TelegramChannelParser
+from app.telegram.telegram_notifications import TelegramNotificationService
+
+
+
+
+
 
 # Загрузка переменных окружения
 try:
@@ -49,7 +57,6 @@ def create_app() -> Flask:
 
     app = Flask(__name__, static_folder= 'app/static', template_folder='templates')
     app.config.from_object(AppConfig)
-
     # Настройка JSON сериализации
     app.json.ensure_ascii = False
     app.json.sort_keys = AppConfig.JSON_SORT_KEYS
@@ -59,7 +66,17 @@ def create_app() -> Flask:
     register_middleware(app)
     register_error_handlers(app)
     register_system_routes(app)
-
+    logger.info("✅ Компоненты приложения инициализированы")
+    if AppConfig.TELEGRAM_INTEGRATION and AppConfig.BOT_TOKEN:
+        try:
+            app.telegram_notifications = TelegramNotificationService()
+            app.telegram_parser = TelegramChannelParser()
+            app.telegram_bot = TelegramBotExtension()   
+            logger.info("✅ Telegram сервисы инициализированы")
+        except Exception as e:
+            logger.error(f"❌ Ошибка инициализации Telegram: {e}") 
+    else:
+        logger.warning("⚠️ Telegram интеграция отключена или BOT_TOKEN не задан")
     return app
 
 # === РЕГИСТРАЦИЯ BLUEPRINTS ===
