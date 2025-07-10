@@ -13,12 +13,14 @@ from typing import Dict, Any, Optional, List
 import os
 import sys
 from urllib.parse import quote
+from app.config.telegram_config import AppConfig
 
 # Добавляем путь для импорта
 sys.path.insert(0, os.getcwd())
 
 logger = logging.getLogger(__name__)
-DATABASE_PATH = 'telegram_mini_app.db'
+
+DATABASE_PATH = AppConfig.DATABASE_PATH
 
 
 class NotificationService:
@@ -88,6 +90,7 @@ class NotificationService:
         except Exception as e:
             logger.error(f"❌ Ошибка отправки уведомления: {e}")
             try:
+                service = NotificationService()
                 service._save_notification_to_db(telegram_id, message, 'error', metadata)
             except:
                 pass
@@ -99,65 +102,107 @@ class NotificationService:
             conn = sqlite3.connect(DATABASE_PATH)
             cursor = conn.cursor()
 
-            # Создаем таблицу уведомлений если не существует
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    telegram_id INTEGER NOT NULL,
-                    message TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'pending',
-                    metadata TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    sent_at DATETIME,
-                    error_message TEXT
-                )
-            ''')
+            # Получаем user_id по telegram_id (используем существующую структуру БД)
+            cursor.execute('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,))
+            user_row = cursor.fetchone()
+            
+            if not user_row:
+                logger.warning(f"⚠️ Пользователь с telegram_id {telegram_id} не найден в БД")
+                conn.close()
+                return
 
-            # Вставляем уведомление
+            user_id = user_row[0]
+
+            # Определяем тип уведомления на основе metadata
+            notification_type = 'system'  # ✅ Разрешенный тип
+            if metadata:
+                notification_type_from_meta = metadata.get('type', 'system')
+                # Маппинг на разрешенные типы
+                type_mapping = {
+                    'welcome': 'system',
+                    'telegram_notification': 'system',
+                    'balance_change': 'payment_received',
+                    'offer_created': 'offer_received',
+                    'offer_new_response': 'offer_received',
+                    'channel_verified': 'channel_verified',
+                    'channel_verification_failed': 'system',
+                    'channel_new_offer': 'offer_received'
+                }
+                notification_type = type_mapping.get(notification_type_from_meta, 'system')
+
+            # Вставляем в существующую таблицу notifications
+            # Структура: id, user_id, type, title, message, data, priority, is_read, created_at
             cursor.execute('''
-                INSERT INTO notifications (telegram_id, message, status, metadata, sent_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO notifications (user_id, type, title, message, data, priority, is_read)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
-                telegram_id,
+                user_id,
+                notification_type,
+                'Уведомление от бота',
                 message,
-                status,
                 json.dumps(metadata) if metadata else None,
-                datetime.now().isoformat() if status == 'sent' else None
+                1,  # Обычный приоритет
+                0   # Непрочитанное
             ))
 
             conn.commit()
             conn.close()
+            logger.info(f"✅ Уведомление сохранено в БД для user_id: {user_id}")
 
         except Exception as e:
-            logger.error(f"Ошибка сохранения уведомления в БД: {e}")
+            logger.error(f"❌ Ошибка сохранения уведомления в БД: {e}")
+            if 'conn' in locals():
+                conn.close()
 
     @staticmethod
     def send_welcome_notification(user) -> bool:
         """Отправка приветственного уведомления новому пользователю"""
         try:
+            if isinstance(user, dict):
+                telegram_id = user.get('telegram_id')
+                first_name = user.get('first_name', '')
+                last_name = user.get('last_name', '')
+                username = user.get('username', '')
+                referral_code = user.get('referral_code', 'REF001')
+            else:
+                telegram_id = getattr(user, 'telegram_id', None)
+                first_name = getattr(user, 'first_name', '')
+                last_name = getattr(user, 'last_name', '')
+                username = getattr(user, 'username', '')
+                referral_code = getattr(user, 'referral_code', 'REF001')
+
+            # Формируем полное имя
+            full_name = []
+            if first_name:
+                full_name.append(first_name)
+            if last_name:
+                full_name.append(last_name)
+            
+            display_name = ' '.join(full_name) if full_name else username or 'пользователь'
+
             welcome_message = f"""
-🎉 <b>Добро пожаловать в платформу рекламы!</b>
+    🎉 <b>Добро пожаловать в платформу рекламы!</b>
 
-Привет, {user.first_name or user.username or 'пользователь'}!
+    Привет, {display_name}!
 
-Вы успешно зарегистрировались. Теперь вы можете:
-• Добавлять свои каналы для монетизации
-• Создавать рекламные предложения  
-• Зарабатывать на размещении рекламы
+    Вы успешно зарегистрировались. Теперь вы можете:
+    - Добавлять свои каналы для монетизации
+    - Создавать рекламные предложения  
+    - Зарабатывать на размещении рекламы
 
-🎁 Ваш реферальный код: {getattr(user, 'referral_code', 'REF001')}
-Приглашайте друзей и получайте бонусы!
+    🎁 Ваш реферальный код: {referral_code}
+    Приглашайте друзей и получайте бонусы!
 
-Начните с добавления вашего первого канала 👇
+    Начните с добавления вашего первого канала 👇
             """
 
             return NotificationService.send_telegram_notification(
-                user.telegram_id,
+                telegram_id,
                 welcome_message,
                 {
                     'type': 'welcome',
-                    'user_id': getattr(user, 'id', None),
-                    'referral_code': getattr(user, 'referral_code', 'REF001')
+                    'user_id': user.get('id') if isinstance(user, dict) else getattr(user, 'id', None),
+                    'referral_code': referral_code
                 }
             )
 
@@ -169,6 +214,18 @@ class NotificationService:
     def send_balance_notification(user, amount: float, transaction_type: str) -> bool:
         """Уведомление об изменении баланса"""
         try:
+            # Получаем telegram_id - поддерживаем как объект, так и dict
+            if hasattr(user, 'telegram_id'):
+                telegram_id = user.telegram_id
+                balance = getattr(user, 'balance', 0)
+                user_id = getattr(user, 'id', None)
+            elif isinstance(user, dict):
+                telegram_id = user.get('telegram_id')
+                balance = user.get('balance', 0)
+                user_id = user.get('id')
+            else:
+                return False
+
             if transaction_type == 'deposit':
                 emoji = "💰"
                 action = "пополнен"
@@ -186,17 +243,17 @@ class NotificationService:
 {emoji} <b>Баланс {action}</b>
 
 Сумма: {abs(amount):,.2f} ₽
-Текущий баланс: {getattr(user, 'balance', 0):,.2f} ₽
+Текущий баланс: {balance:,.2f} ₽
 
 Все операции можно отслеживать в разделе "Платежи".
             """
 
             return NotificationService.send_telegram_notification(
-                user.telegram_id,
+                telegram_id,
                 message,
                 {
                     'type': 'balance_change',
-                    'user_id': getattr(user, 'id', None),
+                    'user_id': user_id,
                     'amount': amount,
                     'transaction_type': transaction_type
                 }
@@ -210,12 +267,22 @@ class NotificationService:
     def send_offer_notification(user, offer, notification_type: str) -> bool:
         """Уведомления о офферах"""
         try:
+            # Получаем telegram_id - поддерживаем как объект, так и dict
+            if hasattr(user, 'telegram_id'):
+                telegram_id = user.telegram_id
+                user_id = getattr(user, 'id', None)
+            elif isinstance(user, dict):
+                telegram_id = user.get('telegram_id')
+                user_id = user.get('id')
+            else:
+                return False
+
             if notification_type == 'created':
                 message = f"""
 🚀 <b>Оффер создан!</b>
 
-📢 <b>Название:</b> {offer.title}
-💰 <b>Бюджет:</b> {getattr(offer, 'budget', 0)} ₽
+📢 <b>Название:</b> {getattr(offer, 'title', 'Без названия')}
+💰 <b>Бюджет:</b> {getattr(offer, 'budget', getattr(offer, 'price', 0))} ₽
 🎯 <b>Целевая аудитория:</b> {getattr(offer, 'target_audience', 'Не указана')}
 
 Ваш оффер опубликован и доступен владельцам каналов.
@@ -224,22 +291,22 @@ class NotificationService:
                 message = f"""
 📩 <b>Новый отклик на ваш оффер!</b>
 
-📢 <b>Оффер:</b> {offer.title}
+📢 <b>Оффер:</b> {getattr(offer, 'title', 'Без названия')}
 👤 <b>Канал:</b> {getattr(offer, 'channel_name', 'Неизвестный канал')}
 💰 <b>Предложенная цена:</b> {getattr(offer, 'proposed_price', 0)} ₽
 
 Проверьте детали в приложении.
                 """
             else:
-                message = f"📋 Обновление по офферу: {offer.title}"
+                message = f"📋 Обновление по офферу: {getattr(offer, 'title', 'Без названия')}"
 
             return NotificationService.send_telegram_notification(
-                user.telegram_id,
+                telegram_id,
                 message,
                 {
                     'type': f'offer_{notification_type}',
                     'offer_id': getattr(offer, 'id', None),
-                    'user_id': getattr(user, 'id', None)
+                    'user_id': user_id
                 }
             )
 
@@ -251,43 +318,88 @@ class NotificationService:
     def send_channel_notification(user, channel, notification_type: str) -> bool:
         """Уведомления о каналах"""
         try:
+            # Получаем telegram_id пользователя - поддерживаем как объект, так и dict
+            if hasattr(user, 'telegram_id'):
+                telegram_id = user.telegram_id
+                user_id = getattr(user, 'id', None)
+            elif isinstance(user, dict):
+                telegram_id = user.get('telegram_id')
+                user_id = user.get('id')
+            else:
+                return False
+
+            # Получаем данные канала - поддерживаем как объект, так и dict
+            if isinstance(channel, dict):
+                channel_title = channel.get('title', 'Ваш канал')
+                channel_subscriber_count = channel.get('subscriber_count', 0)
+                channel_telegram_id = channel.get('telegram_id')
+                channel_username = channel.get('username')
+                channel_id = channel.get('id')
+            else:
+                channel_title = getattr(channel, 'title', 'Ваш канал')
+                channel_subscriber_count = getattr(channel, 'subscriber_count', 0)
+                channel_telegram_id = getattr(channel, 'telegram_id', None)
+                channel_username = getattr(channel, 'username', None)
+                channel_id = getattr(channel, 'id', None)
+
+            # ✅ ПЫТАЕМСЯ ПОЛУЧИТЬ АКТУАЛЬНЫЕ ДАННЫЕ ИЗ TELEGRAM
+            try:
+                real_channel_data = NotificationService._get_real_channel_data(
+                    channel_telegram_id, channel_username
+                )
+                
+                if real_channel_data:
+                    logger.info(f"✅ Получены актуальные данные канала из Telegram API")
+                    channel_title = real_channel_data.get('title', channel_title)
+                    channel_subscriber_count = real_channel_data.get('member_count', channel_subscriber_count)
+                else:
+                    logger.info(f"⚠️ Используем данные канала из БД")
+                    
+            except Exception as api_error:
+                logger.warning(f"⚠️ Не удалось получить данные из Telegram API: {api_error}")
+
+            # Формируем сообщения с актуальными данными
             if notification_type == 'verified':
                 message = f"""
-✅ <b>Канал верифицирован!</b>
+    ✅ <b>Канал верифицирован!</b>
 
-📺 <b>Канал:</b> {getattr(channel, 'title', 'Ваш канал')}
-👥 <b>Подписчиков:</b> {getattr(channel, 'subscriber_count', 0):,}
+    📺 <b>Канал:</b> {channel_title}
+    👥 <b>Подписчиков:</b> {channel_subscriber_count:,}
 
-Теперь вы можете получать предложения от рекламодателей!
+    Теперь вы можете получать предложения от рекламодателей!
                 """
             elif notification_type == 'verification_failed':
+                verification_error = channel.get('verification_error') if isinstance(channel, dict) else getattr(channel, 'verification_error', 'Проверьте код верификации')
                 message = f"""
-❌ <b>Верификация канала не пройдена</b>
+    ❌ <b>Верификация канала не пройдена</b>
 
-📺 <b>Канал:</b> {getattr(channel, 'title', 'Ваш канал')}
-📝 <b>Причина:</b> {getattr(channel, 'verification_error', 'Проверьте код верификации')}
+    📺 <b>Канал:</b> {channel_title}
+    📝 <b>Причина:</b> {verification_error}
 
-Повторите процедуру верификации.
+    Повторите процедуру верификации.
                 """
             elif notification_type == 'new_offer':
+                offer_price = channel.get('offer_price') if isinstance(channel, dict) else getattr(channel, 'offer_price', 0)
                 message = f"""
-💎 <b>Новое предложение для вашего канала!</b>
+    💎 <b>Новое предложение для вашего канала!</b>
 
-📺 <b>Канал:</b> {getattr(channel, 'title', 'Ваш канал')}
-💰 <b>Предложенная цена:</b> {getattr(channel, 'offer_price', 0)} ₽
+    📺 <b>Канал:</b> {channel_title}
+    👥 <b>Подписчиков:</b> {channel_subscriber_count:,}
+    💰 <b>Предложенная цена:</b> {offer_price} ₽
 
-Проверьте детали в приложении.
+    Проверьте детали в приложении.
                 """
             else:
-                message = f"📋 Обновление канала: {getattr(channel, 'title', 'Ваш канал')}"
+                message = f"📋 Обновление канала: {channel_title}"
 
             return NotificationService.send_telegram_notification(
-                user.telegram_id,
+                telegram_id,
                 message,
                 {
                     'type': f'channel_{notification_type}',
-                    'channel_id': getattr(channel, 'id', None),
-                    'user_id': getattr(user, 'id', None)
+                    'channel_id': channel_id,
+                    'user_id': user_id,
+                    'real_data_used': real_channel_data is not None if 'real_channel_data' in locals() else False
                 }
             )
 
@@ -295,6 +407,63 @@ class NotificationService:
             logger.error(f"Ошибка отправки уведомления о канале: {e}")
             return False
 
+    @staticmethod
+    def _get_real_channel_data(channel_telegram_id, channel_username=None):
+        """Получение актуальных данных канала из Telegram Bot API"""
+        try:
+            from app.config.telegram_config import AppConfig
+            import requests
+            
+            if not AppConfig.BOT_TOKEN:
+                return None
+                
+            # Определяем chat_id для запроса
+            chat_id = None
+            if channel_telegram_id:
+                chat_id = channel_telegram_id
+            elif channel_username:
+                chat_id = f"@{channel_username}" if not channel_username.startswith('@') else channel_username
+            
+            if not chat_id:
+                return None
+                
+            # Запрос к Telegram Bot API
+            url = f"https://api.telegram.org/bot{AppConfig.BOT_TOKEN}/getChat"
+            params = {'chat_id': chat_id}
+            
+            response = requests.get(url, params=params, timeout=10)
+            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('ok'):
+                    chat_data = result.get('result', {})
+                    
+                    # Пытаемся получить количество участников (не всегда работает для каналов)
+                    member_count = 0
+                    try:
+                        count_url = f"https://api.telegram.org/bot{AppConfig.BOT_TOKEN}/getChatMemberCount"
+                        count_response = requests.get(count_url, params=params, timeout=10)
+                        if count_response.status_code == 200:
+                            count_result = count_response.json()
+                            if count_result.get('ok'):
+                                member_count = count_result.get('result', 0)
+                    except:
+                        pass
+                    
+                    return {
+                        'title': chat_data.get('title'),
+                        'username': chat_data.get('username'),
+                        'description': chat_data.get('description'),
+                        'member_count': member_count,
+                        'type': chat_data.get('type'),
+                        'invite_link': chat_data.get('invite_link')
+                    }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения данных канала из Telegram API: {e}")
+            return None
 
 # === ФУНКЦИИ ДЛЯ ОБРАТНОЙ СОВМЕСТИМОСТИ ===
 
@@ -338,6 +507,7 @@ def send_contract_notification(contract_id, notification_type, extra_data=None):
         conn.close()
 
         if not data:
+            logger.warning(f"Контракт с ID {contract_id} не найден")
             return
 
         def format_date(date_str):
@@ -355,22 +525,22 @@ def send_contract_notification(contract_id, notification_type, extra_data=None):
             advertiser_msg = f"""📋 <b>Контракт создан!</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>Сумма:</b> {data['price']} RUB
-📺 <b>Канал:</b> {data['channel_title']}
+💰 <b>Сумма:</b> {data.get('price', 0)} RUB
+📺 <b>Канал:</b> {data.get('channel_title', 'Неизвестный канал')}
 👤 <b>Издатель:</b> {data['publisher_name']}
 
-⏰ <b>Срок размещения:</b> {format_date(data['placement_deadline'])}
-🔍 <b>Срок мониторинга:</b> {data['monitoring_duration']} дней
+⏰ <b>Срок размещения:</b> {format_date(data.get('placement_deadline'))}
+🔍 <b>Срок мониторинга:</b> {data.get('monitoring_duration', 7)} дней
 
 📱 Издатель должен разместить рекламу и подать заявку в приложении."""
 
             publisher_msg = f"""✅ <b>Ваш отклик принят! Контракт создан.</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>Оплата:</b> {data['price']} RUB
+💰 <b>Оплата:</b> {data.get('price', 0)} RUB
 👤 <b>Рекламодатель:</b> {data['advertiser_name']}
 
-⏰ <b>Разместите рекламу до:</b> {format_date(data['placement_deadline'])}
+⏰ <b>Разместите рекламу до:</b> {format_date(data.get('placement_deadline'))}
 
 📝 <b>Что делать дальше:</b>
 1. Разместите рекламу в своем канале
@@ -389,17 +559,17 @@ def send_contract_notification(contract_id, notification_type, extra_data=None):
                 adv_msg = f"""✅ <b>Размещение проверено и подтверждено!</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
+📺 <b>Канал:</b> {data.get('channel_title', 'Неизвестный канал')}
 
-🔍 Начат мониторинг на {data['monitoring_duration']} дней.
+🔍 Начат мониторинг на {data.get('monitoring_duration', 7)} дней.
 Оплата будет произведена автоматически после завершения мониторинга."""
 
                 pub_msg = f"""✅ <b>Размещение проверено и подтверждено!</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-💰 <b>К оплате:</b> {data['price']} RUB
+💰 <b>К оплате:</b> {data.get('price', 0)} RUB
 
-🔍 Начат мониторинг на {data['monitoring_duration']} дней.
+🔍 Начат мониторинг на {data.get('monitoring_duration', 7)} дней.
 Не удаляйте пост до завершения мониторинга!"""
             else:
                 error_msg = extra_data.get('message') if extra_data else 'Размещение не соответствует требованиям'
@@ -414,7 +584,7 @@ def send_contract_notification(contract_id, notification_type, extra_data=None):
                 adv_msg = f"""❌ <b>Проверка размещения не пройдена</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
+📺 <b>Канал:</b> {data.get('channel_title', 'Неизвестный канал')}
 ❌ <b>Причина:</b> {error_msg}
 
 Издатель должен исправить размещение."""
@@ -425,12 +595,12 @@ def send_contract_notification(contract_id, notification_type, extra_data=None):
         elif notification_type == 'completed':
             # Уведомления о завершении контракта
             payment_id = extra_data.get('payment_id') if extra_data else 'N/A'
-            amount = extra_data.get('amount') if extra_data else data['price']
+            amount = extra_data.get('amount') if extra_data else data.get('price', 0)
 
             adv_msg = f"""✅ <b>Контракт завершен!</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
+📺 <b>Канал:</b> {data.get('channel_title', 'Неизвестный канал')}
 💰 <b>Сумма:</b> {amount} RUB
 
 ✅ Мониторинг завершен успешно.
@@ -461,7 +631,7 @@ def send_contract_notification(contract_id, notification_type, extra_data=None):
             adv_msg = f"""⚠️ <b>Нарушение контракта</b>
 
 🎯 <b>Оффер:</b> {data['offer_title']}
-📺 <b>Канал:</b> {data['channel_title']}
+📺 <b>Канал:</b> {data.get('channel_title', 'Неизвестный канал')}
 ❌ <b>Проблема:</b> {reason}
 
 Мы уведомили издателя о необходимости исправления."""

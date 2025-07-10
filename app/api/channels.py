@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 channels_bp = Blueprint('channels', __name__)
 
 # Путь к базе данных
-DATABASE_PATH = 'telegram_mini_app.db'
+DATABASE_PATH = AppConfig.DATABASE_PATH
 
 # Добавьте этот эндпоинт в channels.py
 

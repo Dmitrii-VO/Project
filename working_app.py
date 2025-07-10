@@ -24,7 +24,7 @@ from app.api.monitoring_statistics import monitoring_statistics_bp
 from app.telegram.telegram_bot_commands import TelegramBotExtension
 from app.telegram.telegram_channel_parser import TelegramChannelParser
 from app.telegram.telegram_notifications import TelegramNotificationService
-
+from app.utils.notifications import NotificationService
 
 
 
@@ -66,9 +66,11 @@ def create_app() -> Flask:
     register_middleware(app)
     register_error_handlers(app)
     register_system_routes(app)
+
     logger.info("✅ Компоненты приложения инициализированы")
     if AppConfig.TELEGRAM_INTEGRATION and AppConfig.BOT_TOKEN:
         try:
+            app.notеfication_service = NotificationService()
             app.telegram_notifications = TelegramNotificationService()
             app.telegram_parser = TelegramChannelParser()
             app.telegram_bot = TelegramBotExtension()   
@@ -475,12 +477,7 @@ def register_system_routes(app: Flask) -> None:
             if 'pre_checkout_query' in update or ('message' in update and 'successful_payment' in update.get('message', {})):
                 logger.info("💳 Обрабатываем платежное обновление")
                 return handle_payment_webhook(update)
-            
-            # === ОБРАБОТКА СООБЩЕНИЙ В КАНАЛАХ (верификация) ===
-            if 'channel_post' in update:
-                logger.info("📢 Обрабатываем сообщение в канале")
-                return handle_channel_verification(update)
-            
+                       
             # === ОБРАБОТКА ЛИЧНЫХ СООБЩЕНИЙ БОТУ ===
             if 'message' in update:
                 message = update['message']
@@ -517,123 +514,139 @@ def register_system_routes(app: Flask) -> None:
             logger.warning("⚠️ Payment router не найден")
             return jsonify({'ok': True})
 
-    def handle_channel_verification(update):
-        """Обработка верификации каналов через channel_post"""
-        try:
-            message = update['channel_post']
-            chat = message.get('chat', {})
-            chat_id = str(chat.get('id'))
-            text = message.get('text', '')
-
-            logger.info(f"📢 Сообщение из канала {chat_id}: {text[:50]}...")
-
-            # Проверяем коды верификации
-            result = execute_db_query(
-                "SELECT * FROM channels WHERE telegram_id = ? AND is_verified = 0 AND verification_code IS NOT NULL",
-                (chat_id,),
-                fetch_all=True
-            )
-
-            for channel in result:
-                if channel['verification_code'] in text:
-                    # Верифицируем канал
-                    execute_db_query(
-                        "UPDATE channels SET is_verified = 1, verified_at = ? WHERE id = ?",
-                        (datetime.utcnow().isoformat(), channel['id'])
-                    )
-                    logger.info(f"✅ Канал {channel['id']} автоматически верифицирован")
-
-            return jsonify({'ok': True})
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка верификации канала: {e}")
-            return jsonify({'ok': True})
-
     def handle_start_command(update):
-        """Обработка команды /start"""
         try:
-            import requests
+            # Извлекаем данные из Telegram
+            if isinstance(update, dict):
+                telegram_id = update.get('message', {}).get('from', {}).get('id')
+                first_name = update.get('message', {}).get('from', {}).get('first_name', 'Пользователь')
+                last_name = update.get('message', {}).get('from', {}).get('last_name')  # ← Добавлена фамилия
+                username = update.get('message', {}).get('from', {}).get('username')
+            else:
+                telegram_id = update.effective_user.id
+                first_name = update.effective_user.first_name or 'Пользователь'
+                last_name = update.effective_user.last_name  # ← Добавлена фамилия
+                username = update.effective_user.username
+            
+            # Получаем пользователя
+            user = execute_db_query(
+                'SELECT * FROM users WHERE telegram_id = ?',
+                (telegram_id,),
+                fetch_one=True
+            )
+            
+            if not user:
+                # Создаем нового пользователя
+                execute_db_query(
+                    'INSERT INTO users (telegram_id, first_name, last_name, username) VALUES (?, ?, ?, ?)',
+                    (telegram_id, first_name, last_name, username)
+                )
+                user = execute_db_query(
+                    'SELECT * FROM users WHERE telegram_id = ?',
+                    (telegram_id,),
+                    fetch_one=True
+                )
+            else:
+                # ОБНОВЛЯЕМ существующего пользователя данными из Telegram
+                execute_db_query(
+                    'UPDATE users SET first_name = ?, last_name = ?, username = ? WHERE telegram_id = ?',
+                    (first_name, last_name, username, telegram_id)
+                )
+                # Получаем обновленного пользователя
+                user = execute_db_query(
+                    'SELECT * FROM users WHERE telegram_id = ?',
+                    (telegram_id,),
+                    fetch_one=True
+                )
+            
+            # Теперь user содержит актуальные данные (включая фамилию)
+            NotificationService.send_welcome_notification(user)
+            
+            return {'ok': True}
+            
+        except Exception as e:
+            print(f"❌ Ошибка: {e}")
+            print(f"❌ Update: {update}")
+            return {'ok': False}
+        
+    def handle_forwarded_message(update):
+        """Обработка пересланных сообщений для верификации каналов"""
+        try:
+            from app.utils.notifications import NotificationService  # ← ДОБАВИТЬ
             
             message = update['message']
-            from_user_id = str(message['from']['id'])
+            text = message.get('text', '')
+            forward_from_chat = message.get('forward_from_chat', {})
             
-            bot_token = AppConfig.BOT_TOKEN
-            if not bot_token:
+            if not forward_from_chat:
                 return jsonify({'ok': True})
             
-            send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            channel_id = str(forward_from_chat.get('id', ''))
+            channel_username = forward_from_chat.get('username', '')
             
-            welcome_message = """👋 <b>Добро пожаловать!</b>
-
-    Я помогу вам верифицировать ваши Telegram каналы.
-
-    <b>Как это работает:</b>
-    1️⃣ Добавьте канал в Mini App
-    2️⃣ Получите код верификации  
-    3️⃣ Опубликуйте код в вашем канале
-    4️⃣ Переслать сообщение с кодом мне
-
-    После успешной верификации вы получите уведомление прямо здесь!"""
-
-            requests.post(send_url, json={
-                'chat_id': from_user_id,
-                'text': welcome_message,
-                'parse_mode': 'HTML'
-            }, timeout=5)
-            
-            return jsonify({'ok': True})
-
-        except Exception as e:
-            logger.error(f"❌ Ошибка /start: {e}")
-            return jsonify({'ok': True})
-
-    def handle_forwarded_message(update):
-        """Обработка пересланных сообщений для верификации с расширенным логом"""
-        try:
-            message = update.get('message', {})
-            forwarded_chat = message.get('forward_from_chat', {})
-            text = message.get('text', '')
-
-            logger.info("📨 Получено пересланное сообщение:")
+            logger.info(f"📨 Получено пересланное сообщение:")
             logger.info(f"  🔹 Текст: {text}")
-            logger.info(f"  🔹 forward_from_chat: {forwarded_chat}")
-
-            chat_id = str(forwarded_chat.get('id', ''))
-            username = forwarded_chat.get('username', '')
-
-            result = None
-
-            if chat_id:
-                logger.info(f"🔍 Пытаемся найти канал по telegram_id = {chat_id}")
+            logger.info(f"  🔹 forward_from_chat: {forward_from_chat}")
+            
+            # Ищем канал по telegram_id
+            logger.info(f"🔍 Пытаемся найти канал по telegram_id = {channel_id}")
+            result = execute_db_query(
+                "SELECT * FROM channels WHERE telegram_id = ? AND is_verified = 0 AND verification_code IS NOT NULL",
+                (channel_id,),
+                fetch_one=True
+            )
+            
+            # Если не найден по ID, ищем по username
+            if not result and channel_username:
+                logger.info(f"🔍 Пытаемся найти канал по username = {channel_username}")
                 result = execute_db_query(
-                    "SELECT * FROM channels WHERE telegram_id = ? AND is_verified = 0",
-                    (chat_id,),
+                    "SELECT * FROM channels WHERE username = ? AND is_verified = 0 AND verification_code IS NOT NULL",
+                    (channel_username,),
                     fetch_one=True
                 )
-
-            if not result and username:
-                logger.info(f"🔍 Пытаемся найти канал по username = {username}")
-                result = execute_db_query(
-                    "SELECT * FROM channels WHERE username = ? AND is_verified = 0",
-                    (username,),
-                    fetch_one=True
-                )
-
-            if not result:
-                logger.warning("❌ Канал не найден в базе по ID или username")
-            elif result['verification_code'] not in text:
-                logger.warning(f"❌ Код верификации не найден в тексте. Ожидали: {result['verification_code']}")
-            else:
+            
+            if result and result['verification_code'] in text:
+                # Верифицируем канал
                 execute_db_query(
                     "UPDATE channels SET is_verified = 1, verified_at = ? WHERE id = ?",
                     (datetime.utcnow().isoformat(), result['id'])
                 )
+                
                 logger.info(f"✅ Канал {result['id']} успешно верифицирован через пересылку")
-
+                
+                # ✅ ДОБАВЛЯЕМ ОТПРАВКУ УВЕДОМЛЕНИЯ
+                try:
+                    # Получаем данные владельца канала
+                    owner = execute_db_query(
+                        "SELECT * FROM users WHERE id = ?",
+                        (result['owner_id'],),
+                        fetch_one=True
+                    )
+                    
+                    if owner:
+                        logger.info(f"📨 Отправляем уведомление владельцу канала {result['id']}")
+                        
+                        # Отправляем уведомление о верификации
+                        notification_result = NotificationService.send_channel_notification(
+                            user=owner,
+                            channel=result,
+                            notification_type='verified'
+                        )
+                        
+                        if notification_result:
+                            logger.info(f"✅ Уведомление о верификации отправлено владельцу канала {result['id']}")
+                        else:
+                            logger.error(f"❌ Не удалось отправить уведомление владельцу канала {result['id']}")
+                    else:
+                        logger.warning(f"⚠️ Владелец канала {result['id']} не найден в БД")
+                        
+                except Exception as notification_error:
+                    logger.error(f"❌ Ошибка отправки уведомления о верификации: {notification_error}")
+            
             return jsonify({'ok': True})
-
+            
         except Exception as e:
-            logger.error(f"❌ Ошибка при обработке пересланного сообщения: {e}", exc_info=True)
+            logger.error(f"❌ Ошибка обработки пересланного сообщения: {e}")
             return jsonify({'ok': True})
 
 
