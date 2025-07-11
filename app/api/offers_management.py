@@ -254,91 +254,37 @@ def get_recommended_channels_endpoint(offer_id: int):
 
 @offers_management_bp.route('/<int:offer_id>/select-channels', methods=['POST'])
 def select_channels_endpoint(offer_id: int):
-    """
-    Выбор каналов и запуск кампании
-    
-    POST /api/offers/{offer_id}/select-channels
-    
-    Request Body:
-    {
-        "channel_ids": [1, 2, 3],
-        "message": "Текст сообщения для владельцев каналов",
-        "expected_duration": 7
-    }
-    """
     try:
-        # Получаем ID пользователя из запроса
         user_id = get_user_id_from_request()
         if not user_id:
-            return jsonify({
-                'error': 'Unauthorized',
-                'message': 'Требуется авторизация'
-            }), 401
-        
-        # Проверяем принадлежность оффера
-   #     if not validate_offer_ownership(offer_id, user_id):
-   #         return jsonify({
-   #             'error': 'Forbidden',
-    #            'message': 'Оффер не принадлежит пользователю'
-     #       }), 403
+            return jsonify({'error': 'Unauthorized'}), 401
         
         # Получаем детали оффера
         offer = get_offer_details(offer_id)
         if not offer:
-            return jsonify({
-                'error': 'Not Found',
-                'message': 'Оффер не найден'
-            }), 404
-        
-        # Проверяем статус оффера
-     #   if offer['status'] not in ['draft', 'matching']:
-    #        return jsonify({
-     #           'error': 'Bad Request',
-      #          'message': f'Нельзя выбрать каналы для оффера со статусом {offer["status"]}'
-     #       }), 400
+            return jsonify({'error': 'Not Found', 'message': 'Оффер не найден'}), 404
         
         # Получаем данные из запроса
         data = request.get_json()
         if not data:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Отсутствует тело запроса'
-            }), 400
+            return jsonify({'error': 'Bad Request', 'message': 'Отсутствует тело запроса'}), 400
         
         channel_ids = data.get('channel_ids', [])
-        custom_message = data.get('message', '')
         expected_duration = data.get('expected_duration', 7)
         
-        # Валидация данных
-        if not channel_ids or not isinstance(channel_ids, list):
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Необходимо указать массив channel_ids'
-            }), 400
+        # Валидация
+        if not channel_ids or len(channel_ids) > 20:
+            return jsonify({'error': 'Bad Request', 'message': 'Укажите от 1 до 20 каналов'}), 400
         
-        if len(channel_ids) > 20:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Максимум 20 каналов за раз'
-            }), 400
-        
-        # Создаем предложения для выбранных каналов
         conn = get_db_connection()
-        if not conn:
-            return jsonify({
-                'error': 'Internal Server Error',
-                'message': 'Ошибка подключения к базе данных'
-            }), 500
-        
         cursor = conn.cursor()
         created_proposals = []
         
         try:
-            # Начинаем транзакцию
             conn.execute('BEGIN')
             
             for channel_id in channel_ids:
-                # Проверяем, что канал существует и активен
+                # Проверяем канал
                 cursor.execute("""
                     SELECT id, title, owner_id 
                     FROM channels 
@@ -349,14 +295,13 @@ def select_channels_endpoint(offer_id: int):
                 if not channel:
                     continue
                 
-                # Проверяем, что предложение еще не создано
+                # Проверяем дубликат
                 cursor.execute("""
                     SELECT id FROM offer_proposals 
                     WHERE offer_id = ? AND channel_id = ?
                 """, (offer_id, channel_id))
                 
-                existing_proposal = cursor.fetchone()
-                if existing_proposal:
+                if cursor.fetchone():
                     continue
                 
                 # Создаем предложение
@@ -368,9 +313,8 @@ def select_channels_endpoint(offer_id: int):
                              datetime('now', '+7 days'), CURRENT_TIMESTAMP)
                 """, (offer_id, channel_id))
                 
-                proposal_id = cursor.lastrowid
                 created_proposals.append({
-                    'proposal_id': proposal_id,
+                    'proposal_id': cursor.lastrowid,
                     'channel_id': channel_id,
                     'channel_title': channel['title'],
                     'channel_owner_id': channel['owner_id']
@@ -379,50 +323,51 @@ def select_channels_endpoint(offer_id: int):
             # Обновляем статус оффера
             cursor.execute("""
                 UPDATE offers 
-                SET status = 'active', 
+                SET status = 'active',
                     selected_channels_count = ?,
                     expected_placement_duration = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (len(created_proposals), expected_duration, offer_id))
             
-            # Подтверждаем транзакцию
             conn.commit()
+            
+            # Отправляем уведомления
+            notification_results = []
+            for proposal in created_proposals:
+                try:
+                    notification_service = current_app.telegram_notifications
+                    success = notification_service.send_new_proposal_notification(proposal['proposal_id'])
+                    notification_results.append({
+                        'proposal_id': proposal['proposal_id'],
+                        'notification_sent': success
+                    })
+                except Exception as e:
+                    logger.error(f"Ошибка отправки уведомления: {e}")
+                    notification_results.append({
+                        'proposal_id': proposal['proposal_id'],
+                        'notification_sent': False
+                    })
+            
+            successful_notifications = sum(1 for r in notification_results if r['notification_sent'])
+            
+            return jsonify({
+                'success': True,
+                'message': f'Предложения отправлены в {len(created_proposals)} каналов',
+                'created_proposals': len(created_proposals),
+                'notifications_sent': successful_notifications
+            }), 200
             
         except Exception as e:
             conn.rollback()
-            logger.error(f"Ошибка создания предложений: {e}")
-            return jsonify({
-                'error': 'Internal Server Error',
-                'message': 'Ошибка создания предложений'
-            }), 500
-        
+            raise e
         finally:
             conn.close()
-        
-
-        # Отправляем уведомления владельцам каналов
-        # TODO: Реализовать отправку уведомлений через Telegram Bot
-        
-        # Формируем ответ
-        response = {
-            'success': True,
-            'offer_id': offer_id,
-            'created_proposals': len(created_proposals),
-            'proposals': created_proposals,
-            'message': f'Создано {len(created_proposals)} предложений для каналов'
-        }
-        
-        logger.info(f"Создано {len(created_proposals)} предложений для оффера {offer_id}")
-        
-        return jsonify(response), 200
-        
+            
     except Exception as e:
-        logger.error(f"Ошибка выбора каналов: {e}")
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': 'Внутренняя ошибка сервера'
-        }), 500
+        logger.error(f"Ошибка создания предложений: {e}")
+        return jsonify({'error': 'Internal Server Error'}), 500
+        
 
 @offers_management_bp.route('/<int:offer_id>/mark-as-advertising', methods=['POST'])
 def mark_as_advertising_endpoint(offer_id: int):

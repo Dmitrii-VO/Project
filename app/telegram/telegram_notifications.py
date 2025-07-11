@@ -78,6 +78,17 @@ class TelegramNotificationService:
     def send_notification(self, notification: NotificationData) -> bool:
         """Отправка уведомления пользователю"""
         try:
+            logger.info(f"🔔 Начинаем отправку уведомления типа {notification.notification_type}")
+            logger.info(f"📱 Telegram ID: {notification.telegram_id}")
+            logger.info(f"📝 Заголовок: {notification.title}")
+            logger.info(f"💬 Длина сообщения: {len(notification.message)} символов")
+            
+            # Проверяем наличие BOT_TOKEN
+            if not self.bot_token:
+                logger.error("❌ BOT_TOKEN не настроен!")
+                return False
+            
+            logger.info(f"✅ BOT_TOKEN настроен: {self.bot_token[:10]}...")
             if not self.bot_token:
                 logger.warning("BOT_TOKEN не настроен, уведомления не отправляются")
                 return False
@@ -185,49 +196,97 @@ class TelegramNotificationService:
     def send_new_proposal_notification(self, proposal_id: int) -> bool:
         """Уведомление о новом предложении"""
         try:
+            logger.info(f"📤 Начинаем отправку уведомления для предложения {proposal_id}")
+            
             proposal_data = self._get_proposal_data(proposal_id)
             if not proposal_data:
+                logger.error(f"❌ Не удалось получить данные предложения {proposal_id}")
                 return False
             
+            logger.info(f"✅ Данные предложения получены успешно")
+            
+            # Определяем бюджет
+            budget = proposal_data.get('offer_budget', 0) or proposal_data.get('offer_price', 0)
+            currency = proposal_data.get('offer_currency', 'RUB')
+            logger.info(f"💰 Бюджет: {budget} {currency}")
+            
+            # Проверяем telegram_id
+            telegram_id = proposal_data.get('channel_owner_telegram_id')
+            if not telegram_id:
+                logger.error(f"❌ У владельца канала нет telegram_id")
+                return False
+            
+            logger.info(f"✅ Telegram ID владельца канала: {telegram_id}")
+            
             # Формируем сообщение
-            message = f"📢 <b>Новое предложение о рекламе!</b>\n\n"
-            message += f"🎯 <b>Оффер:</b> {proposal_data['offer_title']}\n"
-            message += f"💰 <b>Бюджет:</b> {proposal_data['offer_budget']} руб.\n"
-            message += f"📊 <b>Ваш канал:</b> {proposal_data['channel_title']}\n"
-            message += f"👥 <b>Подписчики:</b> {proposal_data['subscriber_count']}\n\n"
+            try:
+                message = f"📢 <b>Новое предложение о рекламе!</b>\n\n"
+                message += f"🎯 <b>Оффер:</b> {proposal_data['offer_title']}\n"
+                message += f"💰 <b>Бюджет:</b> {budget} {currency}\n"
+                message += f"📊 <b>Ваш канал:</b> {proposal_data['channel_title']}\n"
+                message += f"👥 <b>Подписчики:</b> {proposal_data['subscriber_count']}\n\n"
+                
+                if proposal_data.get('offer_description'):
+                    description = proposal_data['offer_description'][:200]
+                    message += f"📝 <b>Описание:</b>\n{description}...\n\n"
+                
+                message += f"⏱ <b>Срок ответа:</b> {proposal_data['expires_at']}\n\n"
+                message += f"💡 Используйте команды /my_proposals для просмотра или ответьте через веб-приложение"
+                
+                logger.info(f"✅ Сообщение сформировано, длина: {len(message)} символов")
+                
+            except Exception as msg_error:
+                logger.error(f"❌ Ошибка формирования сообщения: {msg_error}")
+                return False
             
-            if proposal_data['offer_description']:
-                message += f"📝 <b>Описание:</b>\n{proposal_data['offer_description'][:200]}...\n\n"
+            # Создаем кнопки
+            try:
+                buttons = [
+                    {'text': '✅ Принять', 'callback_data': f'accept_proposal_{proposal_id}'},
+                    {'text': '❌ Отклонить', 'callback_data': f'reject_proposal_{proposal_id}'},
+                    {'text': '📋 Подробнее', 'callback_data': f'proposal_details_{proposal_id}'}
+                ]
+                logger.info(f"✅ Кнопки созданы: {len(buttons)} штук")
+                
+            except Exception as btn_error:
+                logger.error(f"❌ Ошибка создания кнопок: {btn_error}")
+                return False
             
-            message += f"⏱ <b>Срок ответа:</b> {proposal_data['expires_at']}\n\n"
-            message += f"💡 Используйте команды /my_proposals для просмотра или ответьте через веб-приложение"
+            # Создаем объект уведомления
+            try:
+                notification = NotificationData(
+                    user_id=proposal_data['channel_owner_id'],
+                    telegram_id=telegram_id,
+                    notification_type=NotificationType.NEW_PROPOSAL,
+                    title="Новое предложение о рекламе",
+                    message=message,
+                    data={
+                        'proposal_id': proposal_id,
+                        'offer_id': proposal_data['offer_id'],
+                        'channel_id': proposal_data['channel_id']
+                    },
+                    buttons=buttons,
+                    priority=2
+                )
+                logger.info(f"✅ Объект NotificationData создан")
+                
+            except Exception as notif_error:
+                logger.error(f"❌ Ошибка создания NotificationData: {notif_error}")
+                return False
             
-            # Добавляем кнопки
-            buttons = [
-                {'text': '✅ Принять', 'callback_data': f'accept_proposal_{proposal_id}'},
-                {'text': '❌ Отклонить', 'callback_data': f'reject_proposal_{proposal_id}'},
-                {'text': '📋 Подробнее', 'callback_data': f'proposal_details_{proposal_id}'}
-            ]
-            
-            notification = NotificationData(
-                user_id=proposal_data['channel_owner_id'],
-                telegram_id=proposal_data['channel_owner_telegram_id'],
-                notification_type=NotificationType.NEW_PROPOSAL,
-                title="Новое предложение о рекламе",
-                message=message,
-                data={
-                    'proposal_id': proposal_id,
-                    'offer_id': proposal_data['offer_id'],
-                    'channel_id': proposal_data['channel_id']
-                },
-                buttons=buttons,
-                priority=2
-            )
-            
-            return self.send_notification(notification)
+            # Отправляем уведомление
+            try:
+                logger.info(f"🚀 Вызываем send_notification()...")
+                result = self.send_notification(notification)
+                logger.info(f"📨 Результат send_notification: {result}")
+                return result
+                
+            except Exception as send_error:
+                logger.error(f"❌ Ошибка в send_notification: {send_error}")
+                return False
             
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления о новом предложении: {e}")
+            logger.error(f"❌ Общая ошибка send_new_proposal_notification: {e}")
             return False
     
     def send_proposal_reminder(self, proposal_id: int) -> bool:
@@ -426,14 +485,22 @@ class TelegramNotificationService:
                 SELECT 
                     op.id, op.offer_id, op.channel_id, op.expires_at,
                     -- Информация об оффере
-                    o.title as offer_title, o.description as offer_description,
-                    o.budget as offer_budget, o.created_by as offer_creator_id,
+                    o.title as offer_title, 
+                    o.description as offer_description,
+                    o.budget_total as offer_budget,
+                    o.price as offer_price,
+                    o.currency as offer_currency,
+                    o.created_by as offer_creator_id,
                     -- Информация о канале
-                    c.title as channel_title, c.subscriber_count, c.owner_id as channel_owner_id,
+                    c.title as channel_title, 
+                    c.subscriber_count, 
+                    c.owner_id as channel_owner_id,
                     -- Информация о владельце канала
                     u_channel.telegram_id as channel_owner_telegram_id,
+                    u_channel.first_name as channel_owner_first_name,
                     -- Информация о создателе оффера
-                    u_offer.telegram_id as offer_creator_telegram_id
+                    u_offer.telegram_id as offer_creator_telegram_id,
+                    u_offer.first_name as offer_creator_first_name
                 FROM offer_proposals op
                 JOIN offers o ON op.offer_id = o.id
                 JOIN channels c ON op.channel_id = c.id
@@ -450,7 +517,7 @@ class TelegramNotificationService:
         except Exception as e:
             logger.error(f"Ошибка получения данных предложения: {e}")
             return None
-    
+        
     def _get_placement_data(self, placement_id: int) -> Optional[Dict]:
         """Получение данных размещения для уведомлений"""
         try:
@@ -898,36 +965,66 @@ class NotificationQueue:
 # UTILITY FUNCTIONS
 # ================================================================
 
-def send_new_proposal_notifications(offer_id: int, channel_ids: List[int]) -> Dict[str, int]:
-    """Отправка уведомлений о новых предложениях"""
+def send_new_proposal_notification(self, proposal_id: int) -> bool:
+    """Уведомление о новом предложении"""
     try:
-        service = TelegramNotificationService()
-        queue = NotificationQueue()
+        proposal_data = self._get_proposal_data(proposal_id)
+        if not proposal_data:
+            return False
         
-        # Получаем все предложения
-        conn = service.get_db_connection()
-        if not conn:
-            return {'sent': 0, 'failed': 0}
+        # Определяем бюджет
+        budget = proposal_data.get('offer_budget', 0) or proposal_data.get('offer_price', 0)
+        currency = proposal_data.get('offer_currency', 'RUB')
         
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id FROM offer_proposals 
-            WHERE offer_id = ? AND channel_id IN ({})
-        """.format(','.join('?' * len(channel_ids))), [offer_id] + channel_ids)
+        # Проверяем telegram_id
+        telegram_id = proposal_data.get('channel_owner_telegram_id')
+        if not telegram_id:
+            logger.error(f"У владельца канала нет telegram_id")
+            return False
         
-        proposal_ids = [row[0] for row in cursor.fetchall()]
-        conn.close()
+        # Формируем сообщение
+        message = f"📢 <b>Новое предложение о рекламе!</b>\n\n"
+        message += f"🎯 <b>Оффер:</b> {proposal_data['offer_title']}\n"
+        message += f"💰 <b>Бюджет:</b> {budget} {currency}\n"
+        message += f"📊 <b>Ваш канал:</b> {proposal_data['channel_title']}\n"
+        message += f"👥 <b>Подписчики:</b> {proposal_data['subscriber_count']}\n\n"
         
-        # Добавляем уведомления в очередь
-        for proposal_id in proposal_ids:
-            if service.send_new_proposal_notification(proposal_id):
-                pass  # Уведомление отправлено
+        if proposal_data.get('offer_description'):
+            description = proposal_data['offer_description'][:200]
+            message += f"📝 <b>Описание:</b>\n{description}...\n\n"
         
-        return {'sent': len(proposal_ids), 'failed': 0}
+        message += f"⏱ <b>Срок ответа:</b> {proposal_data['expires_at']}\n\n"
+        message += f"💡 Используйте /my_proposals для просмотра"
+        
+        # Создаем кнопки
+        buttons = [
+            {'text': '✅ Принять', 'callback_data': f'accept_proposal_{proposal_id}'},
+            {'text': '❌ Отклонить', 'callback_data': f'reject_proposal_{proposal_id}'},
+            {'text': '📋 Подробнее', 'callback_data': f'proposal_details_{proposal_id}'}
+        ]
+        
+        # Создаем уведомление
+        notification = NotificationData(
+            user_id=proposal_data['channel_owner_id'],
+            telegram_id=telegram_id,
+            notification_type=NotificationType.NEW_PROPOSAL,
+            title="Новое предложение о рекламе",
+            message=message,
+            data={
+                'proposal_id': proposal_id,
+                'offer_id': proposal_data['offer_id'],
+                'channel_id': proposal_data['channel_id']
+            },
+            buttons=buttons,
+            priority=2
+        )
+        
+        # Отправляем уведомление
+        return self.send_notification(notification)
         
     except Exception as e:
-        logger.error(f"Ошибка массовой отправки уведомлений: {e}")
-        return {'sent': 0, 'failed': 1}
+        logger.error(f"Ошибка отправки уведомления: {e}")
+        return False
 
 def send_daily_reminders() -> Dict[str, int]:
     """Отправка ежедневных напоминаний"""
