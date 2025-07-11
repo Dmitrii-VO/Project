@@ -650,7 +650,7 @@ class OffersManager {
             const result = await ApiClient.post('/api/offers', data);
 
             if (result.success) {
-                alert('✅ Оффер успешно создан!');
+                showChannelSelectionModal(result.offer.id, result.offer.title);
                 this.resetForm();
                 switchTab('my-offers');
             } else {
@@ -1426,7 +1426,138 @@ function setupOffersSearch() {
         });
     }
 }
+// ===== МОДАЛЬНОЕ ОКНО ВЫБОРА КАНАЛОВ =====
 
+async function showChannelSelectionModal(offerId, offerTitle) {
+    try {
+        showLoadingOverlay('Подбираем каналы...');
+        const response = await fetch(`/api/offers_management/${offerId}/recommended-channels?limit=20`);
+        const data = await response.json();
+        hideLoadingOverlay();
+        
+        if (data.success) {
+            createChannelModal(offerId, offerTitle, data.channels);
+        } else {
+            throw new Error(data.error);
+        }
+    } catch (error) {
+        hideLoadingOverlay();
+        showNotification('success', '✅ Оффер создан! Выбор каналов доступен в "Мои офферы"');
+    }
+}
+
+function createChannelModal(offerId, offerTitle, channels) {
+    const modal = document.createElement('div');
+    modal.id = 'channelModal';
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    
+    modal.innerHTML = `
+        <div class="modal-overlay" onclick="closeChannelModal()"></div>
+        <div class="modal-content large-modal">
+            <div class="modal-header">
+                <h2>🎯 Выберите каналы</h2>
+                <button class="modal-close" onclick="closeChannelModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="offer-info">
+                    <h3>${offerTitle}</h3>
+                    <p>Найдено: <strong>${channels.length}</strong> каналов</p>
+                </div>
+                <div class="channels-list">
+                    ${channels.map(ch => `
+                        <div class="channel-card nav-card" data-channel-id="${ch.id}" onclick="toggleChannel(this)">
+                            <div class="channel-checkbox"></div>
+                            <div class="nav-icon">${ch.title.substring(0,2).toUpperCase()}</div>
+                            <div class="nav-content">
+                                <h3>${ch.title}</h3>
+                                <p>@${ch.username || 'no_username'} • ${formatSubs(ch.subscriber_count)} подписчиков</p>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <span id="selectedCount">Выбрано: 0</span>
+                <div class="modal-actions">
+                    <button class="btn btn-secondary" onclick="closeChannelModal()">Пропустить</button>
+                    <button class="btn btn-primary" id="sendBtn" onclick="sendProposals(${offerId})" disabled>Отправить</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function toggleChannel(card) {
+    const isSelected = card.classList.contains('selected');
+    if (isSelected) {
+        card.classList.remove('selected');
+        card.querySelector('.channel-checkbox').innerHTML = '';
+    } else {
+        card.classList.add('selected');
+        card.querySelector('.channel-checkbox').innerHTML = '✓';
+    }
+    updateCount();
+}
+
+function updateCount() {
+    const count = document.querySelectorAll('.channel-card.selected').length;
+    document.getElementById('selectedCount').textContent = `Выбрано: ${count}`;
+    document.getElementById('sendBtn').disabled = count === 0;
+}
+
+async function sendProposals(offerId) {
+    const channelIds = Array.from(document.querySelectorAll('.channel-card.selected'))
+        .map(card => parseInt(card.dataset.channelId));
+    
+    try {
+        const response = await fetch(`/api/offers_management/${offerId}/select-channels`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({channel_ids: channelIds, message: 'Приглашение к участию'})
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+            closeChannelModal();
+            showNotification('success', `✅ Отправлено в ${channelIds.length} каналов!`);
+        }
+    } catch (error) {
+        showNotification('error', `Ошибка: ${error.message}`);
+    }
+}
+
+function closeChannelModal() {
+    const modal = document.getElementById('channelModal');
+    if (modal) modal.remove();
+}
+
+function formatSubs(count) {
+    if (count >= 1000000) return (count/1000000).toFixed(1) + 'M';
+    if (count >= 1000) return (count/1000).toFixed(1) + 'K';
+    return count.toString();
+}
+
+function showLoadingOverlay(text) {
+    const div = document.createElement('div');
+    div.id = 'loading';
+    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:10001;display:flex;align-items:center;justify-content:center;color:white;';
+    div.innerHTML = `<div>${text}<div style="margin-top:10px;border:3px solid #fff;border-top:3px solid transparent;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite;"></div></div>`;
+    document.body.appendChild(div);
+}
+
+function hideLoadingOverlay() {
+    const el = document.getElementById('loading');
+    if (el) el.remove();
+}
+
+// Экспорт
+window.showChannelSelectionModal = showChannelSelectionModal;
+window.closeChannelModal = closeChannelModal;
+window.toggleChannel = toggleChannel;
+window.sendProposals = sendProposals;
 // ===== ИНИЦИАЛИЗАЦИЯ =====
 
 // ===== ГЛОБАЛЬНЫЙ ДОСТУП К ФУНКЦИЯМ =====

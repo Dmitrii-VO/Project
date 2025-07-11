@@ -1757,3 +1757,84 @@ body {
 .offer-card-compact button:active {
     transform: translateY(0);
 }
+
+/* Добавить в конец файла app/static/css/offers.css */
+
+/* === СТИЛИ ДЛЯ МОДАЛЬНОГО ОКНА ВЫБОРА КАНАЛОВ === */
+
+/* Большое модальное окно для списка каналов */
+.modal-content.large-modal {
+    max-width: 700px;
+}
+
+/* Список каналов с прокруткой */
+.channels-list {
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 8px; /* Отступ для скроллбара */
+}
+
+/* Карточка канала в режиме выбора */
+.channel-card.selected {
+    border-color: var(--primary-color) !important;
+    background: #f0f4ff !important;
+    transform: translateY(-1px);
+}
+
+/* Чекбокс канала */
+.channel-checkbox {
+    transition: var(--transition);
+}
+
+/* Информация о выбранных каналах */
+.selected-info {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Скроллбар для списка каналов */
+.channels-list::-webkit-scrollbar {
+    width: 6px;
+}
+
+.channels-list::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: 3px;
+}
+
+.channels-list::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.channels-list::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-color);
+}
+
+/* Адаптивность для модального окна каналов */
+@media (max-width: 768px) {
+    .modal-content.large-modal {
+        max-width: 95vw;
+        margin: 10px;
+    }
+    
+    .channels-list {
+        max-height: 350px;
+    }
+    
+    .channel-card .nav-content p {
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    
+    .modal-footer {
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    .modal-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

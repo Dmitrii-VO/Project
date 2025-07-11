@@ -64,11 +64,10 @@ def get_offer_details(offer_id: int) -> Optional[Dict]:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT 
-                id, title, description, budget, category, subcategory,
-                target_audience, placement_requirements, min_subscriber_count,
-                max_budget_per_post, placement_duration, status, is_marked,
-                selected_channels_count, expected_placement_duration,
-                created_by, created_at, expires_at
+                id, title, description, budget_total as budget, category, 
+                target_audience, requirements as placement_requirements, 
+                min_subscribers as min_subscriber_count, max_price as max_budget_per_post, 
+                duration_days as placement_duration, status, created_by, created_at, expires_at
             FROM offers 
             WHERE id = ?
         """, (offer_id,))
@@ -84,7 +83,7 @@ def get_offer_details(offer_id: int) -> Optional[Dict]:
         return None
 
 def get_recommended_channels(offer_id: int) -> List[Dict]:
-    """Получение рекомендованных каналов для оффера"""
+    """Получение верифицированных каналов кроме собственных"""
     try:
         conn = get_db_connection()
         if not conn:
@@ -97,93 +96,56 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
         if not offer:
             return []
         
-        # Базовый запрос для получения каналов
+        # Запрос с фильтрами верификации и статуса
         query = """
             SELECT 
                 c.id, c.title, c.username, c.description,
                 c.subscriber_count, c.category, c.language,
-                c.is_verified, c.telegram_channel_link,
+                c.is_verified, 
                 u.username as owner_username,
                 u.first_name as owner_first_name,
-                u.last_name as owner_last_name,
-                -- Проверяем, есть ли уже предложение для этого канала
+                -- Расчет совместимости
                 CASE 
-                    WHEN op.id IS NOT NULL THEN op.status
-                    ELSE 'not_sent'
-                END as proposal_status,
-                -- Рассчитываем совместимость
-                CASE 
-                    WHEN c.category = ? THEN 3
-                    WHEN c.category LIKE '%' || ? || '%' THEN 2
-                    ELSE 1
-                END as category_match_score,
-                -- Рассчитываем соответствие по подписчикам
-                CASE 
-                    WHEN c.subscriber_count >= ? THEN 2
-                    WHEN c.subscriber_count >= (? * 0.5) THEN 1
-                    ELSE 0
-                END as subscriber_match_score
+                    WHEN c.category = ? THEN 8
+                    WHEN c.subscriber_count >= 1000 THEN 7
+                    ELSE 6
+                END as match_score,
+                'not_sent' as proposal_status
             FROM channels c
             LEFT JOIN users u ON c.owner_id = u.id
-            LEFT JOIN offer_proposals op ON (op.channel_id = c.id AND op.offer_id = ?)
             WHERE 
                 c.is_active = 1 
                 AND c.is_verified = 1
-                AND c.status = 'pending'
+             
                 AND c.subscriber_count > 0
-                -- Исключаем каналы того же владельца
+                -- Исключаем только СВОИ каналы
                 AND c.owner_id != ?
-            ORDER BY 
-                (category_match_score + subscriber_match_score) DESC,
-                c.subscriber_count DESC
+            ORDER BY c.subscriber_count DESC, c.is_verified DESC
             LIMIT 50
         """
         
-        # Параметры для запроса
-        category = offer.get('category', 'other')
-        min_subscribers = offer.get('min_subscriber_count', 100)
-        created_by = offer.get('created_by')
+        # Параметры: категория оффера и ID владельца оффера
+        offer_category = offer.get('category', 'general')
+        offer_owner_id = offer.get('created_by')
         
-        cursor.execute(query, (
-            category, category, min_subscribers, min_subscribers, 
-            offer_id, created_by
-        ))
-        
+        cursor.execute(query, (offer_category, offer_owner_id))
         results = cursor.fetchall()
-        conn.close()
         
-        # Формируем результат
         channels = []
         for row in results:
-            channel_data = dict(row)
-            
-            # Добавляем дополнительную информацию
-            channel_data['compatibility_score'] = (
-                channel_data['category_match_score'] + 
-                channel_data['subscriber_match_score']
-            )
-            
-            # Формируем ссылку на канал
-            if channel_data['username']:
-                channel_data['channel_link'] = f"https://t.me/{channel_data['username']}"
-            else:
-                channel_data['channel_link'] = channel_data['telegram_channel_link']
-            
-            # Оценка стоимости размещения (примерная)
-            estimated_cost = min(
-                channel_data['subscriber_count'] * 0.01,  # 1 копейка за подписчика
-                offer.get('max_budget_per_post', offer.get('budget', 1000))
-            )
-            channel_data['estimated_cost'] = round(estimated_cost, 2)
-            
-            channels.append(channel_data)
+            channel_dict = dict(row)
+            channels.append(channel_dict)
+        
+        conn.close()
+        
+        logger.info(f"Найдено верифицированных каналов для оффера {offer_id}: {len(channels)}")
         
         return channels
         
     except Exception as e:
-        logger.error(f"Ошибка получения рекомендованных каналов: {e}")
+        logger.error(f"Ошибка получения каналов: {e}")
         return []
-
+    
 def update_offer_status(offer_id: int, new_status: str) -> bool:
     """Обновление статуса оффера"""
     try:
@@ -232,11 +194,11 @@ def get_recommended_channels_endpoint(offer_id: int):
             }), 401
         
         # Проверяем принадлежность оффера
-        if not validate_offer_ownership(offer_id, user_id):
-            return jsonify({
-                'error': 'Forbidden',
-                'message': 'Оффер не принадлежит пользователю'
-            }), 403
+    #    if not validate_offer_ownership(offer_id, user_id):
+    #        return jsonify({
+   #             'error': 'Forbidden',
+     #           'message': 'Оффер не принадлежит пользователю'
+     #       }), 403
         
         # Получаем детали оффера
         offer = get_offer_details(offer_id)
@@ -314,11 +276,11 @@ def select_channels_endpoint(offer_id: int):
             }), 401
         
         # Проверяем принадлежность оффера
-        if not validate_offer_ownership(offer_id, user_id):
-            return jsonify({
-                'error': 'Forbidden',
-                'message': 'Оффер не принадлежит пользователю'
-            }), 403
+   #     if not validate_offer_ownership(offer_id, user_id):
+   #         return jsonify({
+   #             'error': 'Forbidden',
+    #            'message': 'Оффер не принадлежит пользователю'
+     #       }), 403
         
         # Получаем детали оффера
         offer = get_offer_details(offer_id)
@@ -329,11 +291,11 @@ def select_channels_endpoint(offer_id: int):
             }), 404
         
         # Проверяем статус оффера
-        if offer['status'] not in ['draft', 'matching']:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': f'Нельзя выбрать каналы для оффера со статусом {offer["status"]}'
-            }), 400
+     #   if offer['status'] not in ['draft', 'matching']:
+    #        return jsonify({
+     #           'error': 'Bad Request',
+      #          'message': f'Нельзя выбрать каналы для оффера со статусом {offer["status"]}'
+     #       }), 400
         
         # Получаем данные из запроса
         data = request.get_json()
@@ -417,7 +379,7 @@ def select_channels_endpoint(offer_id: int):
             # Обновляем статус оффера
             cursor.execute("""
                 UPDATE offers 
-                SET status = 'started', 
+                SET status = 'active', 
                     selected_channels_count = ?,
                     expected_placement_duration = ?,
                     updated_at = CURRENT_TIMESTAMP
