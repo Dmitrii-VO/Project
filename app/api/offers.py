@@ -94,7 +94,17 @@ def create_offer():
         ))
 
         logger.info(f"Создан новый оффер {offer_id} пользователем {telegram_user_id}")
-
+        # Создаем предложения для выбранных каналов
+        if data.get('selected_channels'):
+            channel_ids = data['selected_channels']
+            for channel_id in channel_ids:
+                execute_db_query('''
+                    INSERT OR IGNORE INTO offer_proposals 
+                    (offer_id, channel_id, status, expires_at, notified_at) 
+                    VALUES (?, ?, 'sent', datetime('now', '+7 days'), CURRENT_TIMESTAMP)
+                ''', (offer_id, channel_id))
+            
+            logger.info(f"Созданы предложения для {len(channel_ids)} каналов")
         # Получаем созданный оффер
         created_offer = execute_db_query('''
             SELECT o.*, u.username, u.first_name

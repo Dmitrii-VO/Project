@@ -136,16 +136,19 @@ class TelegramBotExtension:
             
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT r.id, r.offer_id, r.status, r.response_message, 
-                       r.proposed_price, r.proposed_date, r.created_at,
-                       o.title as offer_title, o.description as offer_description,
-                       o.budget as offer_budget, o.target_audience,
-                       c.title as channel_name, c.username as channel_username
-                FROM offer_responses r
-                JOIN offers o ON r.offer_id = o.id  
-                JOIN channels c ON r.channel_id = c.id
+                SELECT 
+                    op.id, op.offer_id, op.status, op.response_message,
+                    op.proposed_price, op.created_at, op.responded_at, op.expires_at,
+                    o.title as offer_title, o.description as offer_description,
+                    COALESCE(o.budget_total, o.price, 0) as offer_budget,
+                    o.target_audience,
+                    c.title as channel_title, c.username as channel_username,
+                    c.subscriber_count
+                FROM offer_proposals op
+                JOIN offers o ON op.offer_id = o.id
+                JOIN channels c ON op.channel_id = c.id
                 WHERE c.owner_id = ?
-                ORDER BY r.created_at DESC
+                ORDER BY op.created_at DESC
                 LIMIT 20
             """, (user_id,))
             
@@ -159,7 +162,7 @@ class TelegramBotExtension:
             return []
     
     def get_user_offers(self, user_id: int) -> List[Dict]:
-        """Получение офферов пользователя"""
+        """Получение офферов пользователя (ИСПРАВЛЕННАЯ ВЕРСИЯ)"""
         try:
             conn = self.get_db_connection()
             if not conn:
@@ -167,13 +170,16 @@ class TelegramBotExtension:
             
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT o.id, o.title, o.status, o.budget, o.created_at,
-                       COUNT(r.id) as total_proposals,
-                       COUNT(CASE WHEN r.status = 'accepted' THEN 1 END) as accepted_count
+                SELECT 
+                    o.id, o.title, o.status, 
+                    COALESCE(o.budget_total, o.price, 0) as budget,
+                    o.created_at,
+                    COUNT(r.id) as total_proposals,
+                    COUNT(CASE WHEN r.status = 'accepted' THEN 1 END) as accepted_count
                 FROM offers o
                 LEFT JOIN offer_responses r ON o.id = r.offer_id
-                WHERE o.advertiser_id = ?
-                GROUP BY o.id, o.title, o.status, o.budget, o.created_at
+                WHERE o.created_by = ?
+                GROUP BY o.id, o.title, o.status, o.budget_total, o.price, o.created_at
                 ORDER BY o.created_at DESC
                 LIMIT 10
             """, (user_id,))
@@ -249,8 +255,8 @@ class TelegramBotExtension:
                 }.get(proposal['status'], '📄')
                 
                 message += f"{status_emoji} <b>{proposal['offer_title']}</b>\n"
-                message += f"📢 Канал: {proposal['channel_name']}\n"
-                message += f"💰 Предложенная цена: {proposal['proposed_price'] or 'Не указана'} руб.\n"
+                message += f"📢 Канал: {proposal['channel_title']}\n"  # ИСПРАВЛЕНО
+                message += f"💰 Оффер: {proposal['offer_budget'] or 'Не указан'} руб.\n"  # ИСПРАВЛЕНО
                 message += f"📊 Статус: {proposal['status']}\n"
                 message += f"🆔 ID: {proposal['id']}\n\n"
             
