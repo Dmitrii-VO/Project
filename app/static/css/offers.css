@@ -1838,3 +1838,178 @@ body {
         justify-content: space-between;
     }
 }
+/* Стили для карточек предложений */
+.proposal-card {
+    background: var(--bg-primary);
+    border-radius: var(--border-radius);
+    padding: 20px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    transition: var(--transition);
+    margin-bottom: 16px;
+}
+
+.proposal-card.sent {
+    border-left: 4px solid var(--primary-color);
+}
+
+.proposal-card.expired {
+    border-left: 4px solid var(--danger-color);
+    opacity: 0.7;
+}
+
+.proposal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+    gap: 16px;
+}
+
+.proposal-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.advertiser-info {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.proposal-status {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.status-sent {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.status-expired {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.proposal-price {
+    text-align: right;
+}
+
+.price-amount {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--primary-color);
+    display: block;
+}
+
+.price-currency {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.proposal-requirements {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin: 16px 0;
+    padding: 12px;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+}
+
+.req-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.req-item.urgent {
+    color: var(--danger-color);
+    font-weight: 500;
+}
+
+.req-icon {
+    font-size: 14px;
+}
+
+.proposal-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.expired-note {
+    font-size: 12px;
+    color: var(--danger-color);
+    font-style: italic;
+    margin-left: auto;
+}
+/* Компактная версия карточек предложений */
+.proposal-card.compact {
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.proposal-card.compact .proposal-header {
+    margin-bottom: 8px;
+    gap: 12px;
+}
+
+.proposal-card.compact h3 {
+    font-size: 16px;
+    margin: 0 0 4px 0;
+    line-height: 1.2;
+}
+
+.proposal-info {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.3;
+}
+
+.proposal-card.compact .proposal-description {
+    font-size: 13px;
+    margin: 8px 0;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.proposal-card.compact .price-amount {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.proposal-card.compact .price-currency {
+    font-size: 10px;
+}
+
+.proposal-card.compact .proposal-actions {
+    margin-top: 10px;
+    padding-top: 10px;
+    gap: 6px;
+}
+
+.btn-xs {
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 4px;
+}
+
+.expired-note {
+    font-size: 10px;
+    margin-left: auto;
+}
+.channel-info {
+    font-size: 12px;
+    color: var(--primary-color);
+    font-weight: 500;
+}

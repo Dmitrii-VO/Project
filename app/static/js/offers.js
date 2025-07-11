@@ -380,7 +380,7 @@ async function loadAvailableOffers(filters = {}) {
 }
 
 function renderAvailableOffers(offers) {
-    console.log('🎨 Отрисовка доступных офферов:', offers.length);
+    console.log('🎨 Отрисовка входящих предложений:', offers.length);
     const container = document.getElementById('findOffersGrid');
 
     if (!container) {
@@ -389,57 +389,107 @@ function renderAvailableOffers(offers) {
     }
 
     if (!offers?.length) {
-        Utils.showEmpty(container, 'Нет доступных офферов',
-            'В данный момент нет офферов от других пользователей, соответствующих вашим критериям поиска',
-            '<button class="btn btn-primary" onclick="clearFindFilters()">🗑️ Очистить фильтры</button>'
+        Utils.showEmpty(container, 'Нет входящих предложений',
+            'У вас пока нет предложений о размещении рекламы в ваших каналах',
+            '<button class="btn btn-primary" onclick="switchTab(\'my-offers\')">📋 Мои офферы</button>'
         );
         return;
     }
 
     container.innerHTML = offers.map(offer => {
         const {
+            proposal_id, proposal_status = 'sent', expires_at,
             id, title = 'Без названия', description = 'Нет описания',
-            price = 0, currency = 'RUB', category = 'Не указана',
-            min_subscribers = 0, max_subscribers = 0, created_at = '',
-            creator_name = 'Неизвестный автор'
+            price = 0, currency = 'RUB',
+            min_subscribers = 0, max_subscribers = 0,
+            creator_name = 'Неизвестный автор', first_name = '',
+            channel_title = 'Неизвестный канал', channel_username = ''
         } = offer;
 
+        const isExpired = expires_at && new Date(expires_at) < new Date();
+        const statusClass = isExpired ? 'expired' : proposal_status;
+        const timeLeft = expires_at ? getTimeUntilExpiry(expires_at) : null;
+        
         const formattedPrice = Utils.formatPrice(price);
-        const shortDescription = description.length > 200 ? description.substring(0, 200) + '...' : description;
+        const shortDescription = description.length > 100 ? description.substring(0, 100) + '...' : description;
+        const advertiserName = first_name ? `${first_name}` : creator_name;
+        const channelDisplay = channel_username ? `@${channel_username}` : channel_title;
+        
         const subscriberText = max_subscribers > 0 && max_subscribers !== 'Без ограничений'
-            ? `${Utils.formatNumber(min_subscribers)}-${Utils.formatNumber(max_subscribers)}`
-            : `${Utils.formatNumber(min_subscribers)}+`;
+            ? `${min_subscribers.toLocaleString()}-${max_subscribers.toLocaleString()}`
+            : `${min_subscribers.toLocaleString()}+`;
 
         return `
-            <div class="offer-card" data-offer-id="${id}" style="cursor: pointer; margin-bottom: 20px;" onclick="showOfferDetails(${id})">
-                <div class="offer-header">
-                    <h3 style="margin: 0; color: #333; font-size: 18px; font-weight: 600; flex: 1;">${title}</h3>
-                    <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; background: #d4edda; color: #155724; margin-left: 12px;">Активен</span>
-                </div>
-
-                <div style="margin-bottom: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 6px; border-left: 3px solid #667eea;">
-                    <div style="font-size: 12px; color: #666;">👤 Автор оффера:</div>
-                    <div style="font-size: 14px; font-weight: 600; color: #333;">${creator_name}</div>
-                </div>
-
-                <div style="margin: 12px 0; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 8px; text-align: center;">
-                    <div style="color: white; font-size: 24px; font-weight: bold;">${formattedPrice} ${currency}</div>
-                    <div style="color: rgba(255,255,255,0.9); font-size: 12px; margin-top: 4px;">💰 Оплата за размещение</div>
-                </div>
-
-                <div style="margin: 12px 0; color: #666; font-size: 14px; line-height: 1.5;">${shortDescription}</div>
-
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding-top: 16px; border-top: 1px solid #eee;">
-                    <div style="display: flex; gap: 16px; flex-wrap: wrap;">
-                        <div style="font-size: 12px; color: #888;">📂 <strong style="color: #333;">${category}</strong></div>
-                        <div style="font-size: 12px; color: #888;">👥 <strong style="color: #333;">${subscriberText}</strong></div>
-                        <div style="font-size: 12px; color: #888;">📅 <strong style="color: #333;">${Utils.formatDate(created_at)}</strong></div>
+            <div class="proposal-card compact ${statusClass}" data-proposal-id="${proposal_id}">
+                <div class="proposal-header">
+                    <div class="proposal-title">
+                        <h3>${title}</h3>
+                        <div class="proposal-info">
+                            👤 ${advertiserName} • 📺 ${channelDisplay} • 👥 ${subscriberText}
+                            ${timeLeft ? ` • ⏰ ${timeLeft.text}` : ''}
+                        </div>
                     </div>
-                    <button class="btn btn-primary" style="padding: 12px 20px; font-size: 14px; margin-left: 12px; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);" onclick="event.stopPropagation(); acceptOffer(${id})">✅ Откликнуться</button>
+                    <div class="proposal-price">
+                        <span class="price-amount">${formattedPrice}</span>
+                        <span class="price-currency">${currency}</span>
+                    </div>
+                </div>
+
+                <div class="proposal-description">
+                    ${shortDescription}
+                </div>
+
+                <div class="proposal-actions">
+                    ${!isExpired && proposal_status === 'sent' ? `
+                        <button class="btn btn-success btn-xs" onclick="acceptProposal(${proposal_id}, '${title}')">
+                            ✅ Принять
+                        </button>
+                        <button class="btn btn-danger btn-xs" onclick="rejectProposal(${proposal_id}, '${title}')">
+                            ❌ Отклонить
+                        </button>
+                        <button class="btn btn-secondary btn-xs" onclick="viewProposalDetails(${proposal_id})">
+                            👁️
+                        </button>
+                    ` : `
+                        <button class="btn btn-secondary btn-xs" onclick="viewProposalDetails(${proposal_id})">
+                            👁️ Просмотр
+                        </button>
+                        ${proposal_status === 'sent' ? '<span class="expired-note">⏰ Истекло</span>' : ''}
+                    `}
                 </div>
             </div>
         `;
     }).join('');
+}
+
+// Вспомогательная функция для расчета времени
+function getTimeUntilExpiry(expiresAt) {
+    const now = new Date();
+    const expiry = new Date(expiresAt);
+    const diffMs = expiry.getTime() - now.getTime();
+    
+    if (diffMs <= 0) return null;
+    
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffDays > 0) {
+        return {
+            text: `${diffDays} дн.`,
+            isUrgent: diffDays <= 1
+        };
+    } else if (diffHours > 0) {
+        return {
+            text: `${diffHours} ч.`,
+            isUrgent: diffHours <= 6
+        };
+    } else {
+        const diffMinutes = Math.floor(diffMs / (1000 * 60));
+        return {
+            text: `${diffMinutes} мин.`,
+            isUrgent: true
+        };
+    }
 }
 
 // ===== СОЗДАНИЕ ОФФЕРОВ - ОПТИМИЗИРОВАННЫЙ МЕНЕДЖЕР =====

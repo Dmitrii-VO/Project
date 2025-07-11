@@ -385,121 +385,42 @@ def get_my_offers():
 
 @offers_bp.route('/available', methods=['GET'])
 def get_available_offers():
-    """Получение доступных офферов для владельцев каналов"""
+    """Получение доступных офферов для владельца каналов"""
     try:
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Не авторизован'}), 401
 
-        # Собираем фильтры из параметров запроса
-        filters = {
-            'search': request.args.get('search', '').strip(),
-            'category': request.args.get('category', '').strip(),
-            'min_budget': request.args.get('min_budget'),
-            'max_budget': request.args.get('max_budget'),
-            'min_subscribers': request.args.get('min_subscribers'),
-            'limit': int(request.args.get('limit', 50)),
-            'exclude_user_id': telegram_user_id
-        }
+        # Получаем пользователя
+        user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', 
+                              (telegram_user_id,), fetch_one=True)
+        if not user:
+            return jsonify({'success': False, 'error': 'Пользователь не найден'}), 404
 
-        # Удаляем пустые фильтры
-        filters = {k: v for k, v in filters.items() if v not in [None, '', 'None']}
-
-        logger.info(f"Загрузка доступных офферов для {telegram_user_id} с фильтрами: {filters}")
-
-        # Строим запрос
-        base_query = """
-            SELECT o.*, u.first_name, u.last_name, u.username as creator_username
-            FROM offers o
-            LEFT JOIN users u ON o.created_by = u.id
-            WHERE o.status = 'active'
-        """
-
-        query_params = []
-        conditions = []
-
-        # Исключаем офферы текущего пользователя
-        user = execute_db_query(
-            'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
-            fetch_one=True
-        )
-        
-        if user:
-            conditions.append("o.created_by != ?")
-            query_params.append(user['id'])
-
-        # Применяем фильтры
-        if filters.get('category'):
-            conditions.append('o.category = ?')
-            query_params.append(filters['category'])
-
-        if filters.get('min_budget'):
-            conditions.append('o.price >= ?')
-            query_params.append(float(filters['min_budget']))
-
-        if filters.get('max_budget'):
-            conditions.append('o.price <= ?')
-            query_params.append(float(filters['max_budget']))
-
-        if filters.get('min_subscribers'):
-            conditions.append('o.min_subscribers <= ?')
-            query_params.append(int(filters['min_subscribers']))
-
-        # Поиск по тексту
-        if filters.get('search'):
-            search_term = f"%{filters['search']}%"
-            conditions.append("(o.title LIKE ? OR o.description LIKE ?)")
-            query_params.extend([search_term, search_term])
-
-        # Собираем запрос
-        if conditions:
-            base_query += " AND " + " AND ".join(conditions)
-
-        base_query += " ORDER BY o.created_at DESC LIMIT ?"
-        query_params.append(filters.get('limit', 50))
-
-        # Выполняем запрос
-        rows = execute_db_query(base_query, tuple(query_params), fetch_all=True)
-
-        offers = []
-        for row in rows:
-            # Формируем имя создателя
-            creator_name = ''
-            if row.get('first_name') and row.get('last_name'):
-                creator_name = f"{row['first_name']} {row['last_name']}"
-            elif row.get('first_name'):
-                creator_name = row['first_name']
-            elif row.get('creator_username'):
-                creator_name = f"@{row['creator_username']}"
-            else:
-                creator_name = "Аноним"
-
-            offer = {
-                'id': row['id'],
-                'title': row['title'],
-                'description': row['description'],
-                'content': row['content'],
-                'price': float(row['price']) if row['price'] else 0,
-                'currency': row['currency'] or 'RUB',
-                'category': row['category'],
-                'status': row['status'],
-                'created_at': row['created_at'],
-                'updated_at': row['updated_at'],
-                'created_by': row['created_by'],
-                'creator_name': creator_name,
-                'budget_total': float(row['budget_total']) if row['budget_total'] else 0,
-                'min_subscribers': row['min_subscribers'] or 0,
-                'max_subscribers': row['max_subscribers'] or 0,
-                'deadline': row['deadline'],
-                'target_audience': row['target_audience'],
-                'requirements': row['requirements']
-            }
-            offers.append(offer)
+        # ВОТ ЗДЕСЬ КЛЮЧЕВАЯ ЛОГИКА - показываем предложения из offer_proposals
+        offers = execute_db_query("""
+            SELECT 
+                op.id as proposal_id, op.status as proposal_status,
+                op.created_at as proposal_created_at, op.expires_at,
+                o.id, o.title, o.description, 
+                COALESCE(o.budget_total, o.price, 0) as price,
+                o.currency, o.target_audience,
+                o.min_subscribers, o.max_subscribers,
+                u.username as creator_name, u.first_name,
+                c.title as channel_title, c.username as channel_username
+            FROM offer_proposals op
+            JOIN offers o ON op.offer_id = o.id
+            JOIN channels c ON op.channel_id = c.id
+            JOIN users u ON o.created_by = u.id
+            WHERE c.owner_id = ? 
+            AND op.status = 'sent'
+            AND (op.expires_at IS NULL OR op.expires_at > datetime('now'))
+            ORDER BY op.created_at DESC
+        """, (user['id'],), fetch_all=True)
 
         return jsonify({
             'success': True,
-            'offers': offers,
-            'count': len(offers),
-            'filters_applied': filters
+            'offers': [dict(offer) for offer in offers]
         })
 
     except Exception as e:
