@@ -88,7 +88,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
     app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
     app.register_blueprint(offers_management_bp, url_prefix='/api/offers_management')
-    app.register_blueprint(proposals_management_bp, url_prefix='/api/proposals_management')
+    app.register_blueprint(proposals_management_bp)
     app.register_blueprint(monitoring_statistics_bp, url_prefix='/api/monitoring_statistics')
                            
 
@@ -548,14 +548,6 @@ def register_system_routes(app: Flask) -> None:
             
             return jsonify({'ok': True})
 
-    def handle_payment_webhook(update):
-        """Обработка платежных обновлений"""
-        try:
-            from app.routers.payment_router import process_payment_update
-            return process_payment_update(update)
-        except ImportError:
-            logger.warning("⚠️ Payment router не найден")
-            return jsonify({'ok': True})
 
     def handle_start_command(update):
         try:

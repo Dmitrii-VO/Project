@@ -193,12 +193,12 @@ def get_recommended_channels_endpoint(offer_id: int):
                 'message': 'Требуется авторизация'
             }), 401
         
-        # Проверяем принадлежность оффера
-    #    if not validate_offer_ownership(offer_id, user_id):
-    #        return jsonify({
-   #             'error': 'Forbidden',
-     #           'message': 'Оффер не принадлежит пользователю'
-     #       }), 403
+      #   Проверяем принадлежность оффера
+        if not validate_offer_ownership(offer_id, user_id):
+            return jsonify({
+                'error': 'Forbidden',
+                'message': 'Оффер не принадлежит пользователю'
+            }), 403
         
         # Получаем детали оффера
         offer = get_offer_details(offer_id)
@@ -486,7 +486,7 @@ def get_offer_statistics_endpoint(offer_id: int):
         # Получаем общую статистику
         cursor.execute("""
             SELECT 
-                o.id, o.title, o.status, o.budget, o.created_at,
+                o.id, o.title, o.status, o.budget_total, o.created_at,
                 o.is_marked, o.selected_channels_count,
                 os.total_proposals, os.accepted_count, os.rejected_count,
                 os.expired_count, os.cancelled_count, os.completed_count,

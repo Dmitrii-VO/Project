@@ -70,10 +70,9 @@ def get_proposal_details(proposal_id: int) -> Optional[Dict]:
                 op.created_at, op.responded_at, op.rejection_reason,
                 op.expires_at, op.notified_at, op.reminder_sent_at,
                 -- Информация об оффере
-                o.title as offer_title, o.description as offer_description,
-                o.budget as offer_budget, o.content as offer_content,
-                o.placement_requirements, o.contact_info,
-                o.placement_duration, o.expected_placement_duration,
+                o.budget_total as offer_budget, o.content as offer_content,
+                o.requirements as placement_requirements, o.category as contact_info,
+                o.duration_days as placement_duration, o.expected_placement_duration,
                 o.category as offer_category, o.target_audience,
                 -- Информация о канале
                 c.title as channel_title, c.username as channel_username,
@@ -174,40 +173,127 @@ def create_placement_record(proposal_id: int, expected_duration: int = 7) -> Opt
         logger.error(f"Ошибка создания записи о размещении: {e}")
         return None
 
-def send_notification_to_advertiser(proposal_id: int, action: str, message: str = None):
-    """Отправка уведомления рекламодателю"""
+def send_notification_to_advertiser(proposal_id: int, action: str, data: any) -> bool:
+    """
+    УЛУЧШЕННАЯ функция отправки уведомлений рекламодателю
+    
+    Args:
+        proposal_id: ID предложения
+        action: accepted/rejected/placement_submitted
+        data: dict или str с дополнительными данными
+    """
     try:
-        # Получаем информацию о предложении
+        # Получаем детали предложения
         proposal = get_proposal_details(proposal_id)
         if not proposal:
+            logger.error(f"Не найдено предложение {proposal_id} для уведомления")
             return False
         
-        # Формируем сообщение
+        notification_text = ""
+        notification_title = ""
+        
         if action == 'accepted':
-            notification_text = f"✅ Ваше предложение принято!\n\n"
-            notification_text += f"📢 Канал: {proposal['channel_title']}\n"
-            notification_text += f"💰 Оффер: {proposal['offer_title']}\n"
-            notification_text += f"📅 Ожидайте размещения в течение 24 часов"
+            notification_title = "✅ Предложение принято!"
+            notification_text = f"📢 <b>Канал:</b> {proposal.get('channel_title', 'Неизвестный канал')}\n"
+            notification_text += f"💰 <b>Оффер:</b> {proposal.get('offer_title', 'Неизвестный оффер')}\n"
+            
+            # Добавляем информацию о дате размещения
+            if isinstance(data, dict) and data.get('scheduled_date'):
+                try:
+                    scheduled_date = datetime.fromisoformat(data['scheduled_date'].replace('Z', '+00:00'))
+                    formatted_date = scheduled_date.strftime("%d.%m.%Y в %H:%M")
+                    notification_text += f"📅 <b>Планируемое размещение:</b> {formatted_date}\n"
+                except:
+                    notification_text += f"📅 <b>Планируемое размещение:</b> {data['scheduled_date']}\n"
+            else:
+                notification_text += f"📅 <b>Размещение:</b> в течение 24 часов\n"
+            
+            if isinstance(data, dict) and data.get('message'):
+                notification_text += f"💬 <b>Сообщение:</b> {data['message']}\n"
+            
+            notification_text += f"\n🎯 Ожидайте уведомления о размещении!"
         
         elif action == 'rejected':
-            notification_text = f"❌ Ваше предложение отклонено\n\n"
-            notification_text += f"📢 Канал: {proposal['channel_title']}\n"
-            notification_text += f"💰 Оффер: {proposal['offer_title']}\n"
-            if message:
-                notification_text += f"📝 Причина: {message}"
+            notification_title = "❌ Предложение отклонено"
+            notification_text = f"📢 <b>Канал:</b> {proposal.get('channel_title', 'Неизвестный канал')}\n"
+            notification_text += f"💰 <b>Оффер:</b> {proposal.get('offer_title', 'Неизвестный оффер')}\n"
+            
+            if isinstance(data, dict):
+                # Добавляем категорию причины
+                reason_category = data.get('reason_category', 'other')
+                category_names = {
+                    'price': '💰 Цена',
+                    'topic': '📋 Тематика', 
+                    'timing': '⏰ Сроки',
+                    'technical': '⚙️ Технические требования',
+                    'content': '📝 Контент',
+                    'other': '📌 Другое'
+                }
+                notification_text += f"🔍 <b>Причина:</b> {category_names.get(reason_category, 'Другое')}\n"
+                
+                # Добавляем текстовую причину
+                if data.get('reason'):
+                    notification_text += f"📝 <b>Детали:</b> {data['reason']}\n"
+                
+                # Добавляем предложенную цену
+                if data.get('suggested_price'):
+                    notification_text += f"💡 <b>Предложенная цена:</b> {data['suggested_price']} руб.\n"
+                
+                # Добавляем дополнительные детали
+                if data.get('custom_reason'):
+                    notification_text += f"📋 <b>Дополнительно:</b> {data['custom_reason']}\n"
+            else:
+                notification_text += f"📝 <b>Причина:</b> {data}\n"
+            
+            notification_text += f"\n💡 Вы можете создать новый оффер с учетом замечаний"
         
         elif action == 'placement_submitted':
-            notification_text = f"📤 Пост размещен!\n\n"
-            notification_text += f"📢 Канал: {proposal['channel_title']}\n"
-            notification_text += f"💰 Оффер: {proposal['offer_title']}\n"
-            notification_text += f"🔗 Ссылка: {message}"
+            notification_title = "📤 Пост размещен!"
+            notification_text = f"📢 <b>Канал:</b> {proposal.get('channel_title', 'Неизвестный канал')}\n"
+            notification_text += f"💰 <b>Оффер:</b> {proposal.get('offer_title', 'Неизвестный оффер')}\n"
+            notification_text += f"🔗 <b>Ссылка:</b> {data}\n"
+            notification_text += f"\n⏱️ Начался мониторинг размещения"
         
         else:
+            logger.warning(f"Неизвестный тип уведомления: {action}")
             return False
         
-        # TODO: Реализовать отправку уведомления через Telegram Bot
-        # Пока что просто логируем
-        logger.info(f"Уведомление рекламодателю (ID: {proposal['advertiser_telegram_id']}): {notification_text}")
+        # Сохраняем уведомление в базе данных
+        conn = get_db_connection()
+        if conn:
+            try:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO notification_logs (
+                        user_id, telegram_id, notification_type, title, message, 
+                        status, created_at, data
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    proposal.get('advertiser_user_id', 1),  # fallback
+                    proposal.get('advertiser_telegram_id', 0),  # fallback
+                    f'proposal_{action}',
+                    notification_title,
+                    notification_text,
+                    'pending',
+                    datetime.now().isoformat(),
+                    json.dumps({
+                        'proposal_id': proposal_id,
+                        'action': action,
+                        'data': data
+                    })
+                ))
+                conn.commit()
+                logger.info(f"Уведомление сохранено для пользователя {proposal.get('advertiser_telegram_id', 'unknown')}")
+            except Exception as e:
+                logger.error(f"Ошибка сохранения уведомления: {e}")
+            finally:
+                conn.close()
+        
+        # TODO: Здесь добавить реальную отправку через Telegram Bot API
+        # Пока что логируем
+        logger.info(f"📧 Уведомление рекламодателю (ID: {proposal.get('advertiser_telegram_id', 'unknown')})")
+        logger.info(f"📧 Заголовок: {notification_title}")
+        logger.info(f"📧 Текст: {notification_text}")
         
         return True
         
@@ -305,9 +391,9 @@ def get_incoming_proposals():
                 op.rejection_reason, op.notified_at,
                 -- Информация об оффере
                 o.title as offer_title, o.description as offer_description,
-                o.budget as offer_budget, o.content as offer_content,
-                o.placement_requirements, o.contact_info,
-                o.placement_duration, o.expected_placement_duration,
+                o.budget_total as offer_budget, o.content as offer_content,
+                o.requirements as placement_requirements, o.contact_info,
+                o.duration_days as placement_duration,, o.expected_placement_duration,
                 o.category as offer_category, o.target_audience,
                 -- Информация о канале
                 c.title as channel_title, c.username as channel_username,
@@ -405,21 +491,17 @@ def get_incoming_proposals():
 @proposals_management_bp.route('/<int:proposal_id>/accept', methods=['POST'])
 def accept_proposal(proposal_id: int):
     """
-    Принятие предложения  
+    Принятие предложения с возможностью указания даты размещения
+    
+    POST /api/proposals/{proposal_id}/accept
+    
     Request Body:
     {
-        "message": "Дополнительное сообщение (опционально)"
+        "message": "Дополнительное сообщение (опционально)",
+        "scheduled_date": "2025-07-15T14:30:00",  # НОВОЕ ПОЛЕ
+        "timezone": "Europe/Moscow"  # НОВОЕ ПОЛЕ (опционально)
     }
     """
-    # Формируем запрос
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({
-            'error': 'Internal Server Error',
-            'message': 'Ошибка подключения к базе данных'
-        }), 500
-    
-    cursor = conn.cursor()
     try:
         # Получаем ID пользователя из запроса
         user_id = get_user_id_from_request()
@@ -432,9 +514,51 @@ def accept_proposal(proposal_id: int):
         # Проверяем принадлежность предложения
         if not validate_proposal_ownership(proposal_id, user_id):
             return jsonify({
-                'error': 'Forbidden',
+                'error': 'Forbidden', 
                 'message': 'Предложение не принадлежит пользователю'
             }), 403
+        
+        # Получаем данные из запроса
+        data = request.get_json() or {}
+        message = data.get('message', '')
+        scheduled_date = data.get('scheduled_date')  # НОВОЕ ПОЛЕ
+        timezone = data.get('timezone', 'Europe/Moscow')  # НОВОЕ ПОЛЕ
+        
+        # Валидация даты размещения
+        placement_datetime = None
+        if scheduled_date:
+            try:
+                from datetime import datetime
+                
+                # Парсим дату
+                if isinstance(scheduled_date, str):
+                    # Поддерживаем разные форматы даты
+                    try:
+                        placement_datetime = datetime.fromisoformat(scheduled_date.replace('Z', '+00:00'))
+                    except:
+                        placement_datetime = datetime.strptime(scheduled_date, '%Y-%m-%dT%H:%M:%S')
+                
+                # Проверяем что дата в будущем
+                if placement_datetime and placement_datetime <= datetime.now():
+                    return jsonify({
+                        'error': 'Bad Request',
+                        'message': 'Дата размещения должна быть в будущем'
+                    }), 400
+                
+                # Проверяем что дата не слишком далеко (например, не больше 30 дней)
+                max_future_date = datetime.now() + timedelta(days=30)
+                if placement_datetime and placement_datetime > max_future_date:
+                    return jsonify({
+                        'error': 'Bad Request',
+                        'message': 'Дата размещения не может быть больше чем через 30 дней'
+                    }), 400
+                    
+            except Exception as e:
+                logger.error(f"Ошибка парсинга даты: {e}")
+                return jsonify({
+                    'error': 'Bad Request',
+                    'message': 'Неверный формат даты. Используйте формат: 2025-07-15T14:30:00'
+                }), 400
         
         # Получаем детали предложения
         proposal = get_proposal_details(proposal_id)
@@ -448,60 +572,134 @@ def accept_proposal(proposal_id: int):
         if proposal['status'] != 'sent':
             return jsonify({
                 'error': 'Bad Request',
-                'message': f'Нельзя принять предложение со статусом {proposal["status"]}'
+                'message': f'Предложение уже обработано (статус: {proposal["status"]})'
             }), 400
         
-        # Проверяем срок действия
-        if proposal['expires_at'] and proposal['expires_at'] < datetime.now().isoformat():
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Срок действия предложения истек'
-            }), 400
+        # Формируем сообщение с датой
+        full_message = message
+        if placement_datetime:
+            full_message += f"\n📅 Планируемое размещение: {placement_datetime.strftime('%d.%m.%Y в %H:%M')}"
         
-        # Получаем данные из запроса
-        data = request.get_json() or {}
-        message = data.get('message', '')
-        
-        # Обновляем статус предложения
-        if not update_proposal_status(proposal_id, 'accepted'):
+        # Обновляем статус в базе данных
+        conn = get_db_connection()
+        if not conn:
             return jsonify({
                 'error': 'Internal Server Error',
-                'message': 'Ошибка обновления статуса предложения'
+                'message': 'Ошибка подключения к базе данных'
             }), 500
         
-        # Создаем запись о размещении
-        placement_id = create_placement_record(
-            proposal_id, 
-            proposal['expected_placement_duration']
-        )
-        
-        if not placement_id:
-            # Откатываем изменения
-            update_proposal_status(proposal_id, 'sent')
+        try:
+            cursor = conn.cursor()
+            
+            # Обновляем offer_proposals (используем существующие поля)
+            cursor.execute("""
+                UPDATE offer_proposals 
+                SET status = 'accepted',
+                    responded_at = ?,
+                    response_message = ?
+                WHERE id = ?
+            """, (
+                datetime.now().isoformat(),
+                full_message,
+                proposal_id
+            ))
+            
+            # Также обновляем offer_channel_targets если существует (используем proposed_date)
+            cursor.execute("""
+                UPDATE offer_channel_targets 
+                SET status = 'accepted',
+                    response_message = ?,
+                    proposed_date = ?,
+                    updated_at = ?
+                WHERE offer_id = ? AND channel_id = ?
+            """, (
+                full_message,
+                placement_datetime.date() if placement_datetime else None,
+                datetime.now().isoformat(),
+                proposal['offer_id'],
+                proposal['channel_id']
+            ))
+            
+            conn.commit()
+            
+            # Создаем запись в contracts для отслеживания
+            contract_id = f"CONTRACT_{proposal_id}_{int(datetime.now().timestamp())}"
+            # Вычисляем monitoring_end
+            if placement_datetime:
+                monitoring_end = placement_datetime + timedelta(days=7)
+            else:
+                # Если дата не указана, размещение через 24 часа + 7 дней мониторинга
+                monitoring_end = datetime.now() + timedelta(days=8)
+
+            cursor.execute("""
+                INSERT INTO contracts (
+                    id, response_id, offer_id, advertiser_id, publisher_id,
+                    price, status, placement_deadline, monitoring_end, post_requirements,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                contract_id,
+                proposal_id,
+                proposal['offer_id'],
+                proposal.get('advertiser_user_id', 1),
+                user_id,
+                proposal.get('offer_budget', 0),
+                'accepted',
+                placement_datetime.isoformat() if placement_datetime else (datetime.now() + timedelta(days=1)).isoformat(),
+                monitoring_end.isoformat(),  # ← ДОБАВИЛИ monitoring_end
+                message or 'Согласно условиям оффера',
+                datetime.now().isoformat(),
+                datetime.now().isoformat()
+            ))
+            
+            conn.commit()
+            placement_id = contract_id
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Ошибка обновления базы данных: {e}")
             return jsonify({
                 'error': 'Internal Server Error',
-                'message': 'Ошибка создания записи о размещении'
+                'message': 'Ошибка сохранения данных'
             }), 500
+        finally:
+            conn.close()
         
         # Отправляем уведомление рекламодателю
-        send_notification_to_advertiser(proposal_id, 'accepted', message)
- 
+        notification_data = {
+            'scheduled_date': placement_datetime.isoformat() if placement_datetime else None,
+            'message': message,
+            'timezone': timezone
+        }
+        send_notification_to_advertiser(proposal_id, 'accepted', notification_data)
+        
         # Формируем ответ
         response = {
             'success': True,
             'proposal_id': proposal_id,
             'placement_id': placement_id,
-            'offer_title': proposal['offer_title'],
-            'channel_title': proposal['channel_title'],
+            'offer_title': proposal.get('offer_title', 'Неизвестный оффер'),
+            'channel_title': proposal.get('channel_title', 'Неизвестный канал'),
+            'scheduled_date': placement_datetime.isoformat() if placement_datetime else None,
             'message': 'Предложение принято',
-            'next_steps': [
-                'Разместите пост в течение 24 часов',
-                'Подтвердите размещение через API',
-                'Ожидайте автоматической проверки'
-            ]
+            'next_steps': []
         }
         
-        logger.info(f"Предложение {proposal_id} принято пользователем {user_id}")
+        # Формируем следующие шаги
+        if placement_datetime:
+            response['next_steps'] = [
+                f'Разместите пост {placement_datetime.strftime("%d.%m.%Y в %H:%M")}',
+                'Подтвердите размещение через API с ссылкой на пост',
+                'Система автоматически проверит размещение'
+            ]
+        else:
+            response['next_steps'] = [
+                'Разместите пост в течение 24 часов',
+                'Подтвердите размещение через API с ссылкой на пост',
+                'Ожидайте автоматической проверки'
+            ]
+        
+        logger.info(f"Предложение {proposal_id} принято пользователем {user_id} на {placement_datetime}")
         
         return jsonify(response), 200
         
@@ -515,13 +713,16 @@ def accept_proposal(proposal_id: int):
 @proposals_management_bp.route('/<int:proposal_id>/reject', methods=['POST'])
 def reject_proposal(proposal_id: int):
     """
-    Отклонение предложения
+    Отклонение предложения с детальными причинами
     
     POST /api/proposals/{proposal_id}/reject
     
     Request Body:
     {
-        "reason": "Причина отклонения (обязательно)"
+        "reason": "Текстовая причина отклонения (обязательно)",
+        "reason_category": "price",  # НОВОЕ ПОЛЕ: price/topic/timing/other/technical
+        "custom_reason": "Детальное объяснение",  # НОВОЕ ПОЛЕ (опционально)
+        "suggested_price": 1500.00  # НОВОЕ ПОЛЕ (опционально) - предложить другую цену
     }
     """
     try:
@@ -540,6 +741,43 @@ def reject_proposal(proposal_id: int):
                 'message': 'Предложение не принадлежит пользователю'
             }), 403
         
+        # Получаем данные из запроса
+        data = request.get_json() or {}
+        reason = data.get('reason', '').strip()
+        reason_category = data.get('reason_category', 'other')  # НОВОЕ ПОЛЕ
+        custom_reason = data.get('custom_reason', '').strip()  # НОВОЕ ПОЛЕ
+        suggested_price = data.get('suggested_price')  # НОВОЕ ПОЛЕ
+        
+        # Валидация данных
+        if not reason:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': 'Необходимо указать причину отклонения'
+            }), 400
+        
+        # Валидация категории причины
+        valid_categories = ['price', 'topic', 'timing', 'technical', 'content', 'other']
+        if reason_category not in valid_categories:
+            return jsonify({
+                'error': 'Bad Request',
+                'message': f'Неверная категория причины. Доступные: {", ".join(valid_categories)}'
+            }), 400
+        
+        # Валидация предложенной цены
+        if suggested_price is not None:
+            try:
+                suggested_price = float(suggested_price)
+                if suggested_price <= 0:
+                    return jsonify({
+                        'error': 'Bad Request',
+                        'message': 'Предложенная цена должна быть больше 0'
+                    }), 400
+            except (ValueError, TypeError):
+                return jsonify({
+                    'error': 'Bad Request',
+                    'message': 'Неверный формат предложенной цены'
+                }), 400
+        
         # Получаем детали предложения
         proposal = get_proposal_details(proposal_id)
         if not proposal:
@@ -552,51 +790,119 @@ def reject_proposal(proposal_id: int):
         if proposal['status'] != 'sent':
             return jsonify({
                 'error': 'Bad Request',
-                'message': f'Нельзя отклонить предложение со статусом {proposal["status"]}'
+                'message': f'Предложение уже обработано (статус: {proposal["status"]})'
             }), 400
         
-        # Получаем данные из запроса
-        data = request.get_json()
-        if not data:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Отсутствует тело запроса'
-            }), 400
+        # Формируем полное сообщение с причиной (используем существующие поля БД)
+        category_names = {
+            'price': '💰 Цена',
+            'topic': '📋 Тематика', 
+            'timing': '⏰ Сроки',
+            'technical': '⚙️ Технические требования',
+            'content': '📝 Контент',
+            'other': '📌 Другое'
+        }
         
-        reason = data.get('reason', '').strip()
-        if not reason:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Необходимо указать причину отклонения'
-            }), 400
+        full_reason_message = f"{category_names.get(reason_category, 'Другое')}: {reason}"
         
-        if len(reason) > 500:
-            return jsonify({
-                'error': 'Bad Request',
-                'message': 'Причина отклонения не может быть длиннее 500 символов'
-            }), 400
+        if custom_reason:
+            full_reason_message += f"\n\nДетали: {custom_reason}"
+        if suggested_price:
+            full_reason_message += f"\n\nПредложенная цена: {suggested_price} руб."
         
-        # Обновляем статус предложения
-        if not update_proposal_status(proposal_id, 'rejected', reason):
+        # Обновляем статус в базе данных (используем существующие поля)
+        conn = get_db_connection()
+        if not conn:
             return jsonify({
                 'error': 'Internal Server Error',
-                'message': 'Ошибка обновления статуса предложения'
+                'message': 'Ошибка подключения к базе данных'
             }), 500
         
+        try:
+            cursor = conn.cursor()
+            
+            # Обновляем offer_proposals (используем существующие поля)
+            cursor.execute("""
+                UPDATE offer_proposals 
+                SET status = 'rejected',
+                    responded_at = ?,
+                    rejection_reason = ?,
+                    response_message = ?
+                WHERE id = ?
+            """, (
+                datetime.now().isoformat(),
+                full_reason_message,  # В rejection_reason
+                reason,  # Краткая причина в response_message
+                proposal_id
+            ))
+            
+            # Также обновляем offer_channel_targets если существует
+            cursor.execute("""
+                UPDATE offer_channel_targets 
+                SET status = 'rejected',
+                    response_message = ?,
+                    updated_at = ?
+                WHERE offer_id = ? AND channel_id = ?
+            """, (
+                full_reason_message,
+                datetime.now().isoformat(),
+                proposal['offer_id'],
+                proposal['channel_id']
+            ))
+            
+            conn.commit()
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Ошибка обновления базы данных при отклонении: {e}")
+            return jsonify({
+                'error': 'Internal Server Error',
+                'message': 'Ошибка сохранения данных'
+            }), 500
+        finally:
+            conn.close()
+        
         # Отправляем уведомление рекламодателю
-        send_notification_to_advertiser(proposal_id, 'rejected', reason)
+        notification_data = {
+            'reason': reason,
+            'reason_category': reason_category,
+            'custom_reason': custom_reason,
+            'suggested_price': suggested_price
+        }
+        send_notification_to_advertiser(proposal_id, 'rejected', notification_data)
         
         # Формируем ответ
         response = {
             'success': True,
             'proposal_id': proposal_id,
-            'offer_title': proposal['offer_title'],
-            'channel_title': proposal['channel_title'],
-            'rejection_reason': reason,
-            'message': 'Предложение отклонено'
+            'offer_title': proposal.get('offer_title', 'Неизвестный оффер'),
+            'channel_title': proposal.get('channel_title', 'Неизвестный канал'),
+            'reason_category': reason_category,
+            'message': 'Предложение отклонено',
+            'suggestions': []
         }
         
-        logger.info(f"Предложение {proposal_id} отклонено пользователем {user_id}: {reason}")
+        # Добавляем предложения по улучшению
+        if reason_category == 'price':
+            response['suggestions'] = [
+                'Рассмотрите увеличение бюджета',
+                'Попробуйте найти каналы с меньшей аудиторией',
+                'Измените условия сотрудничества'
+            ]
+        elif reason_category == 'topic':
+            response['suggestions'] = [
+                'Уточните тематику оффера',
+                'Найдите каналы соответствующей тематики',
+                'Адаптируйте контент под аудиторию канала'
+            ]
+        elif reason_category == 'timing':
+            response['suggestions'] = [
+                'Предложите более гибкие сроки размещения',
+                'Уточните оптимальное время для размещения',
+                'Рассмотрите отложенное размещение'
+            ]
+        
+        logger.info(f"Предложение {proposal_id} отклонено пользователем {user_id}. Причина: {reason_category}")
         
         return jsonify(response), 200
         

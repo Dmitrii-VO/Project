@@ -29,6 +29,8 @@ def create_offer():
             return jsonify({'success': False, 'error': 'Нет данных'}), 400
 
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         logger.info(f"Создание оффера пользователем {telegram_user_id}")
 
         # Базовая валидация обязательных полей
@@ -132,19 +134,20 @@ def get_my_offers():
         logger.info("Запрос на получение моих офферов")
 
         # Получаем user_id
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Не удалось определить пользователя'}), 400
+        user_db_id = get_user_id_from_request()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
 
-        # Получаем ID пользователя в БД
+        # user_db_id уже является ID пользователя в БД, не нужно искать!
+        # Но если нужна дополнительная информация:
         user = db_manager.execute_query(
-            'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
+            'SELECT id, telegram_id, username FROM users WHERE id = ?',
+            (user_db_id,),
             fetch_one=True
         )
 
         if not user:
-            logger.warning(f"Пользователь с telegram_id {telegram_user_id} не найден в БД")
+            logger.warning(f"Пользователь с telegram_id {user_db_id} не найден в БД")
             return jsonify({'success': False, 'error': 'Пользователь не найден'}), 404
 
         user_db_id = user['id']
@@ -230,7 +233,7 @@ def get_my_offers():
                 'total_count': total_count,
                 'page': page,
                 'total_pages': 0,
-                'user_id': telegram_user_id
+                'user_id': user_db_id
             })
 
         # ОПТИМИЗИРОВАННЫЙ подсчет откликов одним запросом
@@ -352,7 +355,7 @@ def get_my_offers():
             'total_count': total_count,
             'page': page,
             'total_pages': (total_count + limit - 1) // limit,
-            'user_id': telegram_user_id,
+            'user_id': user_db_id,
 
             # Сводная статистика
             'summary': {
@@ -389,7 +392,7 @@ def get_available_offers():
     try:
         telegram_user_id = get_user_id_from_request()
         if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Не авторизован'}), 401
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
         # Получаем пользователя
         user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', 
@@ -432,6 +435,8 @@ def get_offers_stats():
     """Статистика офферов пользователя"""
     try:
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
         user = execute_db_query(
             'SELECT id FROM users WHERE telegram_id = ?',
@@ -475,6 +480,8 @@ def delete_offer(offer_id):
     """Удаление оффера"""
     try:
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         logger.info(f"Запрос на удаление оффера {offer_id}")
 
         # Получаем пользователя
@@ -540,6 +547,8 @@ def update_offer_status(offer_id):
     """Обновление статуса оффера"""
     try:
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         data = request.get_json()
 
         new_status = data.get('status')
@@ -611,6 +620,8 @@ def respond_to_offer(offer_id):
             """Отклик на оффер"""
             try:
                 telegram_user_id = get_user_id_from_request()
+                if not telegram_user_id:
+                    return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
                 data = request.get_json()
 
                 channel_id = data.get('channel_id')
@@ -665,6 +676,8 @@ def get_offer_responses(offer_id):
             """Получение откликов на оффер"""
             try:
                 telegram_user_id = get_user_id_from_request()
+                if not telegram_user_id:
+                    return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
                 # Проверяем права доступа к офферу
                 offer = execute_db_query("""
@@ -730,6 +743,8 @@ def update_response_status_route(response_id):
     """Обновление статуса отклика с автоматическим созданием контракта"""
     try:
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         data = request.get_json()
 
         new_status = data.get('status')
@@ -810,305 +825,6 @@ def update_response_status_route(response_id):
 
     except Exception as e:
         logger.error(f"Ошибка обновления статуса отклика: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@offers_bp.route('/contracts', methods=['GET'])
-def get_user_contracts():
-    """Получение контрактов пользователя"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-
-        user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_user_id,), fetch_one=True)
-        if not user:
-            return jsonify({'success': False, 'error': 'Пользователь не найден'})
-
-        # Получаем контракты пользователя
-        contracts = execute_db_query("""
-                                     SELECT c.*,
-                                            o.title          as offer_title,
-                                            u_adv.first_name as advertiser_name,
-                                            u_pub.first_name as publisher_name,
-                                            or_resp.channel_title,
-                                            or_resp.channel_username
-                                     FROM contracts c
-                                              JOIN offers o ON c.offer_id = o.id
-                                              JOIN users u_adv ON c.advertiser_id = u_adv.id
-                                              JOIN users u_pub ON c.publisher_id = u_pub.id
-                                              JOIN offer_responses or_resp ON c.response_id = or_resp.id
-                                     WHERE c.advertiser_id = ?
-                                        OR c.publisher_id = ?
-                                     ORDER BY c.created_at DESC
-                                     """, (user['id'], user['id']), fetch_all=True)
-
-        contracts_list = []
-        for contract in contracts:
-            contracts_list.append({
-                'id': contract['id'],
-                'offer_title': contract['offer_title'],
-                'price': float(contract['price']),
-                'status': contract['status'],
-                'role': 'advertiser' if contract['advertiser_id'] == user['id'] else 'publisher',
-                'advertiser_name': contract['advertiser_name'],
-                'publisher_name': contract['publisher_name'],
-                'channel_title': contract['channel_title'],
-                'channel_username': contract['channel_username'],
-                'placement_deadline': contract['placement_deadline'],
-                'monitoring_end': contract['monitoring_end'],
-                'verification_passed': bool(contract.get('verification_passed')),
-                'verification_details': contract.get('verification_details', ''),
-                'violation_reason': contract.get('violation_reason', ''),
-                'created_at': contract['created_at']
-            })
-
-        return jsonify({
-            'success': True,
-            'contracts': contracts_list,
-            'count': len(contracts_list)
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка получения контрактов: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@offers_bp.route('/contracts/<contract_id>', methods=['GET'])
-def get_contract_details(contract_id):
-    """Получение деталей контракта"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-
-        # Получаем детали контракта
-        contract = execute_db_query("""
-                                    SELECT c.*,
-                                           o.title           as offer_title,
-                                           o.description     as offer_description,
-                                           u_adv.first_name  as advertiser_name,
-                                           u_adv.telegram_id as advertiser_telegram_id,
-                                           u_pub.first_name  as publisher_name,
-                                           u_pub.telegram_id as publisher_telegram_id,
-                                           or_resp.channel_title,
-                                           or_resp.channel_username,
-                                           or_resp.message   as response_message
-                                    FROM contracts c
-                                             JOIN offers o ON c.offer_id = o.id
-                                             JOIN users u_adv ON c.advertiser_id = u_adv.id
-                                             JOIN users u_pub ON c.publisher_id = u_pub.id
-                                             JOIN offer_responses or_resp ON c.response_id = or_resp.id
-                                    WHERE c.id = ?
-                                      AND (u_adv.telegram_id = ? OR u_pub.telegram_id = ?)
-                                    """, (contract_id, telegram_user_id, telegram_user_id), fetch_one=True)
-
-        if not contract:
-            return jsonify({'success': False, 'error': 'Контракт не найден или нет доступа'}), 404
-
-        contract_details = {
-            'id': contract['id'],
-            'offer_title': contract['offer_title'],
-            'offer_description': contract['offer_description'],
-            'price': float(contract['price']),
-            'status': contract['status'],
-            'role': 'advertiser' if contract['advertiser_telegram_id'] == telegram_user_id else 'publisher',
-            'advertiser_name': contract['advertiser_name'],
-            'publisher_name': contract['publisher_name'],
-            'channel_title': contract['channel_title'],
-            'channel_username': contract['channel_username'],
-            'response_message': contract['response_message'],
-            'placement_deadline': contract['placement_deadline'],
-            'monitoring_duration': contract.get('monitoring_duration'),
-            'monitoring_end': contract['monitoring_end'],
-            'post_url': contract.get('post_url'),
-            'post_id': contract.get('post_id'),
-            'verification_passed': bool(contract.get('verification_passed')),
-            'verification_details': contract.get('verification_details'),
-            'violation_reason': contract.get('violation_reason'),
-            'post_requirements': contract.get('post_requirements'),
-            'created_at': contract['created_at'],
-            'submitted_at': contract.get('submitted_at'),
-            'completed_at': contract.get('completed_at')
-        }
-
-        return jsonify({
-            'success': True,
-            'contract': contract_details
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка получения деталей контракта {contract_id}: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@offers_bp.route('/contracts/<contract_id>/placement', methods=['POST'])
-def submit_placement_api(contract_id):
-    """Подача заявки о размещении рекламы"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-        data = request.get_json()
-
-        if not data or 'post_url' not in data:
-            return jsonify({'success': False, 'error': 'Не указана ссылка на пост'}), 400
-
-        post_url = data['post_url'].strip()
-
-        # Проверяем контракт
-        contract = execute_db_query('''
-            SELECT c.*, u.telegram_id as publisher_telegram_id
-            FROM contracts c
-            JOIN users u ON c.publisher_id = u.id
-            WHERE c.id = ?
-              AND u.telegram_id = ?
-              AND c.status = 'active'
-        ''', (contract_id, telegram_user_id), fetch_one=True)
-
-        if not contract:
-            return jsonify({'success': False, 'error': 'Контракт не найден или недоступен'}), 404
-
-        # Проверяем дедлайн
-        placement_deadline = datetime.fromisoformat(contract['placement_deadline'])
-        if datetime.now() > placement_deadline:
-            execute_db_query('UPDATE contracts SET status = ? WHERE id = ?', ('expired', contract_id))
-            return jsonify({'success': False, 'error': 'Срок размещения истек'}), 400
-
-        # Простое извлечение message_id из URL (упрощенная версия)
-        message_id = None
-        if 't.me/' in post_url and '/' in post_url.split('t.me/')[-1]:
-            try:
-                message_id = post_url.split('/')[-1]
-                if not message_id.isdigit():
-                    message_id = None
-            except:
-                pass
-
-        if not message_id:
-            return jsonify({'success': False, 'error': 'Некорректная ссылка на пост'}), 400
-
-        # Обновляем контракт
-        execute_db_query('''
-            UPDATE contracts
-            SET post_url = ?,
-                post_id = ?,
-                status = 'verification',
-                submitted_at = ?
-            WHERE id = ?
-        ''', (post_url, message_id, datetime.now().isoformat(), contract_id))
-
-        logger.info(f"Подана заявка о размещении для контракта {contract_id}")
-
-        return jsonify({
-            'success': True,
-            'message': 'Заявка о размещении подана! Начинается автоматическая проверка.',
-            'contract_id': contract_id
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка подачи заявки о размещении: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-@offers_bp.route('/contracts/<contract_id>/cancel', methods=['POST'])
-def cancel_contract_api(contract_id):
-    """Отмена контракта"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-        data = request.get_json() or {}
-        reason = data.get('reason', 'Отменено пользователем')
-
-        # Проверяем права и обновляем статус
-        contract = execute_db_query("""
-                                    SELECT c.*,
-                                           u_adv.telegram_id as advertiser_telegram_id,
-                                           u_pub.telegram_id as publisher_telegram_id
-                                    FROM contracts c
-                                             JOIN users u_adv ON c.advertiser_id = u_adv.id
-                                             JOIN users u_pub ON c.publisher_id = u_pub.id
-                                    WHERE c.id = ?
-                                      AND (u_adv.telegram_id = ? OR u_pub.telegram_id = ?)
-                                    """, (contract_id, telegram_user_id, telegram_user_id), fetch_one=True)
-
-        if not contract:
-            return jsonify({'success': False, 'error': 'Контракт не найден или нет доступа'}), 404
-
-        if contract['status'] in ['completed', 'cancelled']:
-            return jsonify({'success': False, 'error': 'Контракт уже завершен или отменен'}), 400
-
-        execute_db_query("""
-                         UPDATE contracts
-                         SET status           = 'cancelled',
-                             violation_reason = ?,
-                             updated_at       = ?
-                         WHERE id = ?
-                         """, (reason, datetime.now().isoformat(), contract_id))
-
-        logger.info(f"Контракт {contract_id} отменен пользователем {telegram_user_id}")
-
-        return jsonify({
-            'success': True,
-            'message': 'Контракт отменен. Все участники получили уведомления.'
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка отмены контракта: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-
-
-@offers_bp.route('/contracts/<contract_id>', methods=['DELETE'])
-def delete_contract_api(contract_id):
-    """Удаление завершенного контракта"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-
-        # Получаем данные контракта
-        contract = execute_db_query('''
-            SELECT c.*,
-                   o.title as offer_title,
-                   u_adv.telegram_id as advertiser_telegram_id,
-                   u_pub.telegram_id as publisher_telegram_id
-            FROM contracts c
-            JOIN offers o ON c.offer_id = o.id
-            JOIN users u_adv ON c.advertiser_id = u_adv.id
-            JOIN users u_pub ON c.publisher_id = u_pub.id
-            WHERE c.id = ?
-        ''', (contract_id,), fetch_one=True)
-
-        if not contract:
-            return jsonify({'success': False, 'error': 'Контракт не найден'}), 404
-
-        # Проверяем права доступа
-        if (contract['advertiser_telegram_id'] != telegram_user_id and
-                contract['publisher_telegram_id'] != telegram_user_id):
-            return jsonify({'success': False, 'error': 'Нет доступа к этому контракту'}), 403
-
-        # Проверяем статус
-        deletable_statuses = ['verification_failed', 'cancelled']
-        if contract['status'] not in deletable_statuses:
-            return jsonify({
-                'success': False,
-                'error': f'Можно удалять только контракты со статусами: {", ".join(deletable_statuses)}'
-            }), 400
-
-        # Удаляем связанные записи и контракт в транзакции
-        import sqlite3
-        conn = sqlite3.connect(DATABASE_PATH)
-        conn.execute('BEGIN TRANSACTION')
-
-        try:
-            conn.execute('DELETE FROM monitoring_tasks WHERE contract_id = ?', (contract_id,))
-            conn.execute('DELETE FROM payments WHERE contract_id = ?', (contract_id,))
-            conn.execute('DELETE FROM contracts WHERE id = ?', (contract_id,))
-            
-            conn.commit()
-
-            return jsonify({
-                'success': True,
-                'message': f'Контракт "{contract["offer_title"]}" удален'
-            })
-
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Ошибка при удалении контракта: {e}")
-            return jsonify({'success': False, 'error': 'Ошибка при удалении контракта'}), 500
-        finally:
-            conn.close()
-
-    except Exception as e:
-        logger.error(f"Ошибка удаления контракта: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # === ОТЛАДОЧНЫЕ ENDPOINTS ===
@@ -1272,6 +988,8 @@ def get_user_summary():
     """Получение сводной информации пользователя"""
     try:
         telegram_user_id = get_user_id_from_request()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
         user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_user_id,), fetch_one=True)
         if not user:

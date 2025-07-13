@@ -53,6 +53,8 @@ def get_dashboard_data():
             return jsonify({'success': False, 'error': 'Система аналитики отключена'}), 503
 
         telegram_user_id = auth_service.get_current_user_id()
+        if not telegram_user_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         range_type = request.args.get('range', '30d')
 
         # Получаем базовые метрики

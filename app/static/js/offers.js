@@ -1603,6 +1603,398 @@ function hideLoadingOverlay() {
     if (el) el.remove();
 }
 
+function acceptProposal(proposalId, title) {
+    showAcceptModal(proposalId, title);
+}
+
+function rejectProposal(proposalId, title) {
+    showRejectModal(proposalId, title);
+}
+// ===== МОДАЛЬНОЕ ОКНО ПРИНЯТИЯ ПРЕДЛОЖЕНИЯ =====
+function showAcceptModal(proposalId, offerTitle) {
+    const modal = createModal('accept-proposal-modal', 'Принять предложение');
+    
+    // Получаем завтрашнюю дату как минимальную
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const minDate = tomorrow.toISOString().split('T')[0];
+    
+    // Получаем дату через неделю как рекомендуемую
+    const weekLater = new Date();
+    weekLater.setDate(weekLater.getDate() + 7);
+    const recommendedDate = weekLater.toISOString().split('T')[0];
+    
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>✅ Принять предложение</h3>
+                    <button class="modal-close" onclick="closeModal('accept-proposal-modal')">&times;</button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="proposal-info">
+                        <h4>📢 ${offerTitle}</h4>
+                        <p class="text-muted">Укажите детали размещения</p>
+                    </div>
+                    
+                    <form id="acceptProposalForm">
+                        <div class="form-group">
+                            <label for="scheduledDate">📅 Дата размещения *</label>
+                            <input type="date" 
+                                   id="scheduledDate" 
+                                   class="form-control" 
+                                   min="${minDate}"
+                                   value="${recommendedDate}"
+                                   required>
+                            <small class="form-help">Минимум завтра</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="scheduledTime">🕐 Время размещения *</label>
+                            <input type="time" 
+                                   id="scheduledTime" 
+                                   class="form-control" 
+                                   value="12:00"
+                                   required>
+                            <small class="form-help">Оптимальное время: 12:00-18:00</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="proposedPrice">💰 Ваша цена (необязательно)</label>
+                            <div class="input-group">
+                                <input type="number" 
+                                       id="proposedPrice" 
+                                       class="form-control" 
+                                       min="0" 
+                                       step="0.01" 
+                                       placeholder="Оставьте пустым для цены из оффера">
+                                <span class="input-group-text">₽</span>
+                            </div>
+                            <small class="form-help">Можете предложить свою цену</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="responseNotes">💬 Комментарий (необязательно)</label>
+                            <textarea id="responseNotes" 
+                                      class="form-control" 
+                                      rows="3" 
+                                      maxlength="500"
+                                      placeholder="Дополнительные условия или пожелания..."></textarea>
+                            <small class="form-help">Максимум 500 символов</small>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('accept-proposal-modal')">
+                        Отмена
+                    </button>
+                    <button class="btn btn-success" onclick="submitAcceptProposal(${proposalId})">
+                        ✅ Принять предложение
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    
+    // Фокус на дату
+    setTimeout(() => document.getElementById('scheduledDate').focus(), 100);
+}
+
+// ===== МОДАЛЬНОЕ ОКНО ОТКЛОНЕНИЯ ПРЕДЛОЖЕНИЯ =====
+function showRejectModal(proposalId, offerTitle) {
+    const modal = createModal('reject-proposal-modal', 'Отклонить предложение');
+    
+    modal.innerHTML = `
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>❌ Отклонить предложение</h3>
+                    <button class="modal-close" onclick="closeModal('reject-proposal-modal')">&times;</button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="proposal-info">
+                        <h4>📢 ${offerTitle}</h4>
+                        <p class="text-muted">Укажите причину отклонения</p>
+                    </div>
+                    
+                    <form id="rejectProposalForm">
+                        <div class="form-group">
+                            <label for="rejectionReason">❌ Причина отклонения *</label>
+                            <select id="rejectionReason" class="form-control" required>
+                                <option value="">Выберите причину...</option>
+                                <option value="Не устраивает цена">💰 Не устраивает цена</option>
+                                <option value="Не подходит тематика">🎯 Не подходит тематика</option>
+                                <option value="Слишком короткий срок">⏰ Слишком короткий срок</option>
+                                <option value="Канал сейчас неактивен">📴 Канал сейчас неактивен</option>
+                                <option value="Не подходит формат контента">📝 Не подходит формат контента</option>
+                                <option value="Занят другими кампаниями">📋 Занят другими кампаниями</option>
+                                <option value="Другое">❓ Другое</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="rejectionComment">💬 Дополнительный комментарий</label>
+                            <textarea id="rejectionComment" 
+                                      class="form-control" 
+                                      rows="3" 
+                                      maxlength="500"
+                                      placeholder="Подробности или предложения по улучшению оффера..."></textarea>
+                            <small class="form-help">Поможет рекламодателю улучшить будущие предложения</small>
+                        </div>
+                        
+                        <div class="rejection-warning">
+                            <div class="warning-icon">⚠️</div>
+                            <div class="warning-text">
+                                После отклонения предложение нельзя будет принять. 
+                                Рекламодатель получит уведомление с указанной причиной.
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" onclick="closeModal('reject-proposal-modal')">
+                        Отмена
+                    </button>
+                    <button class="btn btn-danger" onclick="submitRejectProposal(${proposalId})">
+                        ❌ Отклонить предложение
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    modal.style.display = 'flex';
+    
+    // Фокус на причину
+    setTimeout(() => document.getElementById('rejectionReason').focus(), 100);
+}
+
+// ===== ОБРАБОТКА ОТПРАВКИ ФОРМ =====
+
+async function submitAcceptProposal(proposalId) {
+    try {
+        const form = document.getElementById('acceptProposalForm');
+        const submitBtn = document.querySelector('.btn-success');
+        
+        // Валидация формы
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        // Получаем данные формы
+        const formData = {
+            scheduled_date: document.getElementById('scheduledDate').value,
+            scheduled_time: document.getElementById('scheduledTime').value,
+            proposed_price: document.getElementById('proposedPrice').value || null,
+            response_notes: document.getElementById('responseNotes').value.trim() || null
+        };
+        
+        // Валидация даты
+        const selectedDate = new Date(formData.scheduled_date);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        if (selectedDate < tomorrow) {
+            showError('Дата размещения должна быть не ранее завтрашнего дня');
+            return;
+        }
+        
+        // Отключаем кнопку и показываем загрузку
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Принимаем...';
+        
+        // Отправляем запрос
+        const response = await fetch(`/api/proposals/${proposalId}/accept`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeModal('accept-proposal-modal');
+            showSuccess('✅ Предложение принято! Уведомление отправлено рекламодателю.');
+            
+            // Обновляем список предложений
+            if (typeof loadAvailableOffers === 'function') {
+                loadAvailableOffers();
+            }
+        } else {
+            throw new Error(result.message || 'Ошибка принятия предложения');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка принятия предложения:', error);
+        showError('Ошибка: ' + error.message);
+    } finally {
+        // Восстанавливаем кнопку
+        const submitBtn = document.querySelector('.btn-success');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '✅ Принять предложение';
+        }
+    }
+}
+
+async function submitRejectProposal(proposalId) {
+    try {
+        const form = document.getElementById('rejectProposalForm');
+        const submitBtn = document.querySelector('.btn-danger');
+        
+        // Валидация формы
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+        
+        // Получаем данные формы
+        const rejectionReason = document.getElementById('rejectionReason').value;
+        const rejectionComment = document.getElementById('rejectionComment').value.trim();
+        
+        // Формируем полную причину
+        let fullReason = rejectionReason;
+        if (rejectionComment) {
+            fullReason += `. ${rejectionComment}`;
+        }
+        
+        // Отключаем кнопку и показываем загрузку
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '⏳ Отклоняем...';
+        
+        // Отправляем запрос
+        const response = await fetch(`/api/proposals/${proposalId}/reject`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                reason: fullReason
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            closeModal('reject-proposal-modal');
+            showSuccess('❌ Предложение отклонено. Уведомление отправлено рекламодателю.');
+            
+            // Обновляем список предложений
+            if (typeof loadAvailableOffers === 'function') {
+                loadAvailableOffers();
+            }
+        } else {
+            throw new Error(result.message || 'Ошибка отклонения предложения');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка отклонения предложения:', error);
+        showError('Ошибка: ' + error.message);
+    } finally {
+        // Восстанавливаем кнопку
+        const submitBtn = document.querySelector('.btn-danger');
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '❌ Отклонить предложение';
+        }
+    }
+}
+
+// ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ МОДАЛЬНЫХ ОКОН =====
+
+function createModal(id, title) {
+    // Удаляем существующее модальное окно
+    const existingModal = document.getElementById(id);
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Создаем новое модальное окно
+    const modal = document.createElement('div');
+    modal.id = id;
+    modal.className = 'modal';
+    
+    return modal;
+}
+
+function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'none';
+        setTimeout(() => modal.remove(), 300);
+    }
+}
+
+// Закрытие модального окна по клику вне его
+document.addEventListener('click', function(event) {
+    if (event.target.classList.contains('modal')) {
+        event.target.style.display = 'none';
+        setTimeout(() => event.target.remove(), 300);
+    }
+});
+
+// Закрытие модального окна по Escape
+document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal[style*="display: flex"]');
+        modals.forEach(modal => {
+            modal.style.display = 'none';
+            setTimeout(() => modal.remove(), 300);
+        });
+    }
+});
+
+// ===== ФУНКЦИИ УВЕДОМЛЕНИЙ =====
+
+function showSuccess(message) {
+    showNotification(message, 'success');
+}
+
+function showError(message) {
+    showNotification(message, 'error');
+}
+
+function showNotification(message, type = 'info') {
+    // Создаем уведомление
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <div class="notification-message">${message}</div>
+            <button class="notification-close">&times;</button>
+        </div>
+    `;
+    
+    // Добавляем на страницу
+    document.body.appendChild(notification);
+    
+    // Показываем с анимацией
+    setTimeout(() => notification.classList.add('show'), 10);
+    
+    // Автоматическое скрытие через 5 секунд
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, 5000);
+    
+    // Закрытие по клику
+    notification.querySelector('.notification-close').onclick = () => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    };
+}
+
 // Экспорт
 window.showChannelSelectionModal = showChannelSelectionModal;
 window.closeChannelModal = closeChannelModal;

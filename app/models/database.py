@@ -243,20 +243,51 @@ def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, 
 
 # === УТИЛИТЫ ===
 def get_user_id_from_request():
-    """Получение user_id из заголовков запроса"""
-    user_id = request.headers.get('X-Telegram-User-Id')
-    if user_id:
-        try:
-            return int(user_id)
-        except (ValueError, TypeError):
-            pass
-
-    # Fallback к основному пользователю
-    fallback_id = os.environ.get('YOUR_TELEGRAM_ID', '373086959')
+    """
+    Получение user_db_id из запроса
+    
+    ИСПРАВЛЕНО: теперь возвращает user_db_id (для БД) вместо telegram_id
+    """
     try:
-        return int(fallback_id)
-    except (ValueError, TypeError):
-        return 373086959 
+        # Импортируем auth_service внутри функции чтобы избежать циклических импортов
+        from app.services.auth_service import auth_service
+        
+        # Получаем telegram_id через единый сервис авторизации
+        telegram_user_id = auth_service.get_current_user_id()
+        
+        if not telegram_user_id:
+            logger.warning("⚠️ Database: auth_service.get_current_user_id() вернул None")
+            return None
+        
+        # НОВОЕ: Конвертируем telegram_id в user_db_id
+        import sqlite3
+        from app.config.telegram_config import AppConfig
+        
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        # Ищем пользователя по telegram_id
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if user:
+            user_db_id = user['id']
+            logger.debug(f"🔍 Database: telegram_id {telegram_user_id} → user_db_id {user_db_id}")
+            return user_db_id
+        else:
+            logger.warning(f"⚠️ Database: Пользователь с telegram_id {telegram_user_id} не найден в БД")
+            return None
+        
+    except Exception as e:
+        # Если что-то пошло не так, логируем ошибку
+        logger.error(f"❌ Database: Ошибка в get_user_id_from_request(): {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        
+        # В случае ошибки также возвращаем None
+        return None
         
 def execute_db_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
     """Универсальная функция для работы с БД"""

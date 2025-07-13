@@ -221,7 +221,7 @@ SELECT
     -- Информация об оффере
     o.title as offer_title,
     o.description as offer_description,
-    o.budget as offer_budget,
+    o.budget_total as offer_budget,
     o.status as offer_status,
     
     -- Информация о канале
@@ -250,7 +250,7 @@ SELECT
     o.id as offer_id,
     o.title as offer_title,
     o.status as offer_status,
-    o.budget as offer_budget,
+    o.budget_total as offer_budget,
     o.created_at as offer_created_at,
     
     -- Статистика из таблицы

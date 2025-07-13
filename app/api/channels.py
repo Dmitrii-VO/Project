@@ -8,7 +8,7 @@ import time
 from flask import Blueprint, current_app, request, jsonify, g
 import logging
 import sqlite3
-
+from app.models import get_user_id_from_request
 from datetime import datetime
 from app.config.telegram_config import AppConfig
 from app.models.database import execute_db_query
@@ -726,9 +726,9 @@ def get_my_channels():
     """
     try:
         # Получаем telegram_user_id из заголовков (универсально для фронта)
-        telegram_user_id = request.headers.get('X-Telegram-User-Id')
+        telegram_user_id = get_user_id_from_request()
         if not telegram_user_id:
-            return jsonify({'error': 'User not authenticated'}), 401
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
         current_app.logger.info(f"Получение каналов для пользователя telegram_id: {telegram_user_id}")
 

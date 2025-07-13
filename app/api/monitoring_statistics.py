@@ -90,7 +90,7 @@ def get_placement_details(placement_id: int) -> Optional[Dict]:
                 op.offer_id, op.channel_id, op.status as proposal_status,
                 -- Информация об оффере
                 o.title as offer_title, o.description as offer_description,
-                o.budget as offer_budget, o.created_by as offer_creator_id,
+                o.budget_total as offer_budget, o.created_by as offer_creator_id,
                 -- Информация о канале
                 c.title as channel_title, c.username as channel_username,
                 c.owner_id as channel_owner_id, c.subscriber_count,
