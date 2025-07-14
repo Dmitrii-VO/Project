@@ -1641,10 +1641,20 @@ function toggleChannel(card) {
     const isSelected = card.classList.contains('selected');
     if (isSelected) {
         card.classList.remove('selected');
-        card.querySelector('.channel-checkbox').innerHTML = '';
+        card.style.border = '2px solid #e2e8f0';
+        card.style.background = 'white';
+        const checkbox = card.querySelector('.channel-checkbox');
+        if (checkbox) {
+            checkbox.innerHTML = '';
+        }
     } else {
         card.classList.add('selected');
-        card.querySelector('.channel-checkbox').innerHTML = '✓';
+        card.style.border = '2px solid #4299e1';
+        card.style.background = '#ebf8ff';
+        const checkbox = card.querySelector('.channel-checkbox');
+        if (checkbox) {
+            checkbox.innerHTML = '✓';
+        }
     }
     updateCount();
 }
@@ -1829,7 +1839,7 @@ function createChannelModalForDraft(offerId, offerTitle, channels) {
                 <p>Выберите каналы для размещения вашего оффера:</p>
                 <div class="channels-grid">
                     ${channels.map(channel => `
-                        <div class="channel-card" data-channel-id="${channel.id}" onclick="toggleChannel(this)">
+                        <div class="channel-card" data-channel-id="${channel.id}" onclick="toggleChannel(this)" style="cursor: pointer; padding: 12px; margin: 8px; border: 2px solid #e2e8f0; border-radius: 8px; transition: all 0.2s ease; position: relative;">
                             <div class="channel-info">
                                 <div class="channel-title">${channel.title}</div>
                                 <div class="channel-username">@${channel.username}</div>
@@ -1838,6 +1848,7 @@ function createChannelModalForDraft(offerId, offerTitle, channels) {
                                     <span class="category">📂 ${channel.category}</span>
                                 </div>
                             </div>
+                            <div class="channel-checkbox" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border: 2px solid #4299e1; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #4299e1; font-weight: bold;"></div>
                         </div>
                     `).join('')}
                 </div>
