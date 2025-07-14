@@ -267,42 +267,20 @@ def register_error_handlers(app: Flask) -> None:
             }), 400
         return bad_request(error)
 
-    # Обработка ошибок валидации (если используется)
-    try:
-        from werkzeug.exceptions import UnprocessableEntity
-        
-        @app.errorhandler(422)
-        def validation_error(error):
-            logger.warning(f"Validation error: {error} | Path: {request.path}")
-            if request.path.startswith('/api/'):
-                return jsonify({
-                    'error': 'Validation failed',
-                    'message': 'Ошибка валидации данных',
-                    'details': getattr(error, 'data', {})
-                }), 422
-            return render_template('error.html', 
-                                 message='Ошибка валидации данных', 
-                                 code=422), 422
-    except ImportError:
-        pass
+    
+    @app.errorhandler(422)
+    def validation_error(error):
+        logger.warning(f"Validation error: {error} | Path: {request.path}")
+        if request.path.startswith('/api/'):
+            return jsonify({
+                'error': 'Validation failed',
+                'message': 'Ошибка валидации данных',
+                'details': getattr(error, 'data', {})
+            }), 422
+        return render_template('error.html', 
+                                message='Ошибка валидации данных', 
+                                code=422), 422
 
-    # Обработка ошибок Telegram API (если используется)
-    try:
-        import telegram
-        
-        @app.errorhandler(telegram.error.TelegramError)
-        def telegram_error(error):
-            logger.error(f"Telegram API error: {error} | Path: {request.path}")
-            if request.path.startswith('/api/'):
-                return jsonify({
-                    'error': 'Telegram API error',
-                    'message': 'Ошибка Telegram API'
-                }), 503
-            return render_template('error.html', 
-                                 message='Ошибка связи с Telegram', 
-                                 code=503), 503
-    except ImportError:
-        pass
 
     # Общий обработчик для всех остальных исключений
     @app.errorhandler(Exception)

@@ -17,8 +17,7 @@ import logging
 import os
 import sys
 from urllib.parse import urlparse, parse_qs
-import asyncio
-import aiohttp
+
 
 # Добавляем путь для импорта
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

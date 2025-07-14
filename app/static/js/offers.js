@@ -1480,29 +1480,81 @@ function setupOffersSearch() {
 }
 // ===== МОДАЛЬНОЕ ОКНО ВЫБОРА КАНАЛОВ =====
 
+// Проверка и доработка функции показа модального окна выбора каналов для оффера
+
 async function showChannelSelectionModal(offerId, offerTitle) {
+    console.log('🎯 Показываем модальное окно выбора каналов для оффера:', offerId);
+
     try {
-        showLoadingOverlay('Подбираем каналы...');
+        // Получаем Telegram User ID (глобальная функция должна быть определена)
+        const telegramUserId = getTelegramUserId?.();
+        console.log('👤 Telegram User ID:', telegramUserId);
 
-        const telegramUserId = request.headers.get('X-Telegram-User-Id')
+        if (!telegramUserId) {
+            showNotification('error', '❌ Не удалось получить ID пользователя Telegram. Попробуйте перезагрузить страницу.');
+            return;
+        }
 
+        // Показываем индикатор загрузки
+        showLoadingOverlay?.('Подбираем каналы...');
+
+        // Запрос к API на получение рекомендуемых каналов
         const response = await fetch(`/api/offers_management/${offerId}/recommended-channels?limit=20`, {
+            method: 'GET',
             headers: {
+                'Content-Type': 'application/json',
                 'X-Telegram-User-Id': telegramUserId
             }
         });
 
-        const data = await response.json();
-        hideLoadingOverlay();
-        
-        if (data.success) {
-            createChannelModal(offerId, offerTitle, data.channels);
-        } else {
-            throw new Error(data.error);
+        console.log('📡 Response status:', response.status);
+
+        // Обработка ошибок HTTP
+        if (!response.ok) {
+            const errorText = await response.text();
+            hideLoadingOverlay?.();
+            showNotification('error', `❌ Ошибка загрузки каналов: HTTP ${response.status}: ${errorText}`);
+            // Показываем fallback уведомление
+            setTimeout(() => {
+                showNotification('info', '✅ Оффер создан! Выбор каналов доступен в разделе "Мои офферы"');
+            }, 2000);
+            return;
         }
+
+        // Парсим ответ
+        const data = await response.json();
+        console.log('📊 API Response:', data);
+
+        hideLoadingOverlay?.();
+
+        // Проверяем структуру ответа
+        if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
+            console.log(`✅ Найдено ${data.channels.length} рекомендуемых каналов`);
+            createChannelModal(offerId, offerTitle, data.channels);
+        } else if (data && data.success && Array.isArray(data.channels) && data.channels.length === 0) {
+            // Нет каналов, но запрос успешен
+            showNotification('info', '📺 Рекомендуемые каналы не найдены. Вы можете выбрать каналы позже в разделе "Мои офферы"');
+        } else if (data && data.error) {
+            // Сервер вернул ошибку
+            showNotification('error', `❌ Ошибка: ${data.error}`);
+            setTimeout(() => {
+                showNotification('info', '✅ Оффер создан! Выбор каналов доступен в разделе "Мои офферы"');
+            }, 2000);
+        } else {
+            // Неожиданный ответ
+            showNotification('error', '❌ Не удалось получить список каналов. Попробуйте позже.');
+            setTimeout(() => {
+                showNotification('info', '✅ Оффер создан! Выбор каналов доступен в разделе "Мои офферы"');
+            }, 2000);
+        }
+
     } catch (error) {
-        hideLoadingOverlay();
-        showNotification('success', '✅ Оффер создан! Выбор каналов доступен в "Мои офферы"');
+        console.error('❌ Ошибка при загрузке рекомендуемых каналов:', error);
+        hideLoadingOverlay?.();
+        showNotification('error', `❌ Ошибка загрузки каналов: ${error.message}`);
+        setTimeout(() => {
+            showNotification('info', '✅ Оффер создан! Выбор каналов доступен в разделе "Мои офферы"');
+        }, 2000);
     }
 }
 
