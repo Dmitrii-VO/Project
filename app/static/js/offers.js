@@ -1593,17 +1593,21 @@ async function showChannelSelectionModal(offerId, offerTitle) {
 }
 
 
-function createChannelModal(offerId, offerTitle, channels) {
+function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
     const modal = document.createElement('div');
     modal.id = 'channelModal';
     modal.className = 'modal';
     modal.style.display = 'flex';
     
+    const buttonText = isDraft ? 'Завершить создание' : 'Отправить';
+    const onClickFunction = isDraft ? `completeDraftAndSendProposals(${offerId})` : `sendProposals(${offerId})`;
+    const skipButton = isDraft ? '' : `<button class="btn btn-secondary" onclick="saveOfferAsDraft(${offerId}); closeChannelModal()">Пропустить</button>`;
+    
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeChannelModal()"></div>
         <div class="modal-content large-modal">
             <div class="modal-header">
-                <h2>🎯 Выберите каналы</h2>
+                <h2>${isDraft ? '📝 Завершить создание оффера' : '🎯 Выберите каналы'}</h2>
                 <button class="modal-close" onclick="closeChannelModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -1627,8 +1631,8 @@ function createChannelModal(offerId, offerTitle, channels) {
             <div class="modal-footer">
                 <span id="selectedCount">Выбрано: 0</span>
                 <div class="modal-actions">
-                    <button class="btn btn-secondary" onclick="saveOfferAsDraft(${offerId}); closeChannelModal()">Пропустить</button>
-                    <button class="btn btn-primary" id="sendBtn" onclick="sendProposals(${offerId})" disabled>Отправить</button>
+                    ${skipButton}
+                    <button class="btn btn-primary" id="sendBtn" onclick="${onClickFunction}" disabled>${buttonText}</button>
                 </div>
             </div>
         </div>
@@ -1663,16 +1667,10 @@ function updateCount() {
     const count = document.querySelectorAll('.channel-card.selected').length;
     document.getElementById('selectedCount').textContent = `Выбрано: ${count}`;
     
-    // Обновляем кнопку отправки (для обычных офферов)
+    // Обновляем кнопку отправки (работает для обычных офферов и черновиков)
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn) {
         sendBtn.disabled = count === 0;
-    }
-    
-    // Обновляем кнопку завершения (для черновиков)
-    const completeBtn = document.getElementById('completeOfferBtn');
-    if (completeBtn) {
-        completeBtn.disabled = count === 0;
     }
 }
 
@@ -1705,12 +1703,78 @@ async function sendProposals(offerId) {
         if (response.ok && result.success) {
             closeChannelModal();
             showNotification('success', `✅ Отправлено в ${channelIds.length} каналов!`);
+            // Обновляем список офферов для черновиков
+            setTimeout(() => loadMyOffers(), 1000);
         } else {
             const errorMessage = result.message || result.error || 'Неизвестная ошибка';
             showNotification('error', `Ошибка: ${errorMessage}`);
         }
     } catch (error) {
         showNotification('error', `Ошибка: ${error.message}`);
+    }
+}
+
+async function completeDraftAndSendProposals(offerId) {
+    const channelIds = Array.from(document.querySelectorAll('.channel-card.selected'))
+        .map(card => parseInt(card.dataset.channelId));
+    
+    if (channelIds.length === 0) {
+        showNotification('warning', '⚠️ Выберите хотя бы один канал');
+        return;
+    }
+    
+    try {
+        const telegramUserId = getTelegramUserId();
+        
+        if (!telegramUserId) {
+            showNotification('error', '❌ Не удалось получить ID пользователя Telegram');
+            return;
+        }
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Telegram-User-Id': telegramUserId,
+            'X-User-Id': telegramUserId,
+            'telegram-user-id': telegramUserId
+        };
+        
+        // Сначала завершаем черновик (обновляем статус на active)
+        const completeResponse = await fetch(`/api/offers/${offerId}/complete-draft`, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify({
+                channel_ids: channelIds
+            })
+        });
+        
+        const completeResult = await completeResponse.json();
+        
+        if (completeResponse.ok && completeResult.success) {
+            // Затем отправляем предложения в каналы
+            const proposalsResponse = await fetch(`/api/offers_management/${offerId}/select-channels`, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify({channel_ids: channelIds, message: 'Приглашение к участию'})
+            });
+            
+            const proposalsResult = await proposalsResponse.json();
+            
+            if (proposalsResponse.ok && proposalsResult.success) {
+                closeChannelModal();
+                showNotification('success', `✅ Оффер завершен и отправлен в ${channelIds.length} каналов!`);
+                // Обновляем список офферов
+                setTimeout(() => loadMyOffers(), 1000);
+            } else {
+                const errorMessage = proposalsResult.message || proposalsResult.error || 'Ошибка отправки предложений';
+                showNotification('error', `❌ Ошибка отправки: ${errorMessage}`);
+            }
+        } else {
+            const errorMessage = completeResult.message || completeResult.error || 'Ошибка завершения черновика';
+            showNotification('error', `❌ Ошибка завершения: ${errorMessage}`);
+        }
+    } catch (error) {
+        console.error('❌ Ошибка завершения оффера:', error);
+        showNotification('error', `❌ Ошибка: ${error.message}`);
     }
 }
 
@@ -1787,7 +1851,7 @@ async function showChannelSelectionModalForDraft(offerId, offerTitle) {
 
         if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
             console.log(`✅ Найдено ${data.channels.length} рекомендуемых каналов`);
-            createChannelModalForDraft(offerId, offerTitle, data.channels);
+            createChannelModal(offerId, offerTitle, data.channels, true);
         } else {
             showNotification('info', '📺 Рекомендуемые каналы не найдены');
         }
@@ -1804,117 +1868,6 @@ function showOfferDetailsModal(offer) {
     alert(`Детали оффера "${offer.title}"\n\nСтатус: ${offer.status}\nЦена: ${offer.price} ${offer.currency}\nОписание: ${offer.description}`);
 }
 
-function createChannelModalForDraft(offerId, offerTitle, channels) {
-    // Удаляем существующий модал если есть
-    const existingModal = document.getElementById('channelModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    const modal = document.createElement('div');
-    modal.id = 'channelModal';
-    modal.className = 'modal';
-    modal.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-        z-index: 99999 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        padding: 20px !important;
-        background: rgba(0, 0, 0, 0.5) !important;
-    `;
-    modal.innerHTML = `
-        <div class="modal-overlay" onclick="closeChannelModal()" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5);"></div>
-        <div class="modal-content channel-modal" style="position: relative; z-index: 1; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);">
-            <div class="modal-header">
-                <h3>📝 Завершить создание оффера</h3>
-                <button class="modal-close" onclick="closeChannelModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <p><strong>Оффер:</strong> ${offerTitle}</p>
-                <p>Выберите каналы для размещения вашего оффера:</p>
-                <div class="channels-grid">
-                    ${channels.map(channel => `
-                        <div class="channel-card" data-channel-id="${channel.id}" onclick="toggleChannel(this)" style="cursor: pointer; padding: 12px; margin: 8px; border: 2px solid #e2e8f0; border-radius: 8px; transition: all 0.2s ease; position: relative;">
-                            <div class="channel-info">
-                                <div class="channel-title">${channel.title}</div>
-                                <div class="channel-username">@${channel.username}</div>
-                                <div class="channel-stats">
-                                    <span class="subscribers">👥 ${formatSubs(channel.subscriber_count)}</span>
-                                    <span class="category">📂 ${channel.category}</span>
-                                </div>
-                            </div>
-                            <div class="channel-checkbox"></div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            <div class="modal-footer">
-                <span id="selectedCount">Выбрано: 0</span>
-                <div class="modal-actions">
-                    <button class="btn btn-secondary" onclick="closeChannelModal()">Отмена</button>
-                    <button class="btn btn-primary" id="completeOfferBtn" onclick="completeDraftOffer(${offerId})" disabled>Завершить создание</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    // Инициализируем счетчик выбранных каналов
-    updateCount();
-}
-
-async function completeDraftOffer(offerId) {
-    const selectedChannels = Array.from(document.querySelectorAll('.channel-card.selected'))
-        .map(card => parseInt(card.dataset.channelId));
-    
-    if (selectedChannels.length === 0) {
-        showNotification('warning', '⚠️ Выберите хотя бы один канал');
-        return;
-    }
-    
-    try {
-        const telegramUserId = getTelegramUserId();
-        
-        if (!telegramUserId) {
-            showNotification('error', '❌ Не удалось получить ID пользователя Telegram');
-            return;
-        }
-        
-        const response = await fetch(`/api/offers/${offerId}/complete-draft`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-User-Id': telegramUserId,
-                'X-User-Id': telegramUserId,
-                'telegram-user-id': telegramUserId
-            },
-            body: JSON.stringify({
-                channel_ids: selectedChannels
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok && result.success) {
-            closeChannelModal();
-            showNotification('success', `✅ Оффер завершен и отправлен в ${selectedChannels.length} каналов!`);
-            // Обновляем список офферов
-            setTimeout(() => loadMyOffers(), 1000);
-        } else {
-            const errorMessage = result.message || result.error || 'Неизвестная ошибка';
-            showNotification('error', `❌ Ошибка: ${errorMessage}`);
-        }
-    } catch (error) {
-        console.error('❌ Ошибка завершения оффера:', error);
-        showNotification('error', `❌ Ошибка: ${error.message}`);
-    }
-}
 
 function formatSubs(count) {
     if (count >= 1000000) return (count/1000000).toFixed(1) + 'M';
