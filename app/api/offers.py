@@ -445,10 +445,10 @@ def get_offers_stats():
 def delete_offer(offer_id):
     """Удаление оффера"""
     try:
-        telegram_id = auth_service.get_user_db_id()
+        telegram_id = auth_service.get_current_user_id()
         if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
-        logger.info(f"Запрос на удаление оффера {offer_id}")
+        logger.info(f"Запрос на удаление оффера {offer_id} от пользователя {telegram_id}")
 
         # Получаем пользователя
         user = execute_db_query(
@@ -512,7 +512,7 @@ def delete_offer(offer_id):
 def update_offer_status(offer_id):
     """Обновление статуса оффера"""
     try:
-        telegram_id = auth_service.get_user_db_id()
+        telegram_id = auth_service.get_current_user_id()
         if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         data = request.get_json()
@@ -708,9 +708,14 @@ def get_offer_responses(offer_id):
 def update_response_status_route(response_id):
     """Обновление статуса отклика с автоматическим созданием контракта"""
     try:
-        telegram_id = auth_service.get_user_db_id()
+        telegram_id = auth_service.get_current_user_id()
         if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
+        
+        # Получаем или создаем пользователя в БД
+        user_db_id = auth_service.ensure_user_exists()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
         data = request.get_json()
 
         new_status = data.get('status')
@@ -1040,9 +1045,14 @@ def update_offer_status_endpoint(offer_id):
     """Обновление статуса оффера"""
     try:
         # Проверяем авторизацию
-        user_db_id = auth_service.get_user_db_id()
-        if not user_db_id:
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+        
+        # Получаем или создаем пользователя в БД
+        user_db_id = auth_service.ensure_user_exists()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
         
         # Проверяем, что оффер существует и принадлежит пользователю
         offer = execute_db_query(
