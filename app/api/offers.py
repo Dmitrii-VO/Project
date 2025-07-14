@@ -65,10 +65,13 @@ def get_available_offers():
         params = []
         
         # Фильтр по статусу (по умолчанию только активные)
-        if status_filter:
-            base_query += ' AND o.status = ?'
-            count_query += ' AND o.status = ?'
-            params.append(status_filter)
+        # Если статус не указан явно или пустой, используем 'active'
+        if not status_filter:
+            status_filter = 'active'
+        
+        base_query += ' AND o.status = ?'
+        count_query += ' AND o.status = ?'
+        params.append(status_filter)
         
         # Исключаем собственные офферы пользователя
         if user_db_id:
@@ -262,7 +265,7 @@ def get_my_offers():
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
 
         # Получаем информацию о пользователе для логирования
-        user = db_manager.execute_query(
+        user = execute_db_query(
             'SELECT id, telegram_id, username FROM users WHERE telegram_id = ?',
             (telegram_id,),
             fetch_one=True
@@ -305,7 +308,9 @@ def get_my_offers():
                             o.max_subscribers, \
                             o.metadata,
                             u.username   as creator_username, \
-                            u.first_name as creator_name
+                            u.first_name as creator_name, \
+                            u.telegram_id as creator_telegram_id, \
+                            o.created_by as creator_db_id
                      FROM offers o
                               JOIN users u ON o.created_by = u.id
                      WHERE o.created_by = ? \
@@ -337,20 +342,20 @@ def get_my_offers():
             params.append(category_filter)
 
         # Получаем общее количество (для пагинации)
-        total_count = db_manager.execute_query(count_query, tuple(params), fetch_one=True)['total']
+        total_count = execute_db_query(count_query, tuple(params), fetch_one=True)['total']
 
         # Добавляем сортировку и пагинацию
         base_query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?'
         params.extend([limit, offset])
 
         # Получаем офферы
-        offers = db_manager.execute_query(base_query, tuple(params), fetch_all=True)
+        offers = execute_db_query(base_query, tuple(params), fetch_all=True)
         logger.info(f"Найдено офферов: {len(offers)} (всего в БД: {total_count}) для пользователя db_id={user_db_id}")
         
         # Отладочная информация
         if len(offers) == 0 and total_count == 0:
             logger.warning(f"Нет офферов для пользователя db_id={user_db_id}. Проверим последние офферы в БД:")
-            debug_offers = db_manager.execute_query(
+            debug_offers = execute_db_query(
                 'SELECT id, title, created_by FROM offers ORDER BY created_at DESC LIMIT 5',
                 fetch_all=True
             )
@@ -373,7 +378,7 @@ def get_my_offers():
         offer_ids_str = ','.join(offer_ids)
 
         # Получаем статистику откликов для всех офферов одним запросом
-        response_stats = db_manager.execute_query(f'''
+        response_stats = execute_db_query(f'''
             SELECT offer_id,
                    COUNT(*) as total_count,
                    COUNT(CASE WHEN status = 'accepted' THEN 1 END) as accepted_count,

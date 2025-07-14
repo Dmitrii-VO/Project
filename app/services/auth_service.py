@@ -26,8 +26,9 @@ class AuthService:
         Возвращает telegram_id (int) или None.
         """
         
-        # Кэширование в рамках запроса
-        cache_key = f"{id(request)}_{request.method}_{request.path}"
+        # Кэширование в рамках запроса с учетом заголовков авторизации
+        telegram_header = request.headers.get('X-Telegram-User-Id', '')
+        cache_key = f"{id(request)}_{request.method}_{request.path}_{telegram_header}"
         if cache_key in self._request_cache:
             return self._request_cache[cache_key]
         

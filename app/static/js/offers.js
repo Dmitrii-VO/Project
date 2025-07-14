@@ -184,7 +184,9 @@ const OfferRenderer = {
         const {
             id, title = 'Без названия', description = 'Нет описания',
             price = 0, budget_total = 0, currency = 'RUB', category = 'general',
-            status = 'active', response_count = 0, created_at = ''
+            status = 'active', response_count = 0, created_at = '',
+            creator_username = 'Неизвестный', creator_name = '', 
+            creator_telegram_id = 'N/A', creator_db_id = 'N/A'
         } = offer;
 
         const displayPrice = budget_total || price || 0;
@@ -208,12 +210,19 @@ const OfferRenderer = {
 
         const statusStyle = statusConfig[status] || statusConfig.active;
         const actionButtons = this.getActionButtons(id, status, title, response_count);
+        
+        // Формируем имя создателя
+        const creatorDisplay = creator_name ? creator_name : (creator_username || 'Неизвестный');
 
         return `
             <div class="offer-card-compact" data-offer-id="${id}" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: relative;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <h3 style="margin: 0; color: #2d3748; font-size: 14px; font-weight: 600; flex: 1;">${shortTitle}</h3>
                     <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 500; background: ${statusStyle.bg}; color: ${statusStyle.color}; white-space: nowrap; margin-left: 8px;">${statusStyle.text}</span>
+                </div>
+                
+                <div style="margin-bottom: 6px; font-size: 10px; color: #68d391; font-weight: 500;">
+                    👤 Создатель: ${creatorDisplay}
                 </div>
                 
                 <div style="margin-bottom: 8px;">
@@ -243,7 +252,9 @@ const OfferRenderer = {
                     ${actionButtons}
                 </div>
                 
-                <div style="margin-top: 4px; font-size: 9px; color: #a0aec0; text-align: right;">ID: ${id}</div>
+                <div style="margin-top: 4px; font-size: 9px; color: #a0aec0; text-align: right;">
+                    Оффер ID: ${id} | Создатель: ${creator_db_id} (TG: ${creator_telegram_id})
+                </div>
             </div>
         `;
     },
