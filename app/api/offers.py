@@ -385,51 +385,7 @@ def get_my_offers():
             'success': False,
             'error': f'Внутренняя ошибка сервера: {str(e)}'
         }), 500
-
-@offers_bp.route('/available', methods=['GET'])
-def get_available_offers():
-    """Получение доступных офферов для владельца каналов"""
-    try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
-            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
-
-        # Получаем пользователя
-        user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', 
-                              (telegram_user_id,), fetch_one=True)
-        if not user:
-            return jsonify({'success': False, 'error': 'Пользователь не найден'}), 404
-
-        # ВОТ ЗДЕСЬ КЛЮЧЕВАЯ ЛОГИКА - показываем предложения из offer_proposals
-        offers = execute_db_query("""
-            SELECT 
-                op.id as proposal_id, op.status as proposal_status,
-                op.created_at as proposal_created_at, op.expires_at,
-                o.id, o.title, o.description, 
-                COALESCE(o.budget_total, o.price, 0) as price,
-                o.currency, o.target_audience,
-                o.min_subscribers, o.max_subscribers,
-                u.username as creator_name, u.first_name,
-                c.title as channel_title, c.username as channel_username
-            FROM offer_proposals op
-            JOIN offers o ON op.offer_id = o.id
-            JOIN channels c ON op.channel_id = c.id
-            JOIN users u ON o.created_by = u.id
-            WHERE c.owner_id = ? 
-            AND op.status = 'sent'
-            AND (op.expires_at IS NULL OR op.expires_at > datetime('now'))
-            ORDER BY op.created_at DESC
-        """, (user['id'],), fetch_all=True)
-
-        return jsonify({
-            'success': True,
-            'offers': [dict(offer) for offer in offers]
-        })
-
-    except Exception as e:
-        logger.error(f"Ошибка получения доступных офферов: {e}")
-        return jsonify({'success': False, 'error': str(e)}), 500
-    
+  
 @offers_bp.route('/stats', methods=['GET'])
 def get_offers_stats():
     """Статистика офферов пользователя"""

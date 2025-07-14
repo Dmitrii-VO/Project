@@ -8,12 +8,12 @@ API маршрутизатор для Telegram Mini App
 
 import time
 from flask import Blueprint, request, jsonify, current_app, g
+from app.services.auth_service import AuthService
 from .middleware import (
     require_telegram_auth, 
     cache_response, 
     rate_limit_decorator,
-    get_security_stats,
-    TelegramAuth
+    get_security_stats
 )
 
 # Создание Blueprint для API
@@ -33,7 +33,7 @@ def auth_status():
         import sqlite3
         from app.config.telegram_config import AppConfig
         
-        telegram_user_id = TelegramAuth.get_current_user_id()
+        telegram_user_id = AuthService.get_current_user_id()
         
         if not telegram_user_id:
             return jsonify({
@@ -42,7 +42,7 @@ def auth_status():
             })
         
         # Проверяем существование пользователя в БД
-        user_db_id = TelegramAuth.ensure_user_exists(telegram_user_id)
+        user_db_id = AuthService.ensure_user_exists(telegram_user_id)
         
         if not user_db_id:
             return jsonify({
@@ -111,7 +111,7 @@ def telegram_login():
         init_data = data['init_data']
         
         # Валидируем данные от Telegram
-        if not TelegramAuth.validate_telegram_data(init_data):
+        if not AuthService.validate_telegram_data(init_data):
             return jsonify({
                 'success': False,
                 'error': 'Invalid Telegram data'
@@ -132,7 +132,7 @@ def telegram_login():
             }), 400
         
         # Создаем или обновляем пользователя
-        user_db_id = TelegramAuth.ensure_user_exists(telegram_user_id)
+        user_db_id = AuthService.ensure_user_exists(telegram_user_id)
         
         if not user_db_id:
             return jsonify({

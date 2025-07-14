@@ -254,7 +254,6 @@ def get_user_id_from_request():
         
         # Получаем telegram_id через единый сервис авторизации
         telegram_user_id = auth_service.get_current_user_id()
-        
         if not telegram_user_id:
             logger.warning("⚠️ Database: auth_service.get_current_user_id() вернул None")
             return None
@@ -278,6 +277,8 @@ def get_user_id_from_request():
             return user_db_id
         else:
             logger.warning(f"⚠️ Database: Пользователь с telegram_id {telegram_user_id} не найден в БД")
+
+
             return None
         
     except Exception as e:

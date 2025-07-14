@@ -8,9 +8,8 @@ import os
 import sqlite3
 import sys
 import logging
-from typing import Optional, Dict, Any
 from datetime import datetime
-from app.models.database import get_user_id_from_request, execute_db_query
+from app.models.database import execute_db_query
 from app.config.telegram_config import AppConfig
 from app.api.offers import offers_bp
 from app.routers.main_router import main_bp
@@ -25,18 +24,13 @@ from app.telegram.telegram_bot_commands import TelegramBotExtension
 from app.telegram.telegram_channel_parser import TelegramChannelParser
 from app.telegram.telegram_notifications import TelegramNotificationService
 
-
-
-
-
-
-# Загрузка переменных окружения
 try:
     from dotenv import load_dotenv
 
     load_dotenv()
 except ImportError:
     print("⚠️ python-dotenv не установлен, используем системные переменные")
+
 
 # === НАСТРОЙКА ЛОГИРОВАНИЯ ===
 def setup_logging() -> logging.Logger:
@@ -51,11 +45,14 @@ def setup_logging() -> logging.Logger:
     logger.info("📋 Система логирования инициализирована")
     return logger
 
+
 # === СОЗДАНИЕ ПРИЛОЖЕНИЯ ===
 def create_app() -> Flask:
     """Фабрика приложений"""
 
-    app = Flask(__name__, static_folder= 'app/static', template_folder='templates')
+    app = Flask(__name__,
+                static_folder='app/static',
+                template_folder='templates')
     app.config.from_object(AppConfig)
     # Настройка JSON сериализации
     app.json.ensure_ascii = False
@@ -77,8 +74,10 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации Telegram: {e}") 
     else:
-        logger.warning("⚠️ Telegram интеграция отключена или BOT_TOKEN не задан")
+        logger.warning
+        ("⚠️ Telegram интеграция отключена или BOT_TOKEN не задан")
     return app
+
 
 # === РЕГИСТРАЦИЯ BLUEPRINTS ===
 def register_blueprints(app: Flask) -> None:
@@ -87,11 +86,12 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
     app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
-    app.register_blueprint(offers_management_bp, url_prefix='/api/offers_management')
+    app.register_blueprint(offers_management_bp,
+                           url_prefix='/api/offers_management')
     app.register_blueprint(proposals_management_bp)
-    app.register_blueprint(monitoring_statistics_bp, url_prefix='/api/monitoring_statistics')
+    app.register_blueprint(monitoring_statistics_bp,
+                           url_prefix='/api/monitoring_statistics')
                            
-
 
 # === MIDDLEWARE ===
 def register_middleware(app: Flask) -> None:
@@ -101,7 +101,6 @@ def register_middleware(app: Flask) -> None:
     def security_middleware():
         if request.content_length and request.content_length > AppConfig.MAX_CONTENT_LENGTH:
             return jsonify({'error': 'Request too large'}), 413
-
     @app.after_request
     def security_headers(response):
         response.headers.update({

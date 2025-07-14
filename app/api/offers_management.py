@@ -17,7 +17,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Создание Blueprint
-offers_management_bp = Blueprint('offers_management', __name__, url_prefix='/api/offers')
+offers_management_bp = Blueprint('offers_management', __name__)
 
 # ================================================================
 # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
@@ -173,84 +173,86 @@ def update_offer_status(offer_id: int, new_status: str) -> bool:
 # ================================================================
 
 @offers_management_bp.route('/<int:offer_id>/recommended-channels', methods=['GET'])
-def get_recommended_channels_endpoint(offer_id: int):
+def get_recommended_channels_for_offer(offer_id: int):
     """
-    Получение рекомендованных каналов для оффера
+    Get recommended channels for an offer
     
     GET /api/offers/{offer_id}/recommended-channels
     
     Query Parameters:
-    - limit: количество каналов (по умолчанию 20)
-    - category: фильтр по категории
-    - min_subscribers: минимальное количество подписчиков
+    - limit: number of channels to return (default 20)
+    - category: filter by category
+    - min_subscribers: minimum number of subscribers
     """
     try:
-        # Получаем ID пользователя из запроса
+        # Get user ID from request
         user_id = get_user_id_from_request()
+
         if not user_id:
             return jsonify({
                 'error': 'Unauthorized',
-                'message': 'Требуется авторизация'
+                'message': 'Authentication required'
             }), 401
-        
-      #   Проверяем принадлежность оффера
+
+        # Check if user owns the offer
         if not validate_offer_ownership(offer_id, user_id):
             return jsonify({
                 'error': 'Forbidden',
-                'message': 'Оффер не принадлежит пользователю'
+                'message': 'Offer does not belong to user'
             }), 403
-        
-        # Получаем детали оффера
+
+        # Get offer details
         offer = get_offer_details(offer_id)
         if not offer:
             return jsonify({
                 'error': 'Not Found',
-                'message': 'Оффер не найден'
+                'message': 'Offer not found'
             }), 404
-        
-        # Получаем параметры фильтрации
+
+        # Get filter parameters
         limit = request.args.get('limit', 20, type=int)
-        category_filter = request.args.get('category')
-        min_subscribers_filter = request.args.get('min_subscribers', type=int)
-        
-        # Получаем рекомендованные каналы
+        category = request.args.get('category')
+        min_subscribers = request.args.get('min_subscribers', type=int)
+
+        # Get recommended channels
         channels = get_recommended_channels(offer_id)
+
+        # Apply additional filters
+        if category:
+            channels = [c for c in channels if c.get('category') == category]
         
-        # Применяем дополнительные фильтры
-        if category_filter:
-            channels = [c for c in channels if c['category'] == category_filter]
-        
-        if min_subscribers_filter:
-            channels = [c for c in channels if c['subscriber_count'] >= min_subscribers_filter]
-        
-        # Ограничиваем количество результатов
+        if min_subscribers:
+            channels = [c for c in channels if c.get('subscriber_count', 0) >= min_subscribers]
+
+        # Limit number of results
         channels = channels[:limit]
-        
-        # Формируем ответ
+
+        # Form response
         response = {
             'success': True,
             'offer_id': offer_id,
-            'offer_title': offer['title'],
-            'offer_status': offer['status'],
+            'offer_title': offer.get('title'),
+            'offer_status': offer.get('status'),
             'total_channels': len(channels),
             'channels': channels,
             'filters': {
-                'category': category_filter,
-                'min_subscribers': min_subscribers_filter,
+                'category': category,
+                'min_subscribers': min_subscribers,
                 'limit': limit
             }
         }
-        
-        logger.info(f"Получены рекомендованные каналы для оффера {offer_id}: {len(channels)} каналов")
-        
+
         return jsonify(response), 200
-        
+
     except Exception as e:
-        logger.error(f"Ошибка получения рекомендованных каналов: {e}")
+        logger.error(f"Error getting recommended channels: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return jsonify({
             'error': 'Internal Server Error',
-            'message': 'Внутренняя ошибка сервера'
+            'message': 'Internal server error'
         }), 500
+
 
 @offers_management_bp.route('/<int:offer_id>/select-channels', methods=['POST'])
 def select_channels_endpoint(offer_id: int):

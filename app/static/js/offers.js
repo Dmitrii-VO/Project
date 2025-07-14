@@ -362,12 +362,12 @@ async function loadAvailableOffers(filters = {}) {
             }
         });
 
-        const url = `/api/offers/available${params.toString() ? '?' + params.toString() : ''}`;
+        const url = `/api/proposals/incoming${params.toString() ? '?' + params.toString() : ''}`;
         const result = await ApiClient.get(url);
 
         if (result.success) {
-            console.log('✅ Загружено доступных офферов:', result.offers?.length || 0);
-            renderAvailableOffers(result.offers || []);
+            console.log('✅ Загружено доступных офферов:', result.proposals?.length || 0);
+            renderAvailableOffers(result.proposals || []);
         } else {
             throw new Error(result.error || 'Ошибка загрузки офферов');
         }
@@ -380,6 +380,8 @@ async function loadAvailableOffers(filters = {}) {
 }
 
 function renderAvailableOffers(offers) {
+    console.log('▶ renderAvailableOffers вызвана, получено офферов:', offers.length);
+    console.log('Данные офферов:', offers);
     console.log('🎨 Отрисовка входящих предложений:', offers.length);
     const container = document.getElementById('findOffersGrid');
 
@@ -1481,7 +1483,15 @@ function setupOffersSearch() {
 async function showChannelSelectionModal(offerId, offerTitle) {
     try {
         showLoadingOverlay('Подбираем каналы...');
-        const response = await fetch(`/api/offers_management/${offerId}/recommended-channels?limit=20`);
+
+        const telegramUserId = request.headers.get('X-Telegram-User-Id')
+
+        const response = await fetch(`/api/offers_management/${offerId}/recommended-channels?limit=20`, {
+            headers: {
+                'X-Telegram-User-Id': telegramUserId
+            }
+        });
+
         const data = await response.json();
         hideLoadingOverlay();
         
@@ -1495,6 +1505,7 @@ async function showChannelSelectionModal(offerId, offerTitle) {
         showNotification('success', '✅ Оффер создан! Выбор каналов доступен в "Мои офферы"');
     }
 }
+
 
 function createChannelModal(offerId, offerTitle, channels) {
     const modal = document.createElement('div');

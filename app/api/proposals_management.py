@@ -319,7 +319,7 @@ def get_incoming_proposals():
     - offset: смещение для пагинации (по умолчанию 0)
     """
     try:
-        # Получаем ID пользователя из запроса
+        # 1. Получаем ID пользователя из запроса
         user_id = get_user_id_from_request()
         if not user_id:
             return jsonify({
@@ -327,16 +327,16 @@ def get_incoming_proposals():
                 'message': 'Требуется авторизация'
             }), 401
         
-        # Получаем параметры фильтрации
+        # 2. Получаем параметры фильтрации
         status_filter = request.args.get('status')
         channel_id_filter = request.args.get('channel_id', type=int)
         limit = request.args.get('limit', 50, type=int)
         offset = request.args.get('offset', 0, type=int)
         
-        # Ограничиваем лимит
+        # 3. Ограничиваем лимит на количество результатов
         limit = min(limit, 100)
         
-        # Получаем каналы пользователя
+        # 4. Получаем каналы пользователя
         user_channels = get_user_channels(user_id)
         if not user_channels:
             return jsonify({
@@ -346,7 +346,7 @@ def get_incoming_proposals():
                 'user_channels': []
             }), 200
         
-        # Формируем запрос
+        # 5. Формируем запрос
         conn = get_db_connection()
         if not conn:
             return jsonify({
@@ -356,22 +356,23 @@ def get_incoming_proposals():
         
         cursor = conn.cursor()
         
-        # Базовый запрос
+        # 6. Базовый запрос
         where_conditions = ["c.owner_id = ?"]
         params = [user_id]
         
-        # Добавляем фильтры
-        if status_filter:
-            where_conditions.append("op.status = ?")
-            params.append(status_filter)
+        # 7. Добавляем фильтры
+   #    if status_filter:
+   #         where_conditions.append("op.status = ?")
+   #         params.append(status_filter)
         
         if channel_id_filter:
             where_conditions.append("op.channel_id = ?")
             params.append(channel_id_filter)
         
+        # 8. Формируем WHERE-условие
         where_clause = " AND ".join(where_conditions)
         
-        # Получаем общее количество
+        # 9. Получаем общее количество
         count_query = f"""
             SELECT COUNT(*) as total
             FROM offer_proposals op
@@ -383,52 +384,25 @@ def get_incoming_proposals():
         cursor.execute(count_query, params)
         total_count = cursor.fetchone()['total']
         
-        # Получаем данные с пагинацией
+        # 10. Получаем данные с пагинацией
         main_query = f"""
             SELECT 
-                op.id, op.offer_id, op.channel_id, op.status,
-                op.created_at, op.responded_at, op.expires_at,
-                op.rejection_reason, op.notified_at,
-                -- Информация об оффере
-                o.title as offer_title, o.description as offer_description,
-                o.budget_total as offer_budget, o.content as offer_content,
-                o.requirements as placement_requirements, o.contact_info,
-                o.duration_days as placement_duration,, o.expected_placement_duration,
-                o.category as offer_category, o.target_audience,
-                -- Информация о канале
+                op.id as proposal_id, op.status as proposal_status,
+                op.created_at as proposal_created_at, op.expires_at,
+                o.id, o.title, o.description, 
+                COALESCE(o.budget_total, o.price, 0) as price,
+                o.currency, o.target_audience,
+                o.min_subscribers, o.max_subscribers,
+                u.username as creator_name, u.first_name,
                 c.title as channel_title, c.username as channel_username,
-                c.subscriber_count, c.category as channel_category,
-                -- Информация о создателе оффера
-                u.username as advertiser_username, u.first_name as advertiser_first_name,
-                u.last_name as advertiser_last_name,
-                -- Информация о размещении
-                opl.id as placement_id, opl.post_url, opl.status as placement_status,
-                opl.placement_start, opl.placement_end, opl.final_views_count,
-                -- Дополнительная информация
-                CASE 
-                    WHEN op.expires_at < datetime('now') THEN 1
-                    ELSE 0
-                END as is_expired,
-                CASE 
-                    WHEN op.expires_at > datetime('now') THEN 
-                        CAST((julianday(op.expires_at) - julianday('now')) * 24 AS INTEGER)
-                    ELSE 0
-                END as hours_until_expiry
+                c.subscriber_count,
+                (op.expires_at < CURRENT_TIMESTAMP) as is_expired
             FROM offer_proposals op
-            JOIN channels c ON op.channel_id = c.id
             JOIN offers o ON op.offer_id = o.id
+            JOIN channels c ON op.channel_id = c.id
             JOIN users u ON o.created_by = u.id
-            LEFT JOIN offer_placements opl ON op.id = opl.proposal_id
             WHERE {where_clause}
-            ORDER BY 
-                CASE op.status
-                    WHEN 'sent' THEN 1
-                    WHEN 'accepted' THEN 2
-                    WHEN 'rejected' THEN 3
-                    WHEN 'expired' THEN 4
-                    ELSE 5
-                END,
-                op.created_at DESC
+            ORDER BY op.created_at DESC
             LIMIT ? OFFSET ?
         """
         
@@ -436,7 +410,7 @@ def get_incoming_proposals():
         proposals = cursor.fetchall()
         conn.close()
         
-        # Формируем результат
+        # 11. Формируем результат
         proposals_list = []
         for proposal in proposals:
             proposal_data = dict(proposal)
@@ -444,23 +418,28 @@ def get_incoming_proposals():
             # Добавляем дополнительную информацию
             proposal_data['is_expired'] = bool(proposal_data['is_expired'])
             proposal_data['can_respond'] = (
-                proposal_data['status'] == 'sent' and 
+                proposal_data['proposal_status'] == 'sent' and 
                 not proposal_data['is_expired']
             )
             
             # Рассчитываем предполагаемый доход
-            if proposal_data['offer_budget'] and proposal_data['subscriber_count']:
+            if (
+                proposal_data['price'] is not None and 
+                proposal_data['subscriber_count'] is not None
+            ):
                 estimated_payment = min(
-                    proposal_data['offer_budget'],
-                    proposal_data['subscriber_count'] * 0.01  # 1 копейка за подписчика
+                    proposal_data['price'],
+                    proposal_data['subscriber_count'] * 0.01
                 )
                 proposal_data['estimated_payment'] = round(estimated_payment, 2)
             else:
                 proposal_data['estimated_payment'] = 0
+
             
             proposals_list.append(proposal_data)
-        
-        # Формируем ответ
+
+
+        # 12. Формируем ответ
         response = {
             'success': True,
             'total_proposals': total_count,
