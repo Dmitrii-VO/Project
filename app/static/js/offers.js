@@ -375,12 +375,12 @@ async function loadAvailableOffers(filters = {}) {
             }
         });
 
-        const url = `/api/proposals/incoming${params.toString() ? '?' + params.toString() : ''}`;
+        const url = `/api/offers${params.toString() ? '?' + params.toString() : ''}`;
         const result = await ApiClient.get(url);
 
         if (result.success) {
-            console.log('✅ Загружено доступных офферов:', result.proposals?.length || 0);
-            renderAvailableOffers(result.proposals || []);
+            console.log('✅ Загружено доступных офферов:', result.offers?.length || 0);
+            renderAvailableOffers(result.offers || []);
         } else {
             throw new Error(result.error || 'Ошибка загрузки офферов');
         }
@@ -395,7 +395,6 @@ async function loadAvailableOffers(filters = {}) {
 function renderAvailableOffers(offers) {
     console.log('▶ renderAvailableOffers вызвана, получено офферов:', offers.length);
     console.log('Данные офферов:', offers);
-    console.log('🎨 Отрисовка входящих предложений:', offers.length);
     const container = document.getElementById('findOffersGrid');
 
     if (!container) {
@@ -404,8 +403,8 @@ function renderAvailableOffers(offers) {
     }
 
     if (!offers?.length) {
-        Utils.showEmpty(container, 'Нет входящих предложений',
-            'У вас пока нет предложений о размещении рекламы в ваших каналах',
+        Utils.showEmpty(container, 'Нет доступных офферов',
+            'В данный момент нет офферов, доступных для размещения',
             '<button class="btn btn-primary" onclick="switchTab(\'my-offers\')">📋 Мои офферы</button>'
         );
         return;
@@ -413,64 +412,68 @@ function renderAvailableOffers(offers) {
 
     container.innerHTML = offers.map(offer => {
         const {
-            proposal_id, proposal_status = 'sent', expires_at,
             id, title = 'Без названия', description = 'Нет описания',
-            price = 0, currency = 'RUB',
-            min_subscribers = 0, max_subscribers = 0,
-            creator_name = 'Неизвестный автор', first_name = '',
-            channel_title = 'Неизвестный канал', channel_username = ''
+            price = 0, budget_total = 0, currency = 'RUB',
+            target_audience = 'Не указано', requirements = 'Нет требований',
+            category = 'general', status = 'active',
+            created_at, expires_at,
+            creator_username = 'Неизвестный автор', creator_name = ''
         } = offer;
 
         const isExpired = expires_at && new Date(expires_at) < new Date();
-        const statusClass = isExpired ? 'expired' : proposal_status;
+        const statusClass = isExpired ? 'expired' : status;
         const timeLeft = expires_at ? getTimeUntilExpiry(expires_at) : null;
         
-        const formattedPrice = Utils.formatPrice(price);
-        const shortDescription = description.length > 100 ? description.substring(0, 100) + '...' : description;
-        const advertiserName = first_name ? `${first_name}` : creator_name;
-        const channelDisplay = channel_username ? `@${channel_username}` : channel_title;
+        const displayPrice = budget_total || price;
+        const formattedPrice = Utils.formatPrice(displayPrice);
+        const shortDescription = description.length > 120 ? description.substring(0, 120) + '...' : description;
+        const advertiserName = creator_name ? `${creator_name}` : creator_username;
+        const createdDate = Utils.formatDate(created_at);
         
-        const subscriberText = max_subscribers > 0 && max_subscribers !== 'Без ограничений'
-            ? `${min_subscribers.toLocaleString()}-${max_subscribers.toLocaleString()}`
-            : `${min_subscribers.toLocaleString()}+`;
+        // Категории на русском
+        const categoryNames = {
+            'general': 'Общие',
+            'tech': 'Технологии',
+            'finance': 'Финансы',
+            'lifestyle': 'Образ жизни',
+            'education': 'Образование',
+            'entertainment': 'Развлечения',
+            'business': 'Бизнес'
+        };
+        
+        const categoryName = categoryNames[category] || 'Другое';
 
         return `
-            <div class="proposal-card compact ${statusClass}" data-proposal-id="${proposal_id}">
-                <div class="proposal-header">
-                    <div class="proposal-title">
-                        <h3>${title}</h3>
-                        <div class="proposal-info">
-                            👤 ${advertiserName} • 📺 ${channelDisplay} • 👥 ${subscriberText}
+            <div class="available-offer-card" data-offer-id="${id}" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                <div class="offer-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div class="offer-title" style="flex: 1;">
+                        <h3 style="margin: 0; color: #2d3748; font-size: 16px; font-weight: 600; line-height: 1.3;">${title}</h3>
+                        <div class="offer-meta" style="margin-top: 4px; font-size: 12px; color: #718096;">
+                            👤 ${advertiserName} • 📂 ${categoryName} • 📅 ${createdDate}
                             ${timeLeft ? ` • ⏰ ${timeLeft.text}` : ''}
                         </div>
                     </div>
-                    <div class="proposal-price">
-                        <span class="price-amount">${formattedPrice}</span>
-                        <span class="price-currency">${currency}</span>
+                    <div class="offer-price" style="text-align: right; margin-left: 12px;">
+                        <div style="font-size: 18px; font-weight: 600; color: #2b6cb0;">${formattedPrice}</div>
+                        <div style="font-size: 11px; color: #718096;">${currency}</div>
                     </div>
                 </div>
-
-                <div class="proposal-description">
+                
+                <div class="offer-description" style="margin-bottom: 12px; color: #4a5568; font-size: 14px; line-height: 1.4;">
                     ${shortDescription}
                 </div>
-
-                <div class="proposal-actions">
-                    ${!isExpired && proposal_status === 'sent' ? `
-                        <button class="btn btn-success btn-xs" onclick="acceptProposal(${proposal_id}, '${title}')">
-                            ✅ Принять
-                        </button>
-                        <button class="btn btn-danger btn-xs" onclick="rejectProposal(${proposal_id}, '${title}')">
-                            ❌ Отклонить
-                        </button>
-                        <button class="btn btn-secondary btn-xs" onclick="viewProposalDetails(${proposal_id})">
-                            👁️
-                        </button>
-                    ` : `
-                        <button class="btn btn-secondary btn-xs" onclick="viewProposalDetails(${proposal_id})">
-                            👁️ Просмотр
-                        </button>
-                        ${proposal_status === 'sent' ? '<span class="expired-note">⏰ Истекло</span>' : ''}
-                    `}
+                
+                <div class="offer-audience" style="margin-bottom: 12px; padding: 8px; background: #f7fafc; border-radius: 6px; font-size: 13px;">
+                    <strong>🎯 Целевая аудитория:</strong> ${target_audience}
+                </div>
+                
+                <div class="offer-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
+                    <button class="btn btn-outline" onclick="viewAvailableOfferDetails(${id})" style="padding: 6px 12px; font-size: 12px; border: 1px solid #e2e8f0; background: white; color: #4a5568; border-radius: 4px;">
+                        👁️ Подробнее
+                    </button>
+                    <button class="btn btn-primary" onclick="respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
+                        📩 Откликнуться
+                    </button>
                 </div>
             </div>
         `;
@@ -1478,6 +1481,27 @@ async function acceptOffer(offerId) {
 
 async function manageResponses(offerId) {
     await ResponseManager.manageResponses(offerId);
+}
+
+// Функции для работы с доступными офферами
+async function viewAvailableOfferDetails(offerId) {
+    try {
+        const result = await ApiClient.get(`/api/offers/${offerId}`);
+        if (result.success) {
+            const offer = result.offer;
+            alert(`Детали оффера "${offer.title}"\n\nОписание: ${offer.description}\nЦена: ${offer.budget_total || offer.price} ${offer.currency}\nЦелевая аудитория: ${offer.target_audience}\nТребования: ${offer.requirements || 'Нет требований'}`);
+        } else {
+            alert('Ошибка получения деталей оффера');
+        }
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка получения деталей оффера');
+    }
+}
+
+async function respondToOffer(offerId) {
+    // Заглушка для отклика на оффер
+    alert(`Функция отклика на оффер ${offerId} будет реализована позже`);
 }
 
 async function viewOfferDetails(offerId) {

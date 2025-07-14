@@ -21,6 +21,128 @@ offers_bp = Blueprint('offers', __name__)
 
 # === API ENDPOINTS ===
 
+@offers_bp.route('', methods=['GET'])
+def get_available_offers():
+    """Получение доступных офферов для владельцев каналов"""
+    try:
+        # Получаем параметры фильтрации
+        page = int(request.args.get('page', 1))
+        limit = int(request.args.get('limit', 10))
+        offset = (page - 1) * limit
+        
+        status_filter = request.args.get('status', 'active')
+        search = request.args.get('search', '')
+        category_filter = request.args.get('category', '')
+        
+        # Получаем текущего пользователя
+        telegram_id = auth_service.get_current_user_id()
+        user_db_id = None
+        
+        if telegram_id:
+            user = execute_db_query(
+                'SELECT id FROM users WHERE telegram_id = ?',
+                (telegram_id,),
+                fetch_one=True
+            )
+            if user:
+                user_db_id = user['id']
+        
+        # Базовый запрос для получения доступных офферов
+        base_query = '''
+            SELECT o.*, u.username as creator_username, u.first_name as creator_name
+            FROM offers o
+            JOIN users u ON o.created_by = u.id
+            WHERE 1=1
+        '''
+        
+        count_query = '''
+            SELECT COUNT(*) as total
+            FROM offers o
+            JOIN users u ON o.created_by = u.id
+            WHERE 1=1
+        '''
+        
+        params = []
+        
+        # Фильтр по статусу (по умолчанию только активные)
+        if status_filter:
+            base_query += ' AND o.status = ?'
+            count_query += ' AND o.status = ?'
+            params.append(status_filter)
+        
+        # Исключаем собственные офферы пользователя
+        if user_db_id:
+            base_query += ' AND o.created_by != ?'
+            count_query += ' AND o.created_by != ?'
+            params.append(user_db_id)
+        
+        # Фильтр по поиску
+        if search:
+            base_query += ' AND (o.title LIKE ? OR o.description LIKE ?)'
+            count_query += ' AND (o.title LIKE ? OR o.description LIKE ?)'
+            search_term = f'%{search}%'
+            params.extend([search_term, search_term])
+        
+        # Фильтр по категории
+        if category_filter:
+            base_query += ' AND o.category = ?'
+            count_query += ' AND o.category = ?'
+            params.append(category_filter)
+        
+        # Получаем общее количество
+        total_count = execute_db_query(count_query, tuple(params), fetch_one=True)['total']
+        
+        # Добавляем сортировку и пагинацию
+        base_query += ' ORDER BY o.created_at DESC LIMIT ? OFFSET ?'
+        params.extend([limit, offset])
+        
+        # Получаем офферы
+        offers = execute_db_query(base_query, tuple(params), fetch_all=True)
+        
+        # Форматируем данные
+        formatted_offers = []
+        for offer in offers:
+            # Парсим метаданные
+            try:
+                metadata = json.loads(offer.get('metadata', '{}')) if offer.get('metadata') else {}
+            except (json.JSONDecodeError, TypeError):
+                metadata = {}
+            
+            formatted_offers.append({
+                'id': offer['id'],
+                'title': offer['title'],
+                'description': offer['description'],
+                'price': offer['price'],
+                'budget_total': offer['budget_total'],
+                'currency': offer['currency'],
+                'target_audience': offer['target_audience'],
+                'requirements': offer['requirements'],
+                'category': offer['category'],
+                'status': offer['status'],
+                'created_at': offer['created_at'],
+                'expires_at': offer['expires_at'],
+                'creator_username': offer['creator_username'],
+                'creator_name': offer['creator_name'],
+                'metadata': metadata
+            })
+        
+        total_pages = (total_count + limit - 1) // limit
+        
+        logger.info(f"Найдено доступных офферов: {len(formatted_offers)} из {total_count}")
+        
+        return jsonify({
+            'success': True,
+            'offers': formatted_offers,
+            'count': len(formatted_offers),
+            'total_count': total_count,
+            'page': page,
+            'total_pages': total_pages
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения доступных офферов: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @offers_bp.route('', methods=['POST'])
 def create_offer():
     """Создание нового оффера"""
