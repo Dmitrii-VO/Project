@@ -1848,7 +1848,7 @@ function createChannelModalForDraft(offerId, offerTitle, channels) {
                                     <span class="category">📂 ${channel.category}</span>
                                 </div>
                             </div>
-                            <div class="channel-checkbox" style="position: absolute; top: 8px; right: 8px; width: 24px; height: 24px; border: 2px solid #4299e1; border-radius: 50%; background: white; display: flex; align-items: center; justify-content: center; font-size: 16px; color: #4299e1; font-weight: bold;"></div>
+                            <div class="channel-checkbox"></div>
                         </div>
                     `).join('')}
                 </div>
