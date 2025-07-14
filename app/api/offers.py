@@ -64,6 +64,9 @@ def create_offer():
             'creator_telegram_id': telegram_id
         }
 
+        # Определяем статус оффера (draft или active)
+        initial_status = data.get('status', 'active')  # По умолчанию active, но можно передать draft
+        
         # Создаем оффер
         offer_id = execute_db_query('''
             INSERT INTO offers (created_by, title, description, content, price, currency,
@@ -81,7 +84,7 @@ def create_offer():
             data['target_audience'],
             data.get('requirements', ''),
             data.get('deadline'),
-            'active',
+            initial_status,
             data.get('category', 'general'),
             json.dumps(metadata),
             float(data.get('budget_total', data['price'])),
@@ -991,6 +994,168 @@ def get_user_summary():
     except Exception as e:
         logger.error(f"Ошибка получения сводки: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@offers_bp.route('/<int:offer_id>', methods=['GET'])
+def get_offer_details(offer_id):
+    """Получение деталей конкретного оффера"""
+    try:
+        # Проверяем авторизацию
+        user_db_id = auth_service.get_user_db_id()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+        
+        # Получаем оффер
+        offer = execute_db_query(
+            'SELECT * FROM offers WHERE id = ? AND created_by = ?',
+            (offer_id, user_db_id),
+            fetch_one=True
+        )
+        
+        if not offer:
+            return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+        
+        # Преобразуем в словарь для JSON
+        offer_data = dict(offer)
+        
+        # Парсим metadata если есть
+        if offer_data.get('metadata'):
+            try:
+                offer_data['metadata'] = json.loads(offer_data['metadata'])
+            except:
+                offer_data['metadata'] = {}
+        
+        return jsonify({
+            'success': True,
+            'offer': offer_data
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения деталей оффера: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+
+
+@offers_bp.route('/<int:offer_id>', methods=['PATCH'])
+def update_offer_status_endpoint(offer_id):
+    """Обновление статуса оффера"""
+    try:
+        # Проверяем авторизацию
+        user_db_id = auth_service.get_user_db_id()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+        
+        # Проверяем, что оффер существует и принадлежит пользователю
+        offer = execute_db_query(
+            'SELECT * FROM offers WHERE id = ? AND created_by = ?',
+            (offer_id, user_db_id),
+            fetch_one=True
+        )
+        
+        if not offer:
+            return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+        
+        # Получаем новый статус из запроса
+        data = request.get_json()
+        if not data or 'status' not in data:
+            return jsonify({'success': False, 'error': 'Необходимо указать статус'}), 400
+        
+        new_status = data['status']
+        if new_status not in ['draft', 'active', 'paused', 'completed']:
+            return jsonify({'success': False, 'error': 'Недопустимый статус'}), 400
+        
+        # Обновляем статус
+        execute_db_query(
+            'UPDATE offers SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            (new_status, offer_id)
+        )
+        
+        logger.info(f"Обновлен статус оффера {offer_id} на {new_status}")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Статус оффера изменен на {new_status}',
+            'offer_id': offer_id,
+            'status': new_status
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Ошибка обновления статуса оффера: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+
+
+@offers_bp.route('/<int:offer_id>/complete-draft', methods=['POST'])
+def complete_draft_offer(offer_id):
+    """Завершение создания оффера из черновика"""
+    try:
+        # Проверяем авторизацию
+        user_db_id = auth_service.get_user_db_id()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+        
+        # Проверяем, что оффер существует и принадлежит пользователю
+        offer = execute_db_query(
+            'SELECT * FROM offers WHERE id = ? AND created_by = ?',
+            (offer_id, user_db_id),
+            fetch_one=True
+        )
+        
+        if not offer:
+            return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+        
+        # Проверяем, что оффер в статусе draft
+        if offer['status'] != 'draft':
+            return jsonify({'success': False, 'error': 'Оффер уже завершен'}), 400
+        
+        # Получаем выбранные каналы из запроса
+        data = request.get_json()
+        if not data or 'channel_ids' not in data:
+            return jsonify({'success': False, 'error': 'Необходимо выбрать каналы'}), 400
+        
+        channel_ids = data['channel_ids']
+        if not channel_ids or not isinstance(channel_ids, list):
+            return jsonify({'success': False, 'error': 'Необходимо выбрать хотя бы один канал'}), 400
+        
+        # Обновляем статус оффера на active
+        execute_db_query(
+            'UPDATE offers SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            ('active', offer_id)
+        )
+        
+        # Создаем предложения для выбранных каналов (копируем логику из основного создания)
+        created_proposals = []
+        for channel_id in channel_ids:
+            # Проверяем, что канал существует
+            channel = execute_db_query(
+                'SELECT id, title FROM channels WHERE id = ? AND is_active = 1',
+                (channel_id,),
+                fetch_one=True
+            )
+            
+            if channel:
+                # Создаем предложение
+                proposal_id = execute_db_query('''
+                    INSERT INTO offer_proposals (offer_id, channel_id, status, created_at)
+                    VALUES (?, ?, 'sent', CURRENT_TIMESTAMP)
+                ''', (offer_id, channel_id))
+                
+                created_proposals.append({
+                    'id': proposal_id,
+                    'channel_id': channel_id,
+                    'channel_title': channel['title']
+                })
+        
+        logger.info(f"Завершен черновик оффера {offer_id}, создано {len(created_proposals)} предложений")
+        
+        return jsonify({
+            'success': True,
+            'message': f'Оффер завершен и отправлен в {len(created_proposals)} каналов',
+            'offer_id': offer_id,
+            'proposals_created': len(created_proposals)
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Ошибка завершения черновика: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
 
 # === ЭКСПОРТ ===

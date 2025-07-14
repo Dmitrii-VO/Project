@@ -14,8 +14,14 @@
       "Bash(ls:*)",
       "Bash(rm:*)",
       "Bash(find:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(sqlite3:*)"
     ],
     "deny": []
+  },
+  "rules": {
+    "git_push_policy": "only_on_explicit_user_command",
+    "description": "Git push разрешен только по явной команде пользователя. Не делать push автоматически."
   }
 }
