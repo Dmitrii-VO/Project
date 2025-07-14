@@ -722,36 +722,28 @@ def analyze_channel():
 def get_my_channels():
     """
     ФУНКЦИЯ 3: Получение каналов текущего пользователя
-    ИСПРАВЛЕНО: убран SQLAlchemy, исправлены имена полей
+    ИСПРАВЛЕНО: убрана путаница между telegram_id и user_db_id
     """
     try:
-        # Получаем telegram_id из заголовков (универсально для фронта)
-        telegram_id = get_user_id_from_request()
-        if not telegram_id:
-            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
+        # ✅ ИСПРАВЛЕНО: get_user_id_from_request() возвращает user_db_id, НЕ telegram_id!
+        user_db_id = get_user_id_from_request()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
 
-        current_app.logger.info(f"Получение каналов для пользователя telegram_id: {telegram_id}")
+        current_app.logger.info(f"Получение каналов для пользователя user_db_id: {user_db_id}")
 
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
-        # Получаем user_id по telegram_id
-        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
-        user = cursor.fetchone()
-        if not user:
-            conn.close()
-            return jsonify({'success': True, 'channels': [], 'total': 0})
-
-        user_id = user['id']
-
+        # ✅ ИСПРАВЛЕНО: используем user_db_id напрямую, без дополнительного поиска
         cursor.execute("""
             SELECT id, telegram_id, title, username, subscriber_count, category,
                     is_verified, verification_code, created_at, status
             FROM channels
             WHERE owner_id = ?
             ORDER BY created_at DESC
-        """, (user_id,))
+        """, (user_db_id,))
 
         channels_data = cursor.fetchall()
         conn.close()
@@ -788,7 +780,6 @@ def get_my_channels():
     except Exception as e:
         current_app.logger.error(f"Error getting my channels: {e}")
         return jsonify({'error': 'Internal server error'}), 500
-
 @channels_bp.route('/<int:channel_id>/update-stats', methods=['PUT', 'POST'])
 def update_channel_stats(channel_id):
     """Обновление статистики канала данными от фронтенда"""
