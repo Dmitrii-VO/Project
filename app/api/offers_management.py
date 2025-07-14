@@ -9,7 +9,8 @@ import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from flask import Blueprint, request, jsonify, current_app
-from app.models.database import get_user_id_from_request, execute_db_query
+from app.models.database import execute_db_query
+from app.services.auth_service import auth_service
 from app.config.telegram_config import AppConfig
 import logging
 
@@ -33,23 +34,33 @@ def get_db_connection():
         logger.error(f"Ошибка подключения к БД: {e}")
         return None
 
-def validate_offer_ownership(offer_id: int, user_id: int) -> bool:
+def validate_offer_ownership(offer_id: int, user_db_id: int) -> bool:
     """Проверка принадлежности оффера пользователю"""
     try:
         conn = get_db_connection()
         if not conn:
+            logger.error(f"Ошибка подключения к БД в validate_offer_ownership")
             return False
         
         cursor = conn.cursor()
         cursor.execute("""
             SELECT created_by FROM offers 
-            WHERE id = ? AND created_by = ?
-        """, (offer_id, user_id))
+            WHERE id = ?
+        """, (offer_id,))
         
         result = cursor.fetchone()
         conn.close()
         
-        return result is not None
+        if not result:
+            logger.warning(f"Оффер {offer_id} не найден")
+            return False
+            
+        offer_owner_id = result[0]
+        is_owner = offer_owner_id == user_db_id
+        
+        logger.debug(f"Проверка владения оффером {offer_id}: owner_id={offer_owner_id}, user_db_id={user_db_id}, is_owner={is_owner}")
+        
+        return is_owner
     except Exception as e:
         logger.error(f"Ошибка проверки владения оффером: {e}")
         return False
@@ -185,8 +196,8 @@ def get_recommended_channels_for_offer(offer_id: int):
     - min_subscribers: minimum number of subscribers
     """
     try:
-        # Get user ID from request
-        user_id = get_user_id_from_request()
+        # Get user ID from unified auth service
+        user_id = auth_service.get_user_db_id()
 
         if not user_id:
             return jsonify({
@@ -257,7 +268,7 @@ def get_recommended_channels_for_offer(offer_id: int):
 @offers_management_bp.route('/<int:offer_id>/select-channels', methods=['POST'])
 def select_channels_endpoint(offer_id: int):
     try:
-        user_id = get_user_id_from_request()
+        user_id = auth_service.get_user_db_id()
         if not user_id:
             return jsonify({'error': 'Unauthorized'}), 401
         
@@ -385,7 +396,7 @@ def mark_as_advertising_endpoint(offer_id: int):
     """
     try:
         # Получаем ID пользователя из запроса
-        user_id = get_user_id_from_request()
+        user_id = auth_service.get_user_db_id()
         if not user_id:
             return jsonify({
                 'error': 'Unauthorized',
@@ -461,7 +472,7 @@ def get_offer_statistics_endpoint(offer_id: int):
     """
     try:
         # Получаем ID пользователя из запроса
-        user_id = get_user_id_from_request()
+        user_id = auth_service.get_user_db_id()
         if not user_id:
             return jsonify({
                 'error': 'Unauthorized',

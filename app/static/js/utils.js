@@ -333,25 +333,89 @@ function initUserIdBadge() {
         console.warn('⚠️ ID пользователя не получен, badge скрыт');
     }
 }
-// Получаем ID пользователя из Telegram WebApp или мета-тега
+// ЕДИНАЯ ФУНКЦИЯ ПОЛУЧЕНИЯ TELEGRAM USER ID - АДЕКВАТНАЯ ВЕРСИЯ
 function getTelegramUserId() {
-    // 1. Пытаемся получить из Telegram WebApp
+    // 1. Пытаемся получить из Telegram WebApp API
     if (window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
-        return window.Telegram.WebApp.initDataUnsafe.user.id.toString();
+        const userId = window.Telegram.WebApp.initDataUnsafe.user.id;
+        console.log('✅ User ID получен из Telegram WebApp:', userId);
+        return userId.toString();
     }
     
-    // 2. Fallback из переменных окружения (для разработки)
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        return '373086959'; // YOUR_TELEGRAM_ID из .env
+    // 2. Пытаемся получить из Telegram WebApp initData
+    if (window.Telegram?.WebApp?.initData) {
+        try {
+            const initData = window.Telegram.WebApp.initData;
+            const urlParams = new URLSearchParams(initData);
+            const userParam = urlParams.get('user');
+            if (userParam) {
+                const userData = JSON.parse(decodeURIComponent(userParam));
+                if (userData.id) {
+                    console.log('✅ User ID получен из Telegram initData:', userData.id);
+                    return userData.id.toString();
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ Ошибка парсинга Telegram initData:', e);
+        }
     }
     
-    // 3. Пытаемся получить из мета-тега (если добавить в шаблон)
+    // 3. Пытаемся получить из localStorage (для кэширования)
+    const cachedUserId = localStorage.getItem('telegram_user_id');
+    if (cachedUserId) {
+        console.log('✅ User ID получен из localStorage:', cachedUserId);
+        return cachedUserId;
+    }
+    
+    // 4. Пытаемся получить из мета-тега (если добавлен в шаблон)
     const metaUserId = document.querySelector('meta[name="telegram-user-id"]');
-    if (metaUserId) {
+    if (metaUserId?.content) {
+        console.log('✅ User ID получен из meta тега:', metaUserId.content);
         return metaUserId.content;
     }
     
+    // 5. Пытаемся получить из URL параметров
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlUserId = urlParams.get('telegram_id') || urlParams.get('user_id');
+    if (urlUserId) {
+        console.log('✅ User ID получен из URL параметров:', urlUserId);
+        return urlUserId;
+    }
+    
+    // 6. Режим разработки (только для localhost)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        const devUserId = '373086959'; // YOUR_TELEGRAM_ID из конфига
+        console.warn('🧪 РЕЖИМ РАЗРАБОТКИ: используется тестовый User ID:', devUserId);
+        return devUserId;
+    }
+    
+    // 7. Ничего не найдено
+    console.error('❌ Не удалось получить Telegram User ID!');
+    console.error('❌ Проверьте: Telegram WebApp, localStorage, meta теги, URL параметры');
+    console.error('❌ Текущий hostname:', window.location.hostname);
     return null;
+}
+
+// Функция сохранения User ID в localStorage для кэширования
+function cacheTelegramUserId() {
+    const userId = getTelegramUserId();
+    if (userId) {
+        localStorage.setItem('telegram_user_id', userId);
+        console.log('✅ User ID сохранен в localStorage:', userId);
+    }
+}
+
+// Функция очистки кэша
+function clearTelegramUserIdCache() {
+    localStorage.removeItem('telegram_user_id');
+    console.log('✅ Кэш User ID очищен');
+}
+
+// Автоматическое кэширование при загрузке
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', cacheTelegramUserId);
+} else {
+    cacheTelegramUserId();
 }
 // Автоинициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {
@@ -367,6 +431,8 @@ window.goBack = goBack;
 window.closeModal = closeModal;
 window.initModalHandlers = initModalHandlers;
 window.getTelegramUserId = getTelegramUserId;
+window.cacheTelegramUserId = cacheTelegramUserId;
+window.clearTelegramUserIdCache = clearTelegramUserIdCache;
 // Глобальный экспорт утилит
 window.API = API;
 window.UI = UI;

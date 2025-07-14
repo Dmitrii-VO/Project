@@ -1626,16 +1626,33 @@ async function sendProposals(offerId) {
         .map(card => parseInt(card.dataset.channelId));
     
     try {
+        const telegramUserId = getTelegramUserId();
+        
+        if (!telegramUserId) {
+            showNotification('error', 'Ошибка: не удалось получить Telegram User ID');
+            return;
+        }
+        
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Telegram-User-Id': telegramUserId,
+            'X-User-Id': telegramUserId,
+            'telegram-user-id': telegramUserId
+        };
+        
         const response = await fetch(`/api/offers_management/${offerId}/select-channels`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: headers,
             body: JSON.stringify({channel_ids: channelIds, message: 'Приглашение к участию'})
         });
         
         const result = await response.json();
-        if (result.success) {
+        if (response.ok && result.success) {
             closeChannelModal();
             showNotification('success', `✅ Отправлено в ${channelIds.length} каналов!`);
+        } else {
+            const errorMessage = result.message || result.error || 'Неизвестная ошибка';
+            showNotification('error', `Ошибка: ${errorMessage}`);
         }
     } catch (error) {
         showNotification('error', `Ошибка: ${error.message}`);
