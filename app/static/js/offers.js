@@ -190,14 +190,20 @@ const OfferRenderer = {
         const displayPrice = budget_total || price || 0;
         const formattedPrice = Utils.formatPrice(displayPrice);
         const formattedDate = Utils.formatDate(created_at);
-        const shortDescription = description.length > 80 ? description.substring(0, 80) + '...' : description;
+        let shortDescription = description.length > 80 ? description.substring(0, 80) + '...' : description;
+        
+        // Для черновиков добавляем пояснение
+        if (status === 'draft') {
+            shortDescription = '📝 Черновик требует завершения - выберите каналы для размещения. ' + shortDescription;
+        }
         const shortTitle = title.length > 25 ? title.substring(0, 25) + '...' : title;
 
         const statusConfig = {
             'active': { bg: '#d4edda', color: '#155724', text: 'Активен' },
             'paused': { bg: '#fff3cd', color: '#856404', text: 'Приостановлен' },
             'completed': { bg: '#d1ecf1', color: '#0c5460', text: 'Завершен' },
-            'cancelled': { bg: '#f8d7da', color: '#721c24', text: 'Отменен' }
+            'cancelled': { bg: '#f8d7da', color: '#721c24', text: 'Отменен' },
+            'draft': { bg: '#e2e8f0', color: '#4a5568', text: '📝 Черновик' }
         };
 
         const statusStyle = statusConfig[status] || statusConfig.active;
@@ -258,14 +264,21 @@ const OfferRenderer = {
             ],
             completed: [
                 { text: '🗑️ Удалить', color: '#e53e3e', action: `deleteOffer(${id}, '${title.replace(/'/g, "\\'")}', this)`, flex: '2' }
+            ],
+            draft: [
+                { text: '🗑️ Удалить', color: '#e53e3e', action: `deleteOffer(${id}, '${title.replace(/'/g, "\\'")}', this)`, flex: '2' }
             ]
         };
 
+        // Определяем текст кнопки в зависимости от статуса
+        const detailsButtonText = status === 'draft' ? '📝 Завершить' : '👁️ Подробнее';
+        
         let buttons = [
-            `<button onclick="viewOfferDetails(${id})" style="${baseButtonStyle} border: 1px solid #667eea; background: #667eea; color: white;">👁️ Подробнее</button>`
+            `<button onclick="viewOfferDetails(${id})" style="${baseButtonStyle} border: 1px solid #667eea; background: #667eea; color: white;">${detailsButtonText}</button>`
         ];
 
-        if (responseCount > 0) {
+        // Показываем отклики только для активных офферов
+        if (responseCount > 0 && status !== 'draft') {
             buttons.push(`<button onclick="manageResponses(${id})" style="${baseButtonStyle} border: 1px solid #48bb78; background: #48bb78; color: white;">💬 ${responseCount}</button>`);
         }
 
@@ -1790,9 +1803,23 @@ function createChannelModalForDraft(offerId, offerTitle, channels) {
     
     const modal = document.createElement('div');
     modal.id = 'channelModal';
+    modal.className = 'modal';
+    modal.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 99999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        padding: 20px !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+    `;
     modal.innerHTML = `
-        <div class="modal-overlay" onclick="closeChannelModal()"></div>
-        <div class="modal-content channel-modal">
+        <div class="modal-overlay" onclick="closeChannelModal()" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5);"></div>
+        <div class="modal-content channel-modal" style="position: relative; z-index: 1; max-width: 600px; width: 100%; max-height: 80vh; overflow-y: auto; background: white; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);">
             <div class="modal-header">
                 <h3>📝 Завершить создание оффера</h3>
                 <button class="modal-close" onclick="closeChannelModal()">&times;</button>
@@ -1826,6 +1853,9 @@ function createChannelModalForDraft(offerId, offerTitle, channels) {
     `;
     
     document.body.appendChild(modal);
+    
+    // Инициализируем счетчик выбранных каналов
+    updateCount();
 }
 
 async function completeDraftOffer(offerId) {
