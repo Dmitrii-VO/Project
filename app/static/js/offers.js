@@ -1400,24 +1400,34 @@ const OfferStatusManager = {
             const result = await ApiClient.delete(`/api/offers/${offerId}`);
 
             if (result.success) {
-                alert(`✅ ${result.message || 'Оффер успешно удален'}`);
+                showNotification('success', `✅ ${result.message || 'Оффер успешно удален'}`);
 
-                const offerCard = buttonElement?.closest('.offer-card');
+                const offerCard = buttonElement?.closest('.offer-card-compact');
                 if (offerCard) {
-                    offerCard.style.transition = 'all 0.3s ease';
-                    offerCard.style.transform = 'scale(0.9)';
+                    // Добавляем анимацию исчезновения
+                    offerCard.style.transition = 'all 0.4s ease';
+                    offerCard.style.transform = 'scale(0.95)';
                     offerCard.style.opacity = '0';
+                    offerCard.style.marginBottom = '0';
+                    offerCard.style.height = '0';
+                    offerCard.style.padding = '0';
+                    offerCard.style.overflow = 'hidden';
 
                     setTimeout(() => {
                         offerCard.remove();
-                        const remainingOffers = document.querySelectorAll('.offer-card');
+                        
+                        // Проверяем, остались ли офферы
+                        const remainingOffers = document.querySelectorAll('.offer-card-compact');
                         if (remainingOffers.length === 0) {
-                            Utils.showEmpty(document.getElementById('offersGrid'), 'Пока нет офферов',
-                                'Создайте свой первый оффер, нажав на "Создать оффер"',
-                                '<button class="btn btn-primary" onclick="switchTab(\'create-offer\')">Создать оффер</button>'
-                            );
+                            const offersGrid = document.getElementById('offersGrid');
+                            if (offersGrid) {
+                                Utils.showEmpty(offersGrid, 'Пока нет офферов',
+                                    'Создайте свой первый оффер, нажав на "Создать оффер"',
+                                    '<button class="btn btn-primary" onclick="switchTab(\'create-offer\')">Создать оффер</button>'
+                                );
+                            }
                         }
-                    }, 300);
+                    }, 400);
                 }
             } else {
                 throw new Error(result.error || 'Ошибка удаления оффера');
@@ -1505,7 +1515,7 @@ function setupOffersSearch() {
     if (searchInput) {
         searchInput.addEventListener('input', function() {
             const searchTerm = this.value.toLowerCase().trim();
-            document.querySelectorAll('.offer-card').forEach(card => {
+            document.querySelectorAll('.offer-card-compact').forEach(card => {
                 const title = card.querySelector('h3')?.textContent.toLowerCase() || '';
                 card.style.display = title.includes(searchTerm) ? 'block' : 'none';
             });
