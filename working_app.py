@@ -117,6 +117,15 @@ def register_error_handlers(app: Flask) -> None:
 
     @app.errorhandler(400)
     def bad_request(error):
+        # Проверяем, является ли это JSON ошибкой
+        if request.content_type and 'application/json' in request.content_type:
+            logger.warning(f"Invalid JSON: {request.path} | Error: {error}")
+            if request.path.startswith('/api/'):
+                return jsonify({
+                    'error': 'Invalid JSON',
+                    'message': 'Неверный формат JSON данных'
+                }), 400
+        
         logger.warning(f"Bad request: {error} | Path: {request.path}")
         if request.path.startswith('/api/'):
             return jsonify({
@@ -256,18 +265,6 @@ def register_error_handlers(app: Flask) -> None:
                              message='Временная ошибка. Попробуйте позже.', 
                              code=500), 500
 
-    # Обработка JSON ошибок
-    @app.errorhandler(400)
-    def handle_json_error(error):
-        if 'application/json' in request.content_type:
-            logger.warning(f"Invalid JSON: {request.path} | Error: {error}")
-            return jsonify({
-                'error': 'Invalid JSON',
-                'message': 'Неверный формат JSON данных'
-            }), 400
-        return bad_request(error)
-
-    
     @app.errorhandler(422)
     def validation_error(error):
         logger.warning(f"Validation error: {error} | Path: {request.path}")

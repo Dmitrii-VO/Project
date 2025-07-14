@@ -269,42 +269,15 @@ db_manager = DatabaseManager()
 # === УТИЛИТЫ ===
 def get_user_id_from_request():
     """
-    Получение user_db_id из запроса
+    УСТАРЕВШАЯ ФУНКЦИЯ - используйте auth_service.get_user_db_id()
     
-    ИСПРАВЛЕНО: ленивый импорт AuthService для избежания циклических импортов
+    Получение user_db_id из запроса через единую систему авторизации
     """
     try:
-        # ✅ ЛЕНИВЫЙ ИМПОРТ - импортируем ЭКЗЕМПЛЯР auth_service, а не класс
         from app.services.auth_service import auth_service
-        
-        # Получаем telegram_id через экземпляр сервиса авторизации
-        telegram_id = auth_service.get_current_user_id()
-        if not telegram_id:
-            logger.warning("⚠️ Database: auth_service.get_current_user_id() вернул None")
-            return None
-        
-        # Конвертируем telegram_id в user_db_id
-        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        # Ищем пользователя по telegram_id
-        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        if user:
-            user_db_id = user['id']
-            logger.debug(f"🔍 Database: telegram_id {telegram_id} → user_db_id {user_db_id}")
-            return user_db_id
-        else:
-            logger.warning(f"⚠️ Database: Пользователь с telegram_id {telegram_id} не найден в БД")
-            return None
-        
+        return auth_service.get_user_db_id()
     except Exception as e:
         logger.error(f"❌ Database: Ошибка в get_user_id_from_request(): {e}")
-        import traceback
-        logger.error(traceback.format_exc())
         return None
 
 
