@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.services.auth_service import auth_service
+from app.services.auth_service import AuthService
 from app.utils.decorators import require_telegram_auth
 from app.models.database import db_manager
 from app.config.telegram_config import AppConfig
@@ -14,13 +14,13 @@ analytics_bp = Blueprint('analytics', __name__)
 def get_analytics_status():
     """Проверка статуса системы аналитики"""
     try:
-        telegram_user_id = auth_service.get_current_user_id()
+        telegram_id = AuthService.get_current_user_id()
 
         status = {
             'analytics_enabled': AppConfig.ANALYTICS_SYSTEM_ENABLED,
             'database_connected': True,  # Если дошли до сюда, значит БД работает
-            'user_authenticated': bool(telegram_user_id),
-            'telegram_user_id': telegram_user_id,
+            'user_authenticated': bool(telegram_id),
+            'telegram_id': telegram_id,
             'placement_tracking': AppConfig.PLACEMENT_TRACKING_ENABLED,
             'ai_recommendations': AppConfig.AI_RECOMMENDATIONS_ENABLED
         }
@@ -52,15 +52,15 @@ def get_dashboard_data():
         if not AppConfig.ANALYTICS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Система аналитики отключена'}), 503
 
-        telegram_user_id = auth_service.get_current_user_id()
-        if not telegram_user_id:
+        telegram_id = AuthService.get_current_user_id()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         range_type = request.args.get('range', '30d')
 
         # Получаем базовые метрики
         user = db_manager.execute_query(
             'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
+            (telegram_id,),
             fetch_one=True
         )
 
@@ -73,7 +73,7 @@ def get_dashboard_data():
         dashboard_data = {
             'timestamp': datetime.now().isoformat(),
             'range': range_type,
-            'user_id': telegram_user_id,
+            'user_id': telegram_id,
             'metrics': {},
             'charts': {},
             'performance': []
@@ -87,7 +87,7 @@ def get_dashboard_data():
                                                     FROM channels c
                                                              JOIN users u ON c.owner_id = u.id
                                                     WHERE u.telegram_id = ?
-                                                    ''', (telegram_user_id,), fetch_one=True)
+                                                    ''', (telegram_id,), fetch_one=True)
 
         # Получаем метрики офферов
         offers_metrics = db_manager.execute_query('''
@@ -97,7 +97,7 @@ def get_dashboard_data():
                                                   FROM offers o
                                                            JOIN users u ON o.created_by = u.id
                                                   WHERE u.telegram_id = ?
-                                                  ''', (telegram_user_id,), fetch_one=True)
+                                                  ''', (telegram_id,), fetch_one=True)
 
         dashboard_data['metrics'] = {
             'channels': channels_metrics or {},

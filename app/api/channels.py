@@ -242,9 +242,9 @@ def get_channel(channel_id):
 @channels_bp.route('/<int:channel_id>', methods=['DELETE'])
 def delete_channel(channel_id):
     try:
-        # Получаем telegram_user_id из заголовков
-        telegram_user_id = request.headers.get('X-Telegram-User-Id')
-        if not telegram_user_id:
+        # Получаем telegram_id из заголовков
+        telegram_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_id:
             return jsonify({'error': 'User not authenticated'}), 401
 
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
@@ -252,7 +252,7 @@ def delete_channel(channel_id):
         cursor = conn.cursor()
 
         # Получаем user_id по telegram_id
-        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         if not user:
             conn.close()
@@ -290,7 +290,7 @@ def delete_channel(channel_id):
         conn.close()
 
         current_app.logger.info(
-            f"Channel {channel_id} ({channel_name}) deleted by user {telegram_user_id}"
+            f"Channel {channel_id} ({channel_name}) deleted by user {telegram_id}"
         )
 
         return jsonify({
@@ -418,7 +418,7 @@ def update_response_status(channel_id, response_id):
         ))
 
         current_app.logger.info(
-            f"Response {response_id} status updated to {new_status} by user {g.telegram_user_id}"
+            f"Response {response_id} status updated to {new_status} by user {g.telegram_id}"
         )
 
         return jsonify({
@@ -634,9 +634,9 @@ def analyze_channel():
         cleaned_username = extract_username_from_url(username)
         logger.info(f"📺 Анализируем канал: @{cleaned_username}")
 
-        # Получаем telegram_user_id из заголовков
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', '373086959')
-        logger.info(f"👤 Пользователь: {telegram_user_id}")
+        # Получаем telegram_id из заголовков
+        telegram_id = request.headers.get('X-Telegram-User-Id', '373086959')
+        logger.info(f"👤 Пользователь: {telegram_id}")
 
         # Проверяем, не добавлен ли уже канал
         conn = get_db_connection()
@@ -648,7 +648,7 @@ def analyze_channel():
                                 JOIN users u ON c.owner_id = u.id
                        WHERE (c.username = ? OR c.telegram_id = ?)
                          AND u.telegram_id = ?
-                       """, (cleaned_username, cleaned_username, telegram_user_id))
+                       """, (cleaned_username, cleaned_username, telegram_id))
 
         existing_channel = cursor.fetchone()
         conn.close()
@@ -725,19 +725,19 @@ def get_my_channels():
     ИСПРАВЛЕНО: убран SQLAlchemy, исправлены имена полей
     """
     try:
-        # Получаем telegram_user_id из заголовков (универсально для фронта)
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        # Получаем telegram_id из заголовков (универсально для фронта)
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
-        current_app.logger.info(f"Получение каналов для пользователя telegram_id: {telegram_user_id}")
+        current_app.logger.info(f"Получение каналов для пользователя telegram_id: {telegram_id}")
 
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
         # Получаем user_id по telegram_id
-        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         if not user:
             conn.close()
@@ -799,9 +799,9 @@ def update_channel_stats(channel_id):
     if not data:
         return jsonify({'success': False, 'error': 'JSON данные обязательны'}), 400
 
-    # Получаем telegram_user_id из заголовков
-    telegram_user_id = request.headers.get('X-Telegram-User-Id')
-    if not telegram_user_id:
+    # Получаем telegram_id из заголовков
+    telegram_id = request.headers.get('X-Telegram-User-Id')
+    if not telegram_id:
         return jsonify({'success': False, 'error': 'Не авторизован'}), 401
 
     conn = sqlite3.connect(AppConfig.DATABASE_PATH)
@@ -815,7 +815,7 @@ def update_channel_stats(channel_id):
                             JOIN users u ON c.owner_id = u.id
                     WHERE c.id = ?
                         AND u.telegram_id = ?
-                    """, (channel_id, telegram_user_id))
+                    """, (channel_id, telegram_id))
 
     channel = cursor.fetchone()
     if not channel:
@@ -871,9 +871,9 @@ def add_channel():
         logger.info(f"📊 Количество подписчиков для сохранения: {subscriber_count}")
         logger.info(f"🔍 DEBUG: Полученные данные = {data}")
 
-        # Получаем telegram_user_id из заголовков
-        telegram_user_id = request.headers.get('X-Telegram-User-Id', '373086959')
-        logger.info(f"👤 Пользователь: {telegram_user_id}")
+        # Получаем telegram_id из заголовков
+        telegram_id = request.headers.get('X-Telegram-User-Id', '373086959')
+        logger.info(f"👤 Пользователь: {telegram_id}")
 
         username = data.get('username', '').strip()
         if not username:
@@ -886,7 +886,7 @@ def add_channel():
         cursor = conn.cursor()
 
         # Получаем ID пользователя
-        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
 
         if not user:
@@ -894,7 +894,7 @@ def add_channel():
             cursor.execute("""
                            INSERT INTO users (telegram_id, username, first_name, is_active, created_at, updated_at)
                            VALUES (?, ?, ?, ?, ?, ?)
-                           """, (telegram_user_id, f'user_{telegram_user_id}', 'User', True,
+                           """, (telegram_id, f'user_{telegram_id}', 'User', True,
                                  datetime.now().isoformat(), datetime.now().isoformat()))
             user_db_id = cursor.lastrowid
             logger.info(f"✅ Создан новый пользователь с ID: {user_db_id}")
@@ -911,7 +911,7 @@ def add_channel():
                                 JOIN users u ON c.owner_id = u.id
                        WHERE (c.username = ? OR c.username = ? OR c.telegram_id = ?)
                          AND u.telegram_id = ?
-                       """, (cleaned_username, f"@{cleaned_username}", cleaned_username, telegram_user_id))
+                       """, (cleaned_username, f"@{cleaned_username}", cleaned_username, telegram_id))
 
         existing_channel = cursor.fetchone()
 
@@ -1037,9 +1037,9 @@ def verify_channel_endpoint(channel_id):
     try:
         logger.info(f"🔍 Запрос верификации канала {channel_id}")
 
-        # Получаем telegram_user_id из заголовков
-        telegram_user_id = request.headers.get('X-Telegram-User-Id')
-        if not telegram_user_id:
+        # Получаем telegram_id из заголовков
+        telegram_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Не авторизован'}), 401
 
         conn = get_db_connection()
@@ -1051,7 +1051,7 @@ def verify_channel_endpoint(channel_id):
             FROM channels c
             JOIN users u ON c.owner_id = u.id
             WHERE c.id = ? AND u.telegram_id = ?
-        """, (channel_id, telegram_user_id))
+        """, (channel_id, telegram_id))
 
         channel = cursor.fetchone()
 

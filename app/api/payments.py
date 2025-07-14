@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from app.services.auth_service import auth_service
+from app.services.auth_service import AuthService
 from app.utils.decorators import require_telegram_auth
 from app.models.database import db_manager
 from app.config.telegram_config import AppConfig
@@ -19,7 +19,7 @@ def get_payment_stats():
         if not AppConfig.PAYMENTS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Система платежей отключена'}), 503
 
-        telegram_user_id = auth_service.get_current_user_id()
+        telegram_id = AuthService.get_current_user_id()
 
         # Статистика выплат (входящие)
         payout_stats = db_manager.execute_query('''
@@ -31,7 +31,7 @@ def get_payment_stats():
                                                 FROM payouts p
                                                          JOIN users u ON p.recipient_id = u.id
                                                 WHERE u.telegram_id = ?
-                                                ''', (telegram_user_id,), fetch_one=True)
+                                                ''', (telegram_id,), fetch_one=True)
 
         # Статистика эскроу (исходящие)
         escrow_stats = db_manager.execute_query('''
@@ -43,7 +43,7 @@ def get_payment_stats():
                                                          JOIN offers o ON et.offer_id = o.id
                                                          JOIN users u ON o.created_by = u.id
                                                 WHERE u.telegram_id = ?
-                                                ''', (telegram_user_id,), fetch_one=True)
+                                                ''', (telegram_id,), fetch_one=True)
 
         return jsonify({
             'success': True,
@@ -64,7 +64,7 @@ def create_escrow():
         if not AppConfig.PAYMENTS_SYSTEM_ENABLED:
             return jsonify({'success': False, 'error': 'Система платежей отключена'}), 503
 
-        telegram_user_id = auth_service.get_current_user_id()
+        telegram_id = AuthService.get_current_user_id()
         data = request.get_json()
 
         offer_id = data.get('offer_id')
@@ -84,7 +84,7 @@ def create_escrow():
                                                   JOIN users u ON o.created_by = u.id
                                          WHERE o.id = ?
                                            AND u.telegram_id = ?
-                                         ''', (offer_id, telegram_user_id), fetch_one=True)
+                                         ''', (offer_id, telegram_id), fetch_one=True)
 
         if not offer:
             return jsonify({

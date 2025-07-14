@@ -28,10 +28,10 @@ def create_offer():
         if not data:
             return jsonify({'success': False, 'error': 'Нет данных'}), 400
 
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
-        logger.info(f"Создание оффера пользователем {telegram_user_id}")
+        logger.info(f"Создание оффера пользователем {telegram_id}")
 
         # Базовая валидация обязательных полей
         required_fields = ['title', 'description', 'price', 'target_audience']
@@ -47,16 +47,16 @@ def create_offer():
         # Получаем/создаем пользователя в БД
         user = execute_db_query(
             'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
+            (telegram_id,),
             fetch_one=True
         )
 
         if not user:
-            # Создаем нового пользователя
+            # ✅ ИСПРАВЛЕНО: убираем user_type и status - их нет в таблице
             user_db_id = execute_db_query(
-                '''INSERT INTO users (telegram_id, username, first_name, user_type, status, created_at)
-                   VALUES (?, ?, ?, 'advertiser', 'active', CURRENT_TIMESTAMP)''',
-                (telegram_user_id, data.get('username', f'user_{telegram_user_id}'), data.get('first_name', 'User'))
+                '''INSERT INTO users (telegram_id, username, first_name, created_at, updated_at)
+                   VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)''',
+                (telegram_id, data.get('username', f'user_{telegram_id}'), data.get('first_name', 'User'))
             )
         else:
             user_db_id = user['id']
@@ -65,7 +65,7 @@ def create_offer():
         metadata = {
             'posting_requirements': data.get('posting_requirements', {}),
             'additional_info': data.get('additional_info', ''),
-            'creator_telegram_id': telegram_user_id
+            'creator_telegram_id': telegram_id
         }
 
         # Создаем оффер
@@ -95,7 +95,8 @@ def create_offer():
             int(data.get('max_subscribers', 0))
         ))
 
-        logger.info(f"Создан новый оффер {offer_id} пользователем {telegram_user_id}")
+        logger.info(f"Создан новый оффер {offer_id} пользователем {telegram_id}")
+        
         # Создаем предложения для выбранных каналов
         if data.get('selected_channels'):
             channel_ids = data['selected_channels']
@@ -107,6 +108,7 @@ def create_offer():
                 ''', (offer_id, channel_id))
             
             logger.info(f"Созданы предложения для {len(channel_ids)} каналов")
+            
         # Получаем созданный оффер
         created_offer = execute_db_query('''
             SELECT o.*, u.username, u.first_name
@@ -390,13 +392,13 @@ def get_my_offers():
 def get_offers_stats():
     """Статистика офферов пользователя"""
     try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
         user = execute_db_query(
             'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
+            (telegram_id,),
             fetch_one=True
         )
 
@@ -435,15 +437,15 @@ def get_offers_stats():
 def delete_offer(offer_id):
     """Удаление оффера"""
     try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         logger.info(f"Запрос на удаление оффера {offer_id}")
 
         # Получаем пользователя
         user = execute_db_query(
             'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
+            (telegram_id,),
             fetch_one=True
         )
 
@@ -479,7 +481,7 @@ def delete_offer(offer_id):
             conn.execute('DELETE FROM offers WHERE id = ?', (offer_id,))
             conn.commit()
 
-            logger.info(f"Оффер {offer_id} удален пользователем {telegram_user_id}")
+            logger.info(f"Оффер {offer_id} удален пользователем {telegram_id}")
 
             return jsonify({
                 'success': True,
@@ -502,8 +504,8 @@ def delete_offer(offer_id):
 def update_offer_status(offer_id):
     """Обновление статуса оффера"""
     try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         data = request.get_json()
 
@@ -516,7 +518,7 @@ def update_offer_status(offer_id):
         # Получаем пользователя
         user = execute_db_query(
             'SELECT id FROM users WHERE telegram_id = ?',
-            (telegram_user_id,),
+            (telegram_id,),
             fetch_one=True
         )
 
@@ -575,8 +577,8 @@ def update_offer_status(offer_id):
 def respond_to_offer(offer_id):
             """Отклик на оффер"""
             try:
-                telegram_user_id = get_user_id_from_request()
-                if not telegram_user_id:
+                telegram_id = get_user_id_from_request()
+                if not telegram_id:
                     return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
                 data = request.get_json()
 
@@ -587,7 +589,7 @@ def respond_to_offer(offer_id):
                     return jsonify({'success': False, 'error': 'Канал и сообщение обязательны'}), 400
 
                 # Получаем данные канала для создания отклика
-                user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_user_id,),
+                user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,),
                                         fetch_one=True)
                 if not user:
                     return jsonify({'success': False, 'error': 'Пользователь не найден'}), 400
@@ -631,8 +633,8 @@ def respond_to_offer(offer_id):
 def get_offer_responses(offer_id):
             """Получение откликов на оффер"""
             try:
-                telegram_user_id = get_user_id_from_request()
-                if not telegram_user_id:
+                telegram_id = get_user_id_from_request()
+                if not telegram_id:
                     return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
                 # Проверяем права доступа к офферу
@@ -646,7 +648,7 @@ def get_offer_responses(offer_id):
                 if not offer:
                     return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
 
-                if offer['owner_telegram_id'] != telegram_user_id:
+                if offer['owner_telegram_id'] != telegram_id:
                     return jsonify({'success': False, 'error': 'Нет доступа к этому офферу'}), 403
 
                 # Получаем отклики
@@ -698,8 +700,8 @@ def get_offer_responses(offer_id):
 def update_response_status_route(response_id):
     """Обновление статуса отклика с автоматическим созданием контракта"""
     try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
         data = request.get_json()
 
@@ -726,7 +728,7 @@ def update_response_status_route(response_id):
         if not response_data:
             return jsonify({'success': False, 'error': 'Отклик не найден'}), 404
 
-        if response_data['author_telegram_id'] != telegram_user_id:
+        if response_data['author_telegram_id'] != telegram_id:
             return jsonify({'success': False, 'error': 'Нет прав для изменения статуса'}), 403
 
         if response_data['status'] != 'pending':
@@ -943,11 +945,11 @@ def get_offer_categories():
 def get_user_summary():
     """Получение сводной информации пользователя"""
     try:
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
 
-        user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_user_id,), fetch_one=True)
+        user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,), fetch_one=True)
         if not user:
             return jsonify({'success': False, 'error': 'Пользователь не найден'})
 

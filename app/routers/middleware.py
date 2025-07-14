@@ -9,6 +9,7 @@
 import time
 import json
 from typing import Optional, Dict, Any, Tuple
+from app.services.auth_service import AuthService
 from functools import wraps
 from flask import (
     request, jsonify, current_app, g, session,
@@ -282,9 +283,9 @@ def telegram_auth_middleware():
         return
 
     try:
-        telegram_user_id = TelegramAuth.get_current_user_id()
+        telegram_id = AuthService.get_current_user_id()
 
-        if not telegram_user_id:
+        if not telegram_id:
             current_app.logger.warning(
                 f"Unauthorized access attempt to {request.path} from {request.remote_addr}"
             )
@@ -305,22 +306,22 @@ def telegram_auth_middleware():
                 return redirect(url_for('main.index'))
 
         # Убеждаемся что пользователь существует в БД
-        user_db_id = TelegramAuth.ensure_user_exists(telegram_user_id)
+        user_db_id = AuthService.ensure_user_exists(telegram_id)
 
         if user_db_id:
             # Сохраняем информацию о пользователе в g для использования в маршрутах
             g.current_user_id = user_db_id
-            g.telegram_user_id = telegram_user_id
+            g.telegram_id = telegram_id
 
             current_app.logger.debug(
-                f"Telegram user {telegram_user_id} authenticated for {request.path}"
+                f"Telegram user {telegram_id} authenticated for {request.path}"
             )
         else:
             current_app.logger.error(
-                f"Failed to ensure user exists for Telegram ID: {telegram_user_id}"
+                f"Failed to ensure user exists for Telegram ID: {telegram_id}"
             )
             SecurityLogger.log_security_event('USER_CREATION_FAILED', {
-                'telegram_user_id': telegram_user_id
+                'telegram_id': telegram_id
             })
 
             if request.path.startswith('/api/'):
@@ -406,9 +407,9 @@ def require_telegram_auth(f):
 
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        telegram_user_id = TelegramAuth.get_current_user_id()
+        telegram_id = AuthService.get_current_user_id()
 
-        if not telegram_user_id:
+        if not telegram_id:
             if request.path.startswith('/api/'):
                 return jsonify({
                     'error': 'Authentication required',
@@ -419,14 +420,14 @@ def require_telegram_auth(f):
                 return redirect(url_for('main.index'))
 
         # Проверяем существование пользователя в БД
-        user_db_id = TelegramAuth.ensure_user_exists(telegram_user_id)
+        user_db_id = AuthService.ensure_user_exists(telegram_id)
         if not user_db_id:
             return jsonify({
                 'error': 'User registration failed'
             }), 500
 
         g.current_user_id = user_db_id
-        g.telegram_user_id = telegram_user_id
+        g.telegram_id = telegram_id
 
         return f(*args, **kwargs)
 
@@ -612,6 +613,5 @@ __all__ = [
     'init_middleware',
     'get_security_stats',
     'SecurityLogger',
-    'TelegramAuth',
     'PerformanceMonitor'
 ]

@@ -33,16 +33,16 @@ def auth_status():
         import sqlite3
         from app.config.telegram_config import AppConfig
         
-        telegram_user_id = AuthService.get_current_user_id()
+        telegram_id = AuthService.get_current_user_id()
         
-        if not telegram_user_id:
+        if not telegram_id:
             return jsonify({
                 'authenticated': False,
                 'message': 'Telegram user ID not found'
             })
         
         # Проверяем существование пользователя в БД
-        user_db_id = AuthService.ensure_user_exists(telegram_user_id)
+        user_db_id = AuthService.ensure_user_exists(telegram_id)
         
         if not user_db_id:
             return jsonify({
@@ -123,16 +123,16 @@ def telegram_login():
         
         # В реальном приложении нужно парсить user JSON
         # Пока используем заголовки
-        telegram_user_id = request.headers.get('X-Telegram-User-Id')
+        telegram_id = request.headers.get('X-Telegram-User-Id')
         
-        if not telegram_user_id:
+        if not telegram_id:
             return jsonify({
                 'success': False,
                 'error': 'Telegram user ID not found'
             }), 400
         
         # Создаем или обновляем пользователя
-        user_db_id = AuthService.ensure_user_exists(telegram_user_id)
+        user_db_id = AuthService.ensure_user_exists(telegram_id)
         
         if not user_db_id:
             return jsonify({
@@ -142,10 +142,10 @@ def telegram_login():
         
         # Сохраняем в сессии (для резервного способа аутентификации)
         from flask import session
-        session['telegram_user_id'] = telegram_user_id
+        session['telegram_id'] = telegram_id
         session['user_db_id'] = user_db_id
         
-        current_app.logger.info(f"User {telegram_user_id} logged in successfully")
+        current_app.logger.info(f"User {telegram_id} logged in successfully")
         
         return jsonify({
             'success': True,
@@ -173,10 +173,10 @@ def logout():
         from flask import session
         
         # Очищаем сессию
-        session.pop('telegram_user_id', None)
+        session.pop('telegram_id', None)
         session.pop('user_db_id', None)
         
-        current_app.logger.info(f"User {g.telegram_user_id} logged out")
+        current_app.logger.info(f"User {g.telegram_id} logged out")
         
         return jsonify({
             'success': True,
@@ -314,8 +314,8 @@ def get_user_profile():
         from app.config.telegram_config import AppConfig
         from app.models.database import get_user_id_from_request
         
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'error': 'Unauthorized'}), 401
         
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
@@ -323,7 +323,7 @@ def get_user_profile():
         cursor = conn.cursor()
         
         # Получаем пользователя
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -389,8 +389,8 @@ def update_user_profile():
         if not data:
             return jsonify({'error': 'No data provided'}), 400
         
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'error': 'Unauthorized'}), 401
         
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
@@ -398,7 +398,7 @@ def update_user_profile():
         cursor = conn.cursor()
         
         # Получаем пользователя
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -436,7 +436,7 @@ def update_user_profile():
         updated_user = cursor.fetchone()
         conn.close()
         
-        current_app.logger.info(f"User {telegram_user_id} updated profile")
+        current_app.logger.info(f"User {telegram_id} updated profile")
         
         return jsonify({
             'success': True,
@@ -569,8 +569,8 @@ def dashboard_stats():
         from app.models.database import get_user_id_from_request
         from datetime import datetime, timedelta
         
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'error': 'Unauthorized'}), 401
         
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
@@ -578,7 +578,7 @@ def dashboard_stats():
         cursor = conn.cursor()
         
         # Получаем пользователя
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -622,7 +622,7 @@ def dashboard_stats():
         conn.close()
         
         return jsonify({
-            'user_id': telegram_user_id,
+            'user_id': telegram_id,
             'channels': {
                 'total': channel_stats['total_channels'],
                 'verified': channel_stats['verified_channels'],
@@ -668,8 +668,8 @@ def get_notifications():
         limit = min(int(request.args.get('limit', 20)), 100)
         unread_only = request.args.get('unread_only', '').lower() == 'true'
         
-        telegram_user_id = get_user_id_from_request()
-        if not telegram_user_id:
+        telegram_id = get_user_id_from_request()
+        if not telegram_id:
             return jsonify({'error': 'Unauthorized'}), 401
         
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
@@ -677,7 +677,7 @@ def get_notifications():
         cursor = conn.cursor()
         
         # Получаем пользователя
-        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         
         if not user:
@@ -831,7 +831,7 @@ def upload_file():
         file_url = f"/static/uploads/{file_type}/{safe_filename}"
         
         current_app.logger.info(
-            f"File uploaded by user {g.telegram_user_id}: {safe_filename} ({file_size} bytes)"
+            f"File uploaded by user {g.telegram_id}: {safe_filename} ({file_size} bytes)"
         )
         
         return jsonify({

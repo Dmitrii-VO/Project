@@ -48,7 +48,7 @@ def require_telegram_auth(f):
     def decorated_function(*args, **kwargs):
         # Аутентификация отключена - разрешаем доступ всем
         if FLASK_AVAILABLE and hasattr(g, '__setattr__'):
-            g.telegram_user_id = "test_user_123"
+            g.telegram_id = "test_user_123"
             g.current_user_id = "test_user_123"
         
         return f(*args, **kwargs)

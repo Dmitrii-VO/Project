@@ -1,9 +1,11 @@
+# app/models/database.py
+# ИСПРАВЛЕНО: БД + работа с пользователями, ленивый импорт auth_service
+
 import sqlite3
 import logging
 import os
 import datetime
 from typing import Optional, Dict, Any, List, Union
-
 from flask import request
 from app.config.telegram_config import AppConfig
 
@@ -37,10 +39,6 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Database connection test failed: {e}")
             return False
-        
-    
-
-
 
     def execute_query(self, query: str, params: tuple = (),
                       fetch_one: bool = False, fetch_all: bool = False) -> Union[Dict, List, int, None]:
@@ -112,36 +110,6 @@ class DatabaseManager:
             return False
 
 
-    def ensure_user_exists(self, telegram_id: int, username: str = None, first_name: str = None) -> int:
-        """Обеспечивает существование пользователя в БД"""
-        try:
-            # Проверяем существование
-            user = self.execute_query(
-                "SELECT id FROM users WHERE telegram_id = ?",
-                (telegram_id,),
-                fetch_one=True
-            )
-
-            if user:
-                return user['id']
-
-            # Создаем нового пользователя
-            user_id = self.execute_query("""
-                                         INSERT INTO users (telegram_id, username, first_name, user_type, status, created_at)
-                                         VALUES (?, ?, ?, 'channel_owner', 'active', CURRENT_TIMESTAMP)
-                                         """, (
-                                             telegram_id,
-                                             username or f'user_{telegram_id}',
-                                             first_name or 'User'
-                                         ))
-
-            return user_id
-
-        except Exception as e:
-            logger.error(f"Error ensuring user exists: {e}")
-            return None
-
-
 # ===== ВАЛИДАЦИЯ =====
 class OfferValidator:
     @staticmethod
@@ -208,37 +176,94 @@ class OfferValidator:
 # ===== МЕНЕДЖЕР ПОЛЬЗОВАТЕЛЕЙ =====
 class UserManager:
     @staticmethod
-    def ensure_user_exists(user_id: int, username: str = None, first_name: str = None) -> int:
-        """Убеждаемся что пользователь существует в БД"""
-        user = DatabaseManager.execute_query(
+    def ensure_user_exists(telegram_id: int, username: str = None, first_name: str = None) -> Optional[int]:
+        """
+        Обеспечение существования пользователя в базе по Telegram ID
+        ПЕРЕНЕСЕНО из auth_service.py
+        """
+        try:
+            # Проверяем существование пользователя
+            user = db_manager.execute_query(
+                'SELECT id FROM users WHERE telegram_id = ?',
+                (telegram_id,),
+                fetch_one=True
+            )
+
+            if not user:
+                # ✅ ИСПРАВЛЕНО: создаем без несуществующих полей user_type, status
+                logger.info(f"Creating new user for Telegram ID: {telegram_id}")
+
+                user_db_id = db_manager.execute_query('''
+                    INSERT INTO users (telegram_id, username, first_name, is_admin, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    telegram_id,
+                    username or f'user_{telegram_id}',
+                    first_name or 'Telegram User',
+                    telegram_id == AppConfig.YOUR_TELEGRAM_ID,  # Админ если это YOUR_TELEGRAM_ID
+                    datetime.datetime.now().isoformat(),
+                    datetime.datetime.now().isoformat()
+                ))
+
+                return user_db_id
+            else:
+                # Обновляем информацию о существующем пользователе
+                if username or first_name:
+                    db_manager.execute_query('''
+                        UPDATE users
+                        SET username = COALESCE(?, username),
+                            first_name = COALESCE(?, first_name),
+                            updated_at = ?
+                        WHERE telegram_id = ?
+                    ''', (username, first_name, datetime.datetime.now().isoformat(), telegram_id))
+
+                return user['id']
+
+        except Exception as e:
+            logger.error(f"Ошибка создания/обновления пользователя {telegram_id}: {e}")
+            return None
+
+    @staticmethod
+    def get_user_by_telegram_id(telegram_id: int) -> Optional[Dict]:
+        """Получение пользователя по Telegram ID"""
+        try:
+            return db_manager.execute_query(
+                'SELECT * FROM users WHERE telegram_id = ?',
+                (telegram_id,),
+                fetch_one=True
+            )
+        except Exception as e:
+            logger.error(f"Ошибка получения пользователя {telegram_id}: {e}")
+            return None
+
+    @staticmethod
+    def create_user_from_legacy(user_id: int, username: str = None, first_name: str = None) -> int:
+        """Создание пользователя (legacy метод для обратной совместимости)"""
+        user = db_manager.execute_query(
             'SELECT id FROM users WHERE telegram_id = ?',
             (user_id,),
             fetch_one=True
         )
 
         if not user:
-            user_db_id = DatabaseManager.execute_query('''
-                                                       INSERT INTO users (telegram_id, username, first_name, created_at)
-                                                       VALUES (?, ?, ?, ?)
-                                                       ''', (
-                                                           user_id,
-                                                           username or f'user_{user_id}',
-                                                           first_name or 'User',
-                                                           datetime.now().isoformat()
-                                                       ))
+            user_db_id = db_manager.execute_query('''
+                INSERT INTO users (telegram_id, username, first_name, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (
+                user_id,
+                username or f'user_{user_id}',
+                first_name or 'User',
+                datetime.datetime.now().isoformat(),
+                datetime.datetime.now().isoformat()
+            ))
             logger.info(f"Создан новый пользователь: {user_id}")
             return user_db_id
 
         return user['id']
 
+
 # Глобальный экземпляр
 db_manager = DatabaseManager()
-
-
-# Функция для обратной совместимости
-def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
-    """Обертка для обратной совместимости"""
-    return db_manager.execute_query(query, params, fetch_one, fetch_all)
 
 
 # === УТИЛИТЫ ===
@@ -246,50 +271,43 @@ def get_user_id_from_request():
     """
     Получение user_db_id из запроса
     
-    ИСПРАВЛЕНО: теперь возвращает user_db_id (для БД) вместо telegram_id
+    ИСПРАВЛЕНО: ленивый импорт AuthService для избежания циклических импортов
     """
     try:
-        # Импортируем auth_service внутри функции чтобы избежать циклических импортов
+        # ✅ ЛЕНИВЫЙ ИМПОРТ - импортируем ЭКЗЕМПЛЯР auth_service, а не класс
         from app.services.auth_service import auth_service
         
-        # Получаем telegram_id через единый сервис авторизации
-        telegram_user_id = auth_service.get_current_user_id()
-        if not telegram_user_id:
+        # Получаем telegram_id через экземпляр сервиса авторизации
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
             logger.warning("⚠️ Database: auth_service.get_current_user_id() вернул None")
             return None
         
-        # НОВОЕ: Конвертируем telegram_id в user_db_id
-        import sqlite3
-        from app.config.telegram_config import AppConfig
-        
+        # Конвертируем telegram_id в user_db_id
         conn = sqlite3.connect(AppConfig.DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         
         # Ищем пользователя по telegram_id
-        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_user_id,))
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
         user = cursor.fetchone()
         conn.close()
         
         if user:
             user_db_id = user['id']
-            logger.debug(f"🔍 Database: telegram_id {telegram_user_id} → user_db_id {user_db_id}")
+            logger.debug(f"🔍 Database: telegram_id {telegram_id} → user_db_id {user_db_id}")
             return user_db_id
         else:
-            logger.warning(f"⚠️ Database: Пользователь с telegram_id {telegram_user_id} не найден в БД")
-
-
+            logger.warning(f"⚠️ Database: Пользователь с telegram_id {telegram_id} не найден в БД")
             return None
         
     except Exception as e:
-        # Если что-то пошло не так, логируем ошибку
         logger.error(f"❌ Database: Ошибка в get_user_id_from_request(): {e}")
         import traceback
         logger.error(traceback.format_exc())
-        
-        # В случае ошибки также возвращаем None
         return None
-        
+
+
 def execute_db_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
     """Универсальная функция для работы с БД"""
     try:
@@ -319,3 +337,8 @@ def execute_db_query(query: str, params: tuple = (), fetch_one: bool = False, fe
             conn.close()
         raise
 
+
+# Функция для обратной совместимости
+def safe_execute_query(query: str, params: tuple = (), fetch_one: bool = False, fetch_all: bool = False):
+    """Обертка для обратной совместимости"""
+    return db_manager.execute_query(query, params, fetch_one, fetch_all)
