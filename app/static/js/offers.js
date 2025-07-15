@@ -1944,15 +1944,17 @@ function createModal(id, title) {
 function closeModal(modalId) {
     const modal = document.getElementById(modalId);
     if (modal) {
-        modal.style.display = 'none';
+        // Убираем класс active для запуска CSS анимации закрытия
+        modal.classList.remove('active');
+        // Удаляем элемент после завершения анимации
         setTimeout(() => modal.remove(), 300);
     }
 }
 
 // Закрытие модального окна по клику вне его
 document.addEventListener('click', function(event) {
-    if (event.target.classList.contains('modal')) {
-        event.target.style.display = 'none';
+    if (event.target.classList.contains('modal-overlay')) {
+        event.target.classList.remove('active');
         setTimeout(() => event.target.remove(), 300);
     }
 });
@@ -1960,9 +1962,9 @@ document.addEventListener('click', function(event) {
 // Закрытие модального окна по Escape
 document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') {
-        const modals = document.querySelectorAll('.modal[style*="display: flex"]');
+        const modals = document.querySelectorAll('.modal-overlay.active');
         modals.forEach(modal => {
-            modal.style.display = 'none';
+            modal.classList.remove('active');
             setTimeout(() => modal.remove(), 300);
         });
     }
