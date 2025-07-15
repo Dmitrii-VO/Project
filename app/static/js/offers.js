@@ -482,7 +482,7 @@ function renderAvailableOffers(offers) {
                     <button class="btn btn-outline" onclick="viewAvailableOfferDetails(${id})" style="padding: 6px 12px; font-size: 12px; border: 1px solid #e2e8f0; background: white; color: #4a5568; border-radius: 4px;">
                         👁️ Подробнее
                     </button>
-                    <button class="btn btn-primary" onclick="respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
+                    <button class="btn btn-primary" onclick="console.log('Кнопка нажата, ID:', ${id}); respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
                         📩 Откликнуться
                     </button>
                 </div>
@@ -799,7 +799,7 @@ class OffersManager {
 // ===== УПРАВЛЕНИЕ ОТКЛИКАМИ =====
 const ResponseManager = {
     async acceptOffer(offerId) {
-
+        console.log('ResponseManager.acceptOffer вызвана с ID:', offerId);
         try {
             const channelsResult = await ApiClient.get('/api/channels/my');
 
@@ -1206,7 +1206,13 @@ async function viewAvailableOfferDetails(offerId) {
 }
 
 async function respondToOffer(offerId) {
-    await ResponseManager.acceptOffer(offerId);
+    console.log('respondToOffer вызвана с ID:', offerId);
+    try {
+        await ResponseManager.acceptOffer(offerId);
+    } catch (error) {
+        console.error('Ошибка в respondToOffer:', error);
+        alert('Ошибка: ' + error.message);
+    }
 }
 
 async function viewOfferDetails(offerId) {
