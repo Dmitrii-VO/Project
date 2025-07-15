@@ -33,7 +33,7 @@ const Templates = {
                 <div class="modal-content">
                     <div class="modal-header">
                         <h3>${title}</h3>
-                        <button class="modal-close" onclick="closeModal('${id}')">&times;</button>
+                        <button class="modal-close" onclick="closeResponseModal('${id}')">&times;</button>
                     </div>
                     <div class="modal-body">${content}</div>
                 </div>
@@ -849,7 +849,7 @@ const ResponseManager = {
                     style: 'min-height:120px;'
                 })}
                 <div class="button-group">
-                    ${Templates.button('Отмена', 'this.closest(\'.modal-overlay\').remove()', 'outline', 'md')}
+                    ${Templates.button('Отмена', 'closeResponseModal(\'responseModal\')', 'outline', 'md')}
                     <button type="submit" class="btn-primary btn-md">Отправить отклик</button>
                 </div>
             </form>
@@ -885,7 +885,7 @@ const ResponseManager = {
                     e.preventDefault();
                     e.stopPropagation();
                     console.log('Кнопка закрытия нажата через addEventListener');
-                    closeModal('responseModal');
+                    closeResponseModal('responseModal');
                 });
             }
         }, 100);
@@ -1953,8 +1953,8 @@ function createModal(id, title) {
     return modal;
 }
 
-function closeModal(modalId) {
-    console.log('closeModal вызвана с modalId:', modalId);
+function closeResponseModal(modalId) {
+    console.log('closeResponseModal вызвана с modalId:', modalId);
     const modal = document.getElementById(modalId);
     console.log('Найденный modal элемент:', modal);
     if (modal) {
