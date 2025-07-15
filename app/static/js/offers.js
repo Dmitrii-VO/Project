@@ -881,7 +881,7 @@ const ResponseManager = {
                 modal.remove();
 
                 const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
-                const respondButton = offerCard?.querySelector('button[onclick*="acceptOffer"]');
+                const respondButton = offerCard?.querySelector('button[onclick*="respondToOffer"]');
                 if (respondButton) {
                     respondButton.style.background = '#a0aec0';
                     respondButton.textContent = '✅ Отклик отправлен';
@@ -1199,8 +1199,7 @@ async function viewAvailableOfferDetails(offerId) {
 }
 
 async function respondToOffer(offerId) {
-    // Заглушка для отклика на оффер
-    alert(`Функция отклика на оффер ${offerId} будет реализована позже`);
+    await ResponseManager.acceptOffer(offerId);
 }
 
 async function viewOfferDetails(offerId) {
