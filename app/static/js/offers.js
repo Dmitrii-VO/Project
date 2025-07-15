@@ -890,6 +890,38 @@ const ResponseManager = {
             setTimeout(() => {
                 const check = document.getElementById('responseModal');
                 console.log('Проверка через 100ms:', check ? 'найден' : 'НЕ НАЙДЕН');
+                
+                if (check) {
+                    // Делаем модальное окно максимально заметным
+                    check.style.backgroundColor = 'red';
+                    check.style.border = '10px solid yellow';
+                    check.style.zIndex = '999999';
+                    check.style.opacity = '1';
+                    check.style.visibility = 'visible';
+                    check.style.display = 'block';
+                    check.style.position = 'fixed';
+                    check.style.top = '0';
+                    check.style.left = '0';
+                    check.style.width = '100vw';
+                    check.style.height = '100vh';
+                    
+                    console.log('Принудительно применили яркие стили');
+                    console.log('Computed styles:', window.getComputedStyle(check));
+                    
+                    // Проверяем, не скрыт ли элемент CSS
+                    const computedStyle = window.getComputedStyle(check);
+                    console.log('Критичные стили:', {
+                        display: computedStyle.display,
+                        visibility: computedStyle.visibility,
+                        opacity: computedStyle.opacity,
+                        position: computedStyle.position,
+                        zIndex: computedStyle.zIndex,
+                        top: computedStyle.top,
+                        left: computedStyle.left,
+                        width: computedStyle.width,
+                        height: computedStyle.height
+                    });
+                }
             }, 100);
         } catch (error) {
             console.error('Ошибка при создании модального окна:', error);
