@@ -801,7 +801,9 @@ const ResponseManager = {
     async acceptOffer(offerId) {
         console.log('ResponseManager.acceptOffer вызвана с ID:', offerId);
         try {
+            console.log('Запрашиваем каналы пользователя...');
             const channelsResult = await ApiClient.get('/api/channels/my');
+            console.log('Результат запроса каналов:', channelsResult);
 
             if (!channelsResult.success) {
                 throw new Error(channelsResult.error || 'Ошибка загрузки каналов');
@@ -810,6 +812,7 @@ const ResponseManager = {
             const verifiedChannels = (channelsResult.channels || []).filter(channel =>
                 channel.is_verified === true || channel.is_verified === 1 || channel.status === 'verified'
             );
+            console.log('Верифицированные каналы:', verifiedChannels);
 
             if (verifiedChannels.length === 0) {
                 alert('У вас нет верифицированных каналов. Сначала добавьте и верифицируйте канал в разделе "Мои каналы".');
@@ -817,23 +820,30 @@ const ResponseManager = {
             }
 
             const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
+            console.log('Найдена карточка оффера:', offerCard);
             const titleElement = offerCard?.querySelector('h3');
+            console.log('Элемент заголовка:', titleElement);
             const offer = {
                 id: offerId,
                 title: titleElement?.textContent?.trim() || 'Оффер'
             };
+            console.log('Объект оффера:', offer);
 
+            console.log('Показываем модальное окно...');
             this.showResponseModal(offerId, offer, verifiedChannels);
         } catch (error) {
+            console.error('Ошибка в acceptOffer:', error);
             alert(`❌ Ошибка: ${error.message}`);
         }
     },
 
     showResponseModal(offerId, offer, verifiedChannels) {
+        console.log('showResponseModal вызвана с параметрами:', { offerId, offer, verifiedChannels });
         const channelOptions = verifiedChannels.map(channel => ({
             value: channel.id,
             text: `${channel.title} (@${channel.username}) - ${Utils.formatNumber(channel.subscriber_count)} подписчиков`
         }));
+        console.log('Опции каналов:', channelOptions);
 
         const formContent = `
             ${Templates.infoCard(offer.title, '', '🎯')}
