@@ -910,14 +910,37 @@ const ResponseManager = {
             const addedModal = document.getElementById('responseModal');
             if (addedModal) {
                 console.log('Модальное окно найдено в DOM:', addedModal);
-                console.log('Стили модального окна:', window.getComputedStyle(addedModal));
-                console.log('Видимость модального окна:', {
-                    display: addedModal.style.display,
-                    position: addedModal.style.position,
-                    zIndex: addedModal.style.zIndex,
-                    width: addedModal.style.width,
-                    height: addedModal.style.height
+                const computedStyle = window.getComputedStyle(addedModal);
+                console.log('Computed стили модального окна:', {
+                    display: computedStyle.display,
+                    position: computedStyle.position,
+                    zIndex: computedStyle.zIndex,
+                    top: computedStyle.top,
+                    left: computedStyle.left,
+                    width: computedStyle.width,
+                    height: computedStyle.height,
+                    visibility: computedStyle.visibility,
+                    opacity: computedStyle.opacity
                 });
+                
+                // Проверяем элементы с высоким z-index
+                const allElements = document.querySelectorAll('*');
+                let highZIndexElements = [];
+                allElements.forEach(el => {
+                    const style = window.getComputedStyle(el);
+                    const zIndex = parseInt(style.zIndex);
+                    if (zIndex > 9999) {
+                        highZIndexElements.push({element: el, zIndex: zIndex});
+                    }
+                });
+                if (highZIndexElements.length > 0) {
+                    console.warn('Элементы с z-index больше 9999:', highZIndexElements);
+                }
+                
+                // Попробуем сделать модальное окно еще более заметным
+                addedModal.style.zIndex = '999999';
+                addedModal.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                console.log('Увеличили z-index до 999999 и сделали фон красным');
             } else {
                 console.error('Модальное окно не найдено в DOM!');
             }
