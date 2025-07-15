@@ -2037,7 +2037,6 @@ window.toggleChannel = toggleChannel;
 window.sendProposals = sendProposals;
 window.saveOfferAsDraft = saveOfferAsDraft;
 window.showChannelSelectionModalForDraft = showChannelSelectionModalForDraft;
-window.completeDraftOffer = completeDraftOffer;
 window.updateCount = updateCount;
 // ===== ИНИЦИАЛИЗАЦИЯ =====
 
