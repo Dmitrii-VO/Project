@@ -803,11 +803,8 @@ class OffersManager {
 // ===== УПРАВЛЕНИЕ ОТКЛИКАМИ =====
 const ResponseManager = {
     async acceptOffer(offerId) {
-        console.log('acceptOffer начинает выполнение для offerId:', offerId);
         try {
-            console.log('Запрос каналов пользователя...');
             const channelsResult = await ApiClient.get('/api/channels/my');
-            console.log('Результат запроса каналов:', channelsResult);
 
             if (!channelsResult.success) {
                 throw new Error(channelsResult.error || 'Ошибка загрузки каналов');
@@ -816,43 +813,26 @@ const ResponseManager = {
             const verifiedChannels = (channelsResult.channels || []).filter(channel =>
                 channel.is_verified === true || channel.is_verified === 1 || channel.status === 'verified'
             );
-            console.log('Найдено верифицированных каналов:', verifiedChannels.length);
 
             if (verifiedChannels.length === 0) {
                 alert('У вас нет верифицированных каналов. Сначала добавьте и верифицируйте канал в разделе "Мои каналы".');
                 return;
             }
 
-            console.log('Поиск карточки оффера с data-offer-id:', offerId);
             const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
-            console.log('Найденная карточка оффера:', offerCard);
-            
             const titleElement = offerCard?.querySelector('h3');
-            console.log('Элемент заголовка:', titleElement);
-            
             const offer = {
                 id: offerId,
                 title: titleElement?.textContent?.trim() || 'Оффер'
             };
-            console.log('Объект оффера:', offer);
 
-            console.log('Вызов showResponseModal...');
             this.showResponseModal(offerId, offer, verifiedChannels);
         } catch (error) {
-            console.error('Ошибка в acceptOffer:', error);
             alert(`❌ Ошибка: ${error.message}`);
         }
     },
 
     showResponseModal(offerId, offer, verifiedChannels) {
-        console.log('showResponseModal вызвана с параметрами:', { offerId, offer, verifiedChannels });
-        
-        // Закрываем существующее модальное окно, если оно есть
-        const existingModal = document.getElementById('responseModal');
-        if (existingModal) {
-            console.log('Найдено существующее модальное окно, удаляем');
-            existingModal.remove();
-        }
 
         const channelOptions = verifiedChannels.map(channel => ({
             value: channel.id,
@@ -876,13 +856,10 @@ const ResponseManager = {
             </form>
         `;
 
-        console.log('Создание модального окна...');
         const modal = document.createElement('div');
         const modalHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
-        console.log('HTML модального окна:', modalHTML);
         modal.innerHTML = modalHTML;
         const modalElement = modal.firstElementChild;
-        console.log('Элемент модального окна:', modalElement);
         
         // Исправляем стили модального окна для корректного отображения
         if (modalElement) {
@@ -896,104 +873,18 @@ const ResponseManager = {
             modalElement.style.alignItems = 'center';
             modalElement.style.justifyContent = 'center';
             modalElement.style.background = 'rgba(0, 0, 0, 0.5)';
-            // Добавляем тестовую рамку для видимости
-            modalElement.style.border = '5px solid red';
-            console.log('Стили модального окна применены');
         }
         
-        console.log('Добавление модального окна в DOM...');
-        
-        // Тест: добавляем простой видимый элемент для проверки
-        const testElement = document.createElement('div');
-        testElement.style.cssText = `
-            position: fixed;
-            top: 50px;
-            left: 50px;
-            width: 300px;
-            height: 200px;
-            background: yellow;
-            border: 3px solid black;
-            z-index: 999999;
-            display: block;
-        `;
-        testElement.innerHTML = '<h1>ТЕСТ ВИДИМОСТИ</h1>';
-        document.body.appendChild(testElement);
-        console.log('Тестовый элемент добавлен');
-        
-        // Попробуем добавить в разные контейнеры
-        const container = document.querySelector('.container') || document.body;
-        container.appendChild(modalElement);
-        console.log('Модальное окно добавлено в:', container);
-        
-        // Проверяем, что элемент действительно в DOM
-        const checkElement = document.getElementById('responseModal');
-        console.log('Элемент сразу после добавления:', checkElement);
-        
-        // Добавляем обработчик для отслеживания удаления
-        const observer = new MutationObserver(mutations => {
-            mutations.forEach(mutation => {
-                if (mutation.type === 'childList') {
-                    mutation.removedNodes.forEach(node => {
-                        if (node.id === 'responseModal') {
-                            console.warn('Модальное окно было удалено из DOM!');
-                        }
-                    });
-                }
-            });
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        
-        // Проверяем видимость модального окна
-        setTimeout(() => {
-            const addedModal = document.getElementById('responseModal');
-            if (addedModal) {
-                console.log('Модальное окно найдено в DOM:', addedModal);
-                const computedStyle = window.getComputedStyle(addedModal);
-                console.log('Computed стили модального окна:', {
-                    display: computedStyle.display,
-                    position: computedStyle.position,
-                    zIndex: computedStyle.zIndex,
-                    top: computedStyle.top,
-                    left: computedStyle.left,
-                    width: computedStyle.width,
-                    height: computedStyle.height,
-                    visibility: computedStyle.visibility,
-                    opacity: computedStyle.opacity
-                });
-                
-                // Проверяем элементы с высоким z-index
-                const allElements = document.querySelectorAll('*');
-                let highZIndexElements = [];
-                allElements.forEach(el => {
-                    const style = window.getComputedStyle(el);
-                    const zIndex = parseInt(style.zIndex);
-                    if (zIndex > 9999) {
-                        highZIndexElements.push({element: el, zIndex: zIndex});
-                    }
-                });
-                if (highZIndexElements.length > 0) {
-                    console.warn('Элементы с z-index больше 9999:', highZIndexElements);
-                }
-                
-                // Попробуем сделать модальное окно еще более заметным
-                addedModal.style.zIndex = '999999';
-                addedModal.style.backgroundColor = 'rgba(255, 0, 0, 0.8)';
-                console.log('Увеличили z-index до 999999 и сделали фон красным');
-            } else {
-                console.error('Модальное окно не найдено в DOM!');
-            }
-        }, 50);
+        document.body.appendChild(modalElement);
 
         // Ждем, пока элемент появится в DOM, затем добавляем обработчик
         setTimeout(() => {
             const form = document.getElementById('responseForm');
-            console.log('Форма найдена:', form);
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     await this.submitResponse(offerId, modalElement);
                 });
-                console.log('Обработчик формы добавлен');
             }
         }, 100);
     },
@@ -1336,15 +1227,7 @@ async function viewAvailableOfferDetails(offerId) {
 }
 
 async function respondToOffer(offerId) {
-    console.log('respondToOffer вызвана с offerId:', offerId);
-    console.log('ResponseManager объект:', ResponseManager);
-    
-    try {
-        await ResponseManager.acceptOffer(offerId);
-    } catch (error) {
-        console.error('Ошибка в respondToOffer:', error);
-        alert('Ошибка: ' + error.message);
-    }
+    await ResponseManager.acceptOffer(offerId);
 }
 
 async function viewOfferDetails(offerId) {
