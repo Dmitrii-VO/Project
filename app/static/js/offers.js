@@ -840,42 +840,61 @@ const ResponseManager = {
         }));
         console.log('Опции каналов:', channelOptions);
 
-        const formContent = `
-            ${Templates.infoCard(offer.title, '', '🎯')}
-            <form id="responseForm">
-                ${Templates.formField('Выберите канал', 'select', 'selectedChannel', { required: true, items: channelOptions })}
-                ${Templates.formField('Сообщение рекламодателю', 'textarea', 'responseMessage', { 
-                    required: true, 
-                    placeholder: 'Расскажите, почему ваш канал подходит для этого оффера...',
-                    style: 'min-height:120px;'
-                })}
-                <div class="button-group">
-                    ${Templates.button('Отмена', 'this.closest(\'.modal-overlay\').remove()', 'outline', 'md')}
-                    <button type="submit" class="btn-primary btn-md">Отправить отклик</button>
-                </div>
-            </form>
-        `;
+        try {
+            console.log('Генерация formContent...');
+            const formContent = `
+                ${Templates.infoCard(offer.title, '', '🎯')}
+                <form id="responseForm">
+                    ${Templates.formField('Выберите канал', 'select', 'selectedChannel', { required: true, items: channelOptions })}
+                    ${Templates.formField('Сообщение рекламодателю', 'textarea', 'responseMessage', { 
+                        required: true, 
+                        placeholder: 'Расскажите, почему ваш канал подходит для этого оффера...',
+                        style: 'min-height:120px;'
+                    })}
+                    <div class="button-group">
+                        ${Templates.button('Отмена', 'this.closest(\'.modal-overlay\').remove()', 'outline', 'md')}
+                        <button type="submit" class="btn-primary btn-md">Отправить отклик</button>
+                    </div>
+                </form>
+            `;
+            console.log('formContent сгенерирован');
 
-        const modal = document.createElement('div');
-        const modalHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
-        modal.innerHTML = modalHTML;
-        const modalElement = modal.firstElementChild;
-        
-        // Исправляем стили модального окна для корректного отображения
-        if (modalElement) {
-            modalElement.style.position = 'fixed';
-            modalElement.style.top = '0';
-            modalElement.style.left = '0';
-            modalElement.style.width = '100vw';
-            modalElement.style.height = '100vh';
-            modalElement.style.zIndex = '9999';
-            modalElement.style.display = 'flex';
-            modalElement.style.alignItems = 'center';
-            modalElement.style.justifyContent = 'center';
-            modalElement.style.background = 'rgba(0, 0, 0, 0.5)';
+            console.log('Создание модального окна...');
+            const modal = document.createElement('div');
+            const modalHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
+            console.log('modalHTML создан');
+            modal.innerHTML = modalHTML;
+            const modalElement = modal.firstElementChild;
+            console.log('modalElement:', modalElement);
+            
+            // Исправляем стили модального окна для корректного отображения
+            if (modalElement) {
+                modalElement.style.position = 'fixed';
+                modalElement.style.top = '0';
+                modalElement.style.left = '0';
+                modalElement.style.width = '100vw';
+                modalElement.style.height = '100vh';
+                modalElement.style.zIndex = '9999';
+                modalElement.style.display = 'flex';
+                modalElement.style.alignItems = 'center';
+                modalElement.style.justifyContent = 'center';
+                modalElement.style.background = 'rgba(0, 0, 0, 0.5)';
+                console.log('Стили применены');
+            }
+            
+            console.log('Добавление в DOM...');
+            document.body.appendChild(modalElement);
+            console.log('Модальное окно добавлено в DOM');
+            
+            // Проверяем, что элемент в DOM
+            setTimeout(() => {
+                const check = document.getElementById('responseModal');
+                console.log('Проверка через 100ms:', check ? 'найден' : 'НЕ НАЙДЕН');
+            }, 100);
+        } catch (error) {
+            console.error('Ошибка при создании модального окна:', error);
+            alert('Ошибка создания модального окна: ' + error.message);
         }
-        
-        document.body.appendChild(modalElement);
 
         // Ждем, пока элемент появится в DOM, затем добавляем обработчик
         setTimeout(() => {
