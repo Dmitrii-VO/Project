@@ -861,19 +861,44 @@ const ResponseManager = {
             </form>
         `;
 
+        console.log('Создаем модальное окно...');
         const modal = document.createElement('div');
-        modal.innerHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
+        console.log('Генерируем HTML модального окна...');
+        const modalHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
+        console.log('HTML модального окна:', modalHTML);
+        modal.innerHTML = modalHTML;
         const modalElement = modal.firstElementChild;
+        console.log('Элемент модального окна:', modalElement);
+        
+        // Исправляем стили модального окна для корректного отображения
+        if (modalElement) {
+            modalElement.style.position = 'fixed';
+            modalElement.style.top = '0';
+            modalElement.style.left = '0';
+            modalElement.style.width = '100vw';
+            modalElement.style.height = '100vh';
+            modalElement.style.zIndex = '9999';
+            modalElement.style.display = 'flex';
+            modalElement.style.alignItems = 'center';
+            modalElement.style.justifyContent = 'center';
+            modalElement.style.background = 'rgba(0, 0, 0, 0.5)';
+        }
+        
         document.body.appendChild(modalElement);
+        console.log('Модальное окно добавлено в DOM');
 
         // Ждем, пока элемент появится в DOM, затем добавляем обработчик
         setTimeout(() => {
             const form = document.getElementById('responseForm');
+            console.log('Форма найдена:', form);
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     await this.submitResponse(offerId, modalElement);
                 });
+                console.log('Обработчик формы добавлен');
+            } else {
+                console.error('Форма responseForm не найдена в DOM');
             }
         }, 100);
     },
