@@ -867,13 +867,25 @@ const ResponseManager = {
         
         document.body.appendChild(modalElement);
 
-        // Ждем, пока элемент появится в DOM, затем добавляем обработчик
+        // Ждем, пока элемент появится в DOM, затем добавляем обработчики
         setTimeout(() => {
             const form = document.getElementById('responseForm');
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     await this.submitResponse(offerId, modalElement);
+                });
+            }
+            
+            // Добавляем обработчик для кнопки закрытия
+            const closeButton = modalElement.querySelector('.modal-close');
+            if (closeButton) {
+                console.log('Добавляем обработчик для кнопки закрытия');
+                closeButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('Кнопка закрытия нажата через addEventListener');
+                    closeModal('responseModal');
                 });
             }
         }, 100);
@@ -1942,12 +1954,20 @@ function createModal(id, title) {
 }
 
 function closeModal(modalId) {
+    console.log('closeModal вызвана с modalId:', modalId);
     const modal = document.getElementById(modalId);
+    console.log('Найденный modal элемент:', modal);
     if (modal) {
+        console.log('Закрываем модальное окно...');
         // Убираем класс active для запуска CSS анимации закрытия
         modal.classList.remove('active');
         // Удаляем элемент после завершения анимации
-        setTimeout(() => modal.remove(), 300);
+        setTimeout(() => {
+            console.log('Удаляем модальное окно из DOM');
+            modal.remove();
+        }, 300);
+    } else {
+        console.error('Модальное окно не найдено по ID:', modalId);
     }
 }
 
