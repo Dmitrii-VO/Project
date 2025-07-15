@@ -1,5 +1,4 @@
 // app/static/js/offers.js - ОПТИМИЗИРОВАННАЯ ВЕРСИЯ
-console.log('📝 Загрузка offers.js - оптимизированная версия');
 
 // ===== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ =====
 let offersManager = null;
@@ -10,13 +9,82 @@ if (window.Telegram?.WebApp) {
     window.Telegram.WebApp.expand();
 }
 
+// ===== HTML ШАБЛОНЫ =====
+const Templates = {
+    statusBadge(status, text) {
+        const statusTexts = {
+            active: '✅ Активен',
+            draft: '📝 Черновик', 
+            completed: '✅ Завершен',
+            paused: '⏸️ Приостановлен'
+        };
+        const displayText = text || statusTexts[status] || statusTexts.active;
+        return `<span class="status-badge ${status}">${displayText}</span>`;
+    },
+
+    button(text, onclick, style = 'primary', size = 'sm') {
+        const classes = `btn-${style} btn-${size}`;
+        return `<button class="${classes}" onclick="${onclick}">${text}</button>`;
+    },
+
+    modal(title, content, id = 'modal') {
+        return `
+            <div id="${id}" class="modal-overlay">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>${title}</h3>
+                        <button class="modal-close" onclick="closeModal('${id}')">&times;</button>
+                    </div>
+                    <div class="modal-body">${content}</div>
+                </div>
+            </div>
+        `;
+    },
+
+    formField(label, type, id, options = {}) {
+        const { required = false, placeholder = '', style = '' } = options;
+        const req = required ? '<span class="required">*</span>' : '';
+        const extraStyle = style ? ` style="${style}"` : '';
+        
+        if (type === 'select' && options.items) {
+            return `
+                <div class="form-field">
+                    <label for="${id}">${label} ${req}</label>
+                    <select id="${id}" ${required ? 'required' : ''}${extraStyle}>
+                        ${options.items.map(item => `<option value="${item.value}">${item.text}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        }
+        
+        if (type === 'textarea') {
+            return `
+                <div class="form-field">
+                    <label for="${id}">${label} ${req}</label>
+                    <textarea id="${id}" ${required ? 'required' : ''} placeholder="${placeholder}"${extraStyle}></textarea>
+                </div>
+            `;
+        }
+        
+        return `
+            <div class="form-field">
+                <label for="${id}">${label} ${req}</label>
+                <input type="${type}" id="${id}" ${required ? 'required' : ''} placeholder="${placeholder}"${extraStyle}>
+            </div>
+        `;
+    },
+
+    infoCard(title, content, emoji = '📝') {
+        return `<div class="info-card"><h4>${emoji} ${title}</h4>${content}</div>`;
+    }
+};
+
 // ===== УТИЛИТЫ =====
 const Utils = {
     formatPrice(price) {
         const numericPrice = typeof price === 'string'
             ? parseFloat(price.replace(/[^0-9.,]/g, '').replace(',', '.')) || 0
             : (price || 0);
-
         return numericPrice === 0 ? '0' : numericPrice.toLocaleString('ru-RU', {
             minimumFractionDigits: 0,
             maximumFractionDigits: 2
@@ -33,52 +101,30 @@ const Utils = {
             const date = new Date(dateString);
             if (isNaN(date.getTime())) return 'Неверная дата';
             return date.toLocaleDateString('ru-RU', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
+                year: 'numeric', month: 'short', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
             });
         } catch (error) {
-            console.warn('⚠️ Ошибка форматирования даты:', dateString, error);
             return 'Ошибка даты';
         }
     },
 
     showLoading(container, message = 'Загрузка...') {
         if (container) {
-            container.innerHTML = `
-                <div class="loading-state">
-                    <div class="loading-spinner">⏳</div>
-                    <p>${message}</p>
-                </div>
-            `;
+            container.innerHTML = `<div class="loading-state"><div class="loading-spinner">⏳</div><p>${message}</p></div>`;
         }
     },
 
     showError(container, message, retryCallback = null) {
         if (container) {
-            container.innerHTML = `
-                <div class="error-state">
-                    <div class="error-icon">❌</div>
-                    <h3>Ошибка загрузки</h3>
-                    <p>${message}</p>
-                    ${retryCallback ? `<button class="btn btn-outline" onclick="${retryCallback.name}()">🔄 Попробовать снова</button>` : ''}
-                </div>
-            `;
+            const retryBtn = retryCallback ? Templates.button('🔄 Попробовать снова', `${retryCallback.name}()`, 'outline') : '';
+            container.innerHTML = `<div class="error-state"><div class="error-icon">❌</div><h3>Ошибка загрузки</h3><p>${message}</p>${retryBtn}</div>`;
         }
     },
 
     showEmpty(container, title, description, action = null) {
         if (container) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-icon">📝</div>
-                    <h3>${title}</h3>
-                    <p>${description}</p>
-                    ${action ? action : ''}
-                </div>
-            `;
+            container.innerHTML = `<div class="empty-state"><div class="empty-icon">📝</div><h3>${title}</h3><p>${description}</p>${action || ''}</div>`;
         }
     }
 };
@@ -89,7 +135,7 @@ const ApiClient = {
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json',
-                'X-Telegram-User-Id': getTelegramUserId() // Используем глобальную функцию для получения ID
+                'X-Telegram-User-Id': getTelegramUserId()
             }
         };
 
@@ -99,40 +145,54 @@ const ApiClient = {
         }
 
         const response = await fetch(url, config);
-
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-
         return response.json();
     },
 
-    async get(url) {
-        return this.request(url, { method: 'GET' });
-    },
+    async get(url) { return this.request(url, { method: 'GET' }); },
+    async post(url, data) { return this.request(url, { method: 'POST', body: JSON.stringify(data) }); },
+    async patch(url, data) { return this.request(url, { method: 'PATCH', body: JSON.stringify(data) }); },
+    async delete(url) { return this.request(url, { method: 'DELETE' }); },
 
-    async post(url, data) {
-        return this.request(url, {
-            method: 'POST',
-            body: JSON.stringify(data)
-        });
-    },
+    // Универсальная загрузка с состояниями
+    async loadData(config) {
+        const { 
+            url, container, loadingMessage = 'Загрузка...', 
+            emptyTitle = 'Нет данных', emptyDescription = '', emptyAction = '',
+            renderer, retryCallback, filters = {}
+        } = config;
+        
+        const containerEl = typeof container === 'string' ? document.getElementById(container) : container;
+        if (!containerEl) return;
 
-    async patch(url, data) {
-        return this.request(url, {
-            method: 'PATCH',
-            body: JSON.stringify(data)
-        });
-    },
-
-    async delete(url) {
-        return this.request(url, { method: 'DELETE' });
+        try {
+            Utils.showLoading(containerEl, loadingMessage);
+            
+            const params = new URLSearchParams();
+            Object.keys(filters).forEach(key => {
+                if (filters[key] !== null && filters[key] !== '') {
+                    params.append(key, filters[key]);
+                }
+            });
+            
+            const fullUrl = `${url}${params.toString() ? '?' + params.toString() : ''}`;
+            const result = await this.get(fullUrl);
+            
+            if (result.success && result.offers?.length > 0) {
+                renderer ? renderer(result.offers) : containerEl.innerHTML = JSON.stringify(result.offers);
+            } else {
+                Utils.showEmpty(containerEl, emptyTitle, emptyDescription, emptyAction);
+            }
+        } catch (error) {
+            Utils.showError(containerEl, 'Ошибка загрузки: ' + error.message, retryCallback);
+        }
     }
 };
 
 // ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
 function switchTab(tabName) {
-    console.log('🔄 Переключение на вкладку:', tabName);
 
     // Обновляем навигацию
     document.querySelectorAll('.nav-card').forEach(card => card.classList.remove('active'));
@@ -160,11 +220,9 @@ function switchTab(tabName) {
 // ===== РЕНДЕРИНГ ОФФЕРОВ =====
 const OfferRenderer = {
     renderOffers(offers) {
-        console.log('🎨 Отрисовка офферов:', offers.length);
         const container = document.getElementById('offersGrid');
 
         if (!container) {
-            console.error('❌ Контейнер offersGrid не найден');
             return;
         }
 
@@ -177,7 +235,6 @@ const OfferRenderer = {
         }
 
         container.innerHTML = offers.map(offer => this.renderOfferCard(offer)).join('');
-        console.log('✅ Офферы отрисованы');
     },
 
     renderOfferCard(offer) {
@@ -200,25 +257,14 @@ const OfferRenderer = {
         }
         const shortTitle = title.length > 25 ? title.substring(0, 25) + '...' : title;
 
-        const statusConfig = {
-            'active': { bg: '#d4edda', color: '#155724', text: 'Активен' },
-            'paused': { bg: '#fff3cd', color: '#856404', text: 'Приостановлен' },
-            'completed': { bg: '#d1ecf1', color: '#0c5460', text: 'Завершен' },
-            'cancelled': { bg: '#f8d7da', color: '#721c24', text: 'Отменен' },
-            'draft': { bg: '#e2e8f0', color: '#4a5568', text: '📝 Черновик' }
-        };
-
-        const statusStyle = statusConfig[status] || statusConfig.active;
         const actionButtons = this.getActionButtons(id, status, title, response_count);
-        
-        // Формируем имя создателя
         const creatorDisplay = creator_name ? creator_name : (creator_username || 'Неизвестный');
 
         return `
             <div class="offer-card-compact" data-offer-id="${id}" style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); position: relative;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                     <h3 style="margin: 0; color: #2d3748; font-size: 14px; font-weight: 600; flex: 1;">${shortTitle}</h3>
-                    <span style="padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 500; background: ${statusStyle.bg}; color: ${statusStyle.color}; white-space: nowrap; margin-left: 8px;">${statusStyle.text}</span>
+                    ${Templates.statusBadge(status)}
                 </div>
                 
                 <div style="margin-bottom: 6px; font-size: 10px; color: #68d391; font-weight: 500;">
@@ -299,44 +345,26 @@ const OfferRenderer = {
             buttons.push(`<button onclick="${btn.action}" style="${baseButtonStyle} border: 1px solid ${btn.color}; background: ${btn.color}; color: white; ${flexStyle}">${btn.text}</button>`);
         });
 
-        return buttons.join('');
+        return `<div style="display: flex; gap: 4px; margin-top: 8px;">${buttons.join('')}</div>`;
     }
 };
 
 // ===== ЗАГРУЗКА ОФФЕРОВ =====
 async function loadMyOffers() {
-    console.log('📋 Загрузка моих офферов...');
-    const container = document.getElementById('offersGrid');
-
-    if (!container) {
-        console.error('❌ Контейнер offersGrid не найден');
-        return;
-    }
-
-    try {
-        Utils.showLoading(container, 'Загрузка офферов...');
-
-        const result = await ApiClient.get('/api/offers/my');
-
-        if (result.success && result.offers?.length > 0) {
-            console.log('✅ Офферы загружены:', result.offers.length);
-            OfferRenderer.renderOffers(result.offers);
-        } else {
-            console.log('ℹ️ Офферов не найдено');
-            Utils.showEmpty(container, 'Пока нет офферов',
-                'Создайте свой первый оффер, нажав на "Создать оффер"',
-                '<button class="btn btn-primary" onclick="switchTab(\'create-offer\')">Создать оффер</button>'
-            );
-        }
-    } catch (error) {
-        console.error('❌ Ошибка загрузки офферов:', error);
-        Utils.showError(container, 'Ошибка загрузки офферов: ' + error.message, loadMyOffers);
-    }
+    await ApiClient.loadData({
+        url: '/api/offers/my',
+        container: 'offersGrid', 
+        loadingMessage: 'Загрузка офферов...',
+        emptyTitle: 'Пока нет офферов',
+        emptyDescription: 'Создайте свой первый оффер, нажав на "Создать оффер"',
+        emptyAction: Templates.button('Создать оффер', 'switchTab(\'create-offer\')', 'primary', 'md'),
+        renderer: OfferRenderer.renderOffers.bind(OfferRenderer),
+        retryCallback: loadMyOffers
+    });
 }
 
 // ===== ПОИСК ДОСТУПНЫХ ОФФЕРОВ =====
 function applyFindFilters() {
-    console.log('🔍 Применение фильтров поиска...');
     const filters = {
         search: document.getElementById('findOffersSearch')?.value.trim() || '',
         category: document.getElementById('findCategoryFilter')?.value || '',
@@ -351,12 +379,10 @@ function applyFindFilters() {
         }
     });
 
-    console.log('🎯 Фильтры:', filters);
     loadAvailableOffers(filters);
 }
 
 function clearFindFilters() {
-    console.log('🗑️ Очистка фильтров...');
     ['findOffersSearch', 'findCategoryFilter', 'findBudgetMin', 'findBudgetMax', 'findMinSubscriber']
         .forEach(id => {
             const el = document.getElementById(id);
@@ -366,57 +392,32 @@ function clearFindFilters() {
 }
 
 async function loadAvailableOffers(filters = {}) {
-    console.log('📥 Загрузка доступных офферов с фильтрами:', filters);
-    const container = document.getElementById('findOffersGrid');
+    await ApiClient.loadData({
+        url: '/api/offers',
+        container: 'findOffersGrid',
+        loadingMessage: 'Поиск офферов...',
+        emptyTitle: 'Нет доступных офферов',
+        emptyDescription: 'В данный момент нет офферов, доступных для размещения',
+        emptyAction: Templates.button('📋 Мои офферы', 'switchTab(\'my-offers\')', 'primary', 'md'),
+        renderer: renderAvailableOffers,
+        filters: filters
+    });
+    
     const loading = document.getElementById('findOffersLoading');
-
-    if (!container || !loading) {
-        console.error('❌ Контейнеры для поиска не найдены');
-        return;
-    }
-
-    loading.style.display = 'block';
-    container.innerHTML = '';
-
-    try {
-        const params = new URLSearchParams();
-        Object.keys(filters).forEach(key => {
-            if (filters[key] !== null && filters[key] !== '') {
-                params.append(key, filters[key]);
-            }
-        });
-
-        const url = `/api/offers${params.toString() ? '?' + params.toString() : ''}`;
-        const result = await ApiClient.get(url);
-
-        if (result.success) {
-            console.log('✅ Загружено доступных офферов:', result.offers?.length || 0);
-            renderAvailableOffers(result.offers || []);
-        } else {
-            throw new Error(result.error || 'Ошибка загрузки офферов');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка загрузки доступных офферов:', error);
-        Utils.showError(container, 'Ошибка загрузки офферов: ' + error.message);
-    } finally {
-        loading.style.display = 'none';
-    }
+    if (loading) loading.style.display = 'none';
 }
 
 function renderAvailableOffers(offers) {
-    console.log('▶ renderAvailableOffers вызвана, получено офферов:', offers.length);
-    console.log('Данные офферов:', offers);
     const container = document.getElementById('findOffersGrid');
 
     if (!container) {
-        console.error('❌ Контейнер findOffersGrid не найден');
         return;
     }
 
     if (!offers?.length) {
         Utils.showEmpty(container, 'Нет доступных офферов',
             'В данный момент нет офферов, доступных для размещения',
-            '<button class="btn btn-primary" onclick="switchTab(\'my-offers\')">📋 Мои офферы</button>'
+            Templates.button('📋 Мои офферы', 'switchTab(\'my-offers\')', 'primary', 'md')
         );
         return;
     }
@@ -532,11 +533,9 @@ class OffersManager {
 
     init() {
         if (this.isInitialized) {
-            console.log('⚠️ OffersManager уже инициализирован');
             return;
         }
 
-        console.log('🎯 Инициализация OffersManager');
         this.setupEventListeners();
         this.updateStep(this.currentStep);
         this.isInitialized = true;
@@ -609,7 +608,6 @@ class OffersManager {
     }
 
     updateStep(step) {
-        console.log('📝 Обновление шага:', step);
 
         document.querySelectorAll('.step').forEach((stepEl, index) => {
             const stepNumber = index + 1;
@@ -713,7 +711,6 @@ class OffersManager {
     }
 
     async submitOffer() {
-        console.log('📤 Отправка оффера...');
         const submitBtn = document.getElementById('submitBtn');
         const originalText = submitBtn?.textContent;
 
@@ -724,7 +721,6 @@ class OffersManager {
             }
 
             const data = this.collectFormData();
-            console.log('🚀 Отправляемые данные:', data);
 
             const result = await ApiClient.post('/api/offers', data);
 
@@ -736,7 +732,6 @@ class OffersManager {
                 throw new Error(result.error || result.errors?.join(', ') || 'Ошибка создания оффера');
             }
         } catch (error) {
-            console.error('❌ Ошибка создания оффера:', error);
             alert(`❌ Ошибка: ${error.message}`);
         } finally {
             if (submitBtn) {
@@ -805,7 +800,6 @@ class OffersManager {
 // ===== УПРАВЛЕНИЕ ОТКЛИКАМИ =====
 const ResponseManager = {
     async acceptOffer(offerId) {
-        console.log('✅ Отклик на оффер:', offerId);
 
         try {
             const channelsResult = await ApiClient.get('/api/channels/my');
@@ -832,57 +826,35 @@ const ResponseManager = {
 
             this.showResponseModal(offerId, offer, verifiedChannels);
         } catch (error) {
-            console.error('❌ Ошибка при отклике на оффер:', error);
             alert(`❌ Ошибка: ${error.message}`);
         }
     },
 
     showResponseModal(offerId, offer, verifiedChannels) {
-        const modal = document.createElement('div');
-        modal.className = 'modal';
-        modal.style.background = 'rgba(0,0,0,0.5)';
+        const channelOptions = verifiedChannels.map(channel => ({
+            value: channel.id,
+            text: `${channel.title} (@${channel.username}) - ${Utils.formatNumber(channel.subscriber_count)} подписчиков`
+        }));
 
-        modal.innerHTML = `
-            <div style="background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                    <h3 style="margin: 0; color: #2d3748; font-size: 20px;">📝 Отклик на оффер</h3>
-                    <button onclick="closeModal()" class="modal-close">&times;</button>
+        const formContent = `
+            ${Templates.infoCard(offer.title, '', '🎯')}
+            <form id="responseForm">
+                ${Templates.formField('Выберите канал', 'select', 'selectedChannel', { required: true, items: channelOptions })}
+                ${Templates.formField('Сообщение рекламодателю', 'textarea', 'responseMessage', { 
+                    required: true, 
+                    placeholder: 'Расскажите, почему ваш канал подходит для этого оффера...',
+                    style: 'min-height:120px;'
+                })}
+                <div class="button-group">
+                    ${Templates.button('Отмена', 'this.closest(\'.modal-overlay\').remove()', 'outline', 'md')}
+                    ${Templates.button('Отправить отклик', '', 'primary', 'md')}
                 </div>
-                
-                <div style="background: #f7fafc; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
-                    <h4 style="margin: 0 0 8px 0; color: #2d3748;">🎯 ${offer.title}</h4>
-                </div>
-                
-                <form id="responseForm">
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">
-                            Выберите канал <span style="color: #e53e3e;">*</span>
-                        </label>
-                        <select id="selectedChannel" required style="width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; background: white;">
-                            ${verifiedChannels.map(channel => `
-                                <option value="${channel.id}">
-                                    ${channel.title} (@${channel.username}) - ${Utils.formatNumber(channel.subscriber_count)} подписчиков
-                                </option>
-                            `).join('')}
-                        </select>
-                    </div>
-                    
-                    <div style="margin-bottom: 20px;">
-                        <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">
-                            Сообщение рекламодателю <span style="color: #e53e3e;">*</span>
-                        </label>
-                        <textarea id="responseMessage" required placeholder="Расскажите, почему ваш канал подходит для этого оффера..." style="width: 100%; min-height: 120px; padding: 12px; border: 2px solid #e2e8f0; border-radius: 6px; font-size: 14px; resize: vertical; font-family: inherit;"></textarea>
-                    </div>
-                    
-                    <div style="display: flex; gap: 12px;">
-                        <button type="button" onclick="this.closest('div[style*=\"position: fixed\"]').remove()" style="flex: 1; padding: 12px; border: 2px solid #e2e8f0; background: white; color: #4a5568; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer;">Отмена</button>
-                        <button type="submit" style="flex: 1; padding: 12px; border: none; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); color: white; border-radius: 6px; font-size: 16px; font-weight: 600; cursor: pointer;">Отправить отклик</button>
-                    </div>
-                </form>
-            </div>
+            </form>
         `;
 
-        document.body.appendChild(modal);
+        const modal = document.createElement('div');
+        modal.innerHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
+        document.body.appendChild(modal.firstElementChild);
 
         modal.querySelector('#responseForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -921,13 +893,11 @@ const ResponseManager = {
                 throw new Error(result.error || 'Ошибка отправки отклика');
             }
         } catch (error) {
-            console.error('❌ Ошибка отправки отклика:', error);
             alert(`❌ Ошибка: ${error.message}`);
         }
     },
 
     async manageResponses(offerId) {
-        console.log('💬 Управление откликами для оффера:', offerId);
 
         try {
             const result = await ApiClient.get(`/api/offers/${offerId}/responses`);
@@ -939,7 +909,6 @@ const ResponseManager = {
             const offer = { id: offerId, title: result.offer?.title || `Оффер #${offerId}` };
             this.showResponsesModal(offer, result.responses || []);
         } catch (error) {
-            console.error('❌ Ошибка загрузки откликов:', error);
             alert(`❌ Ошибка загрузки откликов: ${error.message}`);
         }
     },
@@ -1032,7 +1001,6 @@ const ResponseManager = {
     },
 
     async respondToResponse(responseId, action) {
-        console.log(`📝 Обработка отклика ${responseId} - действие: ${action}`);
 
         try {
             let message = '';
@@ -1067,7 +1035,6 @@ const ResponseManager = {
                 throw new Error(result.error || 'Ошибка обработки отклика');
             }
         } catch (error) {
-            console.error('❌ Ошибка обработки отклика:', error);
             alert(`❌ Ошибка: ${error.message}`);
         }
     }
@@ -1076,11 +1043,9 @@ const ResponseManager = {
 // ===== УПРАВЛЕНИЕ КОНТРАКТАМИ =====
 const ContractManager = {
     async loadUserContracts() {
-        console.log('📋 Загрузка контрактов пользователя...');
         const container = document.getElementById('contractsGrid');
 
         if (!container) {
-            console.error('❌ Элемент contractsGrid не найден');
             this.createContractsContainer();
             return;
         }
@@ -1091,14 +1056,12 @@ const ContractManager = {
             const result = await ApiClient.get('/api/offers/contracts');
 
             if (result.success) {
-                console.log(`✅ Загружено контрактов: ${result.contracts?.length || 0}`);
                 this.renderContracts(result.contracts || []);
                 this.updateContractsStats(result.contracts || []);
             } else {
                 throw new Error(result.error || 'Неизвестная ошибка загрузки контрактов');
             }
         } catch (error) {
-            console.error('❌ Ошибка загрузки контрактов:', error);
             Utils.showError(container, error.message, this.loadUserContracts);
         }
     },
@@ -1364,7 +1327,6 @@ const OfferStatusManager = {
                 throw new Error(result.error || `Ошибка изменения статуса на ${newStatus}`);
             }
         } catch (error) {
-            console.error('❌ Ошибка изменения статуса:', error);
             alert(`❌ Ошибка: ${error.message}`);
 
             if (buttonElement) {
@@ -1447,7 +1409,6 @@ const OfferStatusManager = {
                 throw new Error(result.error || 'Ошибка удаления оффера');
             }
         } catch (error) {
-            console.error('❌ Ошибка удаления оффера:', error);
             alert(`❌ Ошибка: ${error.message}`);
 
             if (buttonElement) {
@@ -1505,7 +1466,6 @@ async function viewAvailableOfferDetails(offerId) {
             alert('Ошибка получения деталей оффера');
         }
     } catch (error) {
-        console.error('Ошибка:', error);
         alert('Ошибка получения деталей оффера');
     }
 }
@@ -1535,7 +1495,6 @@ async function viewOfferDetails(offerId) {
         }
         
     } catch (error) {
-        console.error('❌ Ошибка получения деталей оффера:', error);
         alert(`❌ Ошибка: ${error.message}`);
     }
 }
@@ -1562,12 +1521,10 @@ function setupOffersSearch() {
 // Проверка и доработка функции показа модального окна выбора каналов для оффера
 
 async function showChannelSelectionModal(offerId, offerTitle) {
-    console.log('🎯 Показываем модальное окно выбора каналов для оффера:', offerId);
 
     try {
         // Получаем Telegram User ID (глобальная функция должна быть определена)
         const telegramUserId = getTelegramUserId?.();
-        console.log('👤 Telegram User ID:', telegramUserId);
 
         if (!telegramUserId) {
             showNotification('error', '❌ Не удалось получить ID пользователя Telegram. Попробуйте перезагрузить страницу.');
@@ -1586,7 +1543,6 @@ async function showChannelSelectionModal(offerId, offerTitle) {
             }
         });
 
-        console.log('📡 Response status:', response.status);
 
         // Обработка ошибок HTTP
         if (!response.ok) {
@@ -1602,13 +1558,11 @@ async function showChannelSelectionModal(offerId, offerTitle) {
 
         // Парсим ответ
         const data = await response.json();
-        console.log('📊 API Response:', data);
 
         hideLoadingOverlay?.();
 
         // Проверяем структуру ответа
         if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
-            console.log(`✅ Найдено ${data.channels.length} рекомендуемых каналов`);
             createChannelModal(offerId, offerTitle, data.channels);
         } else if (data && data.success && Array.isArray(data.channels) && data.channels.length === 0) {
             // Нет каналов, но запрос успешен
@@ -1628,7 +1582,6 @@ async function showChannelSelectionModal(offerId, offerTitle) {
         }
 
     } catch (error) {
-        console.error('❌ Ошибка при загрузке рекомендуемых каналов:', error);
         hideLoadingOverlay?.();
         showNotification('error', `❌ Ошибка загрузки каналов: ${error.message}`);
         setTimeout(() => {
@@ -1818,7 +1771,6 @@ async function completeDraftAndSendProposals(offerId) {
             showNotification('error', `❌ Ошибка завершения: ${errorMessage}`);
         }
     } catch (error) {
-        console.error('❌ Ошибка завершения оффера:', error);
         showNotification('error', `❌ Ошибка: ${error.message}`);
     }
 }
@@ -1843,20 +1795,16 @@ async function saveOfferAsDraft(offerId) {
         });
 
         if (response.ok) {
-            console.log(`✅ Оффер ${offerId} сохранен как черновик`);
             showNotification('info', '📝 Оффер сохранен как черновик. Завершите его в разделе "Мои офферы"');
         } else {
-            console.error('❌ Ошибка сохранения черновика');
             showNotification('error', '❌ Ошибка сохранения черновика');
         }
     } catch (error) {
-        console.error('❌ Ошибка сохранения черновика:', error);
         showNotification('error', '❌ Ошибка сохранения черновика');
     }
 }
 
 async function showChannelSelectionModalForDraft(offerId, offerTitle) {
-    console.log('📝 Показываем модальное окно выбора каналов для черновика:', offerId);
 
     try {
         const telegramUserId = getTelegramUserId();
@@ -1880,7 +1828,6 @@ async function showChannelSelectionModalForDraft(offerId, offerTitle) {
             }
         });
 
-        console.log('📡 Response status:', response.status);
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -1890,12 +1837,10 @@ async function showChannelSelectionModalForDraft(offerId, offerTitle) {
         }
 
         const data = await response.json();
-        console.log('📊 API Response:', data);
 
         hideLoadingOverlay?.();
 
         if (data && data.success && Array.isArray(data.channels) && data.channels.length > 0) {
-            console.log(`✅ Найдено ${data.channels.length} рекомендуемых каналов`);
             createChannelModal(offerId, offerTitle, data.channels, true);
         } else {
             showNotification('info', '📺 Рекомендуемые каналы не найдены');
@@ -1903,7 +1848,6 @@ async function showChannelSelectionModalForDraft(offerId, offerTitle) {
 
     } catch (error) {
         hideLoadingOverlay?.();
-        console.error('❌ Ошибка получения каналов:', error);
         showNotification('error', `❌ Ошибка: ${error.message}`);
     }
 }
@@ -2166,7 +2110,6 @@ async function submitAcceptProposal(proposalId) {
         }
         
     } catch (error) {
-        console.error('Ошибка принятия предложения:', error);
         showError('Ошибка: ' + error.message);
     } finally {
         // Восстанавливаем кнопку
@@ -2229,7 +2172,6 @@ async function submitRejectProposal(proposalId) {
         }
         
     } catch (error) {
-        console.error('Ошибка отклонения предложения:', error);
         showError('Ошибка: ' + error.message);
     } finally {
         // Восстанавливаем кнопку
@@ -2341,19 +2283,9 @@ window.ResponseManager = ResponseManager;
 window.manageResponses = (offerId) => ResponseManager.manageResponses(offerId);
 window.acceptOffer = (offerId) => ResponseManager.acceptOffer(offerId);
 
-console.log('🔧 Функции доступны глобально:', {
-    ResponseManager: typeof window.ResponseManager,
-    manageResponses: typeof window.manageResponses,
-    acceptOffer: typeof window.acceptOffer
-});
-
-// Глобальные функции уже определены внизу файла
-console.log('🌐 Функции экспортированы в глобальную область');
+// ===== ИНИЦИАЛИЗАЦИЯ =====
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎯 Инициализация страницы офферов');
     loadMyOffers();
     setupOffersSearch();
-    console.log('✅ Страница офферов инициализирована');
 });
 
-console.log('✅ offers.js загружен успешно - оптимизированная версия');
