@@ -902,8 +902,46 @@ const ResponseManager = {
         }
         
         console.log('Добавление модального окна в DOM...');
-        document.body.appendChild(modalElement);
-        console.log('Модальное окно добавлено в DOM');
+        
+        // Тест: добавляем простой видимый элемент для проверки
+        const testElement = document.createElement('div');
+        testElement.style.cssText = `
+            position: fixed;
+            top: 50px;
+            left: 50px;
+            width: 300px;
+            height: 200px;
+            background: yellow;
+            border: 3px solid black;
+            z-index: 999999;
+            display: block;
+        `;
+        testElement.innerHTML = '<h1>ТЕСТ ВИДИМОСТИ</h1>';
+        document.body.appendChild(testElement);
+        console.log('Тестовый элемент добавлен');
+        
+        // Попробуем добавить в разные контейнеры
+        const container = document.querySelector('.container') || document.body;
+        container.appendChild(modalElement);
+        console.log('Модальное окно добавлено в:', container);
+        
+        // Проверяем, что элемент действительно в DOM
+        const checkElement = document.getElementById('responseModal');
+        console.log('Элемент сразу после добавления:', checkElement);
+        
+        // Добавляем обработчик для отслеживания удаления
+        const observer = new MutationObserver(mutations => {
+            mutations.forEach(mutation => {
+                if (mutation.type === 'childList') {
+                    mutation.removedNodes.forEach(node => {
+                        if (node.id === 'responseModal') {
+                            console.warn('Модальное окно было удалено из DOM!');
+                        }
+                    });
+                }
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
         
         // Проверяем видимость модального окна
         setTimeout(() => {
