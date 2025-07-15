@@ -803,8 +803,11 @@ class OffersManager {
 // ===== УПРАВЛЕНИЕ ОТКЛИКАМИ =====
 const ResponseManager = {
     async acceptOffer(offerId) {
+        console.log('acceptOffer начинает выполнение для offerId:', offerId);
         try {
+            console.log('Запрос каналов пользователя...');
             const channelsResult = await ApiClient.get('/api/channels/my');
+            console.log('Результат запроса каналов:', channelsResult);
 
             if (!channelsResult.success) {
                 throw new Error(channelsResult.error || 'Ошибка загрузки каналов');
@@ -813,29 +816,41 @@ const ResponseManager = {
             const verifiedChannels = (channelsResult.channels || []).filter(channel =>
                 channel.is_verified === true || channel.is_verified === 1 || channel.status === 'verified'
             );
+            console.log('Найдено верифицированных каналов:', verifiedChannels.length);
 
             if (verifiedChannels.length === 0) {
                 alert('У вас нет верифицированных каналов. Сначала добавьте и верифицируйте канал в разделе "Мои каналы".');
                 return;
             }
 
+            console.log('Поиск карточки оффера с data-offer-id:', offerId);
             const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
+            console.log('Найденная карточка оффера:', offerCard);
+            
             const titleElement = offerCard?.querySelector('h3');
+            console.log('Элемент заголовка:', titleElement);
+            
             const offer = {
                 id: offerId,
                 title: titleElement?.textContent?.trim() || 'Оффер'
             };
+            console.log('Объект оффера:', offer);
 
+            console.log('Вызов showResponseModal...');
             this.showResponseModal(offerId, offer, verifiedChannels);
         } catch (error) {
+            console.error('Ошибка в acceptOffer:', error);
             alert(`❌ Ошибка: ${error.message}`);
         }
     },
 
     showResponseModal(offerId, offer, verifiedChannels) {
+        console.log('showResponseModal вызвана с параметрами:', { offerId, offer, verifiedChannels });
+        
         // Закрываем существующее модальное окно, если оно есть
         const existingModal = document.getElementById('responseModal');
         if (existingModal) {
+            console.log('Найдено существующее модальное окно, удаляем');
             existingModal.remove();
         }
 
@@ -843,6 +858,7 @@ const ResponseManager = {
             value: channel.id,
             text: `${channel.title} (@${channel.username}) - ${Utils.formatNumber(channel.subscriber_count)} подписчиков`
         }));
+        console.log('Опции каналов:', channelOptions);
 
         const formContent = `
             ${Templates.infoCard(offer.title, '', '🎯')}
@@ -860,10 +876,13 @@ const ResponseManager = {
             </form>
         `;
 
+        console.log('Создание модального окна...');
         const modal = document.createElement('div');
         const modalHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
+        console.log('HTML модального окна:', modalHTML);
         modal.innerHTML = modalHTML;
         const modalElement = modal.firstElementChild;
+        console.log('Элемент модального окна:', modalElement);
         
         // Исправляем стили модального окна для корректного отображения
         if (modalElement) {
@@ -877,18 +896,23 @@ const ResponseManager = {
             modalElement.style.alignItems = 'center';
             modalElement.style.justifyContent = 'center';
             modalElement.style.background = 'rgba(0, 0, 0, 0.5)';
+            console.log('Стили модального окна применены');
         }
         
+        console.log('Добавление модального окна в DOM...');
         document.body.appendChild(modalElement);
+        console.log('Модальное окно добавлено в DOM');
 
         // Ждем, пока элемент появится в DOM, затем добавляем обработчик
         setTimeout(() => {
             const form = document.getElementById('responseForm');
+            console.log('Форма найдена:', form);
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     await this.submitResponse(offerId, modalElement);
                 });
+                console.log('Обработчик формы добавлен');
             }
         }, 100);
     },
