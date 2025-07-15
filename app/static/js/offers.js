@@ -846,19 +846,26 @@ const ResponseManager = {
                 })}
                 <div class="button-group">
                     ${Templates.button('Отмена', 'this.closest(\'.modal-overlay\').remove()', 'outline', 'md')}
-                    ${Templates.button('Отправить отклик', '', 'primary', 'md')}
+                    <button type="submit" class="btn-primary btn-md">Отправить отклик</button>
                 </div>
             </form>
         `;
 
         const modal = document.createElement('div');
         modal.innerHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
-        document.body.appendChild(modal.firstElementChild);
+        const modalElement = modal.firstElementChild;
+        document.body.appendChild(modalElement);
 
-        modal.querySelector('#responseForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            await this.submitResponse(offerId, modal);
-        });
+        // Ждем, пока элемент появится в DOM, затем добавляем обработчик
+        setTimeout(() => {
+            const form = document.getElementById('responseForm');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.submitResponse(offerId, modalElement);
+                });
+            }
+        }, 100);
     },
 
     async submitResponse(offerId, modal) {
