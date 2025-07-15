@@ -391,6 +391,7 @@ function clearFindFilters() {
 }
 
 async function loadAvailableOffers(filters = {}) {
+    console.log('loadAvailableOffers вызвана с фильтрами:', filters);
     await ApiClient.loadData({
         url: '/api/offers',
         container: 'findOffersGrid',
@@ -407,13 +408,16 @@ async function loadAvailableOffers(filters = {}) {
 }
 
 function renderAvailableOffers(offers) {
+    console.log('renderAvailableOffers вызвана с данными:', offers);
     const container = document.getElementById('findOffersGrid');
 
     if (!container) {
+        console.error('Контейнер findOffersGrid не найден');
         return;
     }
 
     if (!offers?.length) {
+        console.log('Нет офферов для отображения');
         Utils.showEmpty(container, 'Нет доступных офферов',
             'В данный момент нет офферов, доступных для размещения',
             Templates.button('📋 Мои офферы', 'switchTab(\'my-offers\')', 'primary', 'md')
@@ -482,7 +486,7 @@ function renderAvailableOffers(offers) {
                     <button class="btn btn-outline" onclick="viewAvailableOfferDetails(${id})" style="padding: 6px 12px; font-size: 12px; border: 1px solid #e2e8f0; background: white; color: #4a5568; border-radius: 4px;">
                         👁️ Подробнее
                     </button>
-                    <button class="btn btn-primary" onclick="respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
+                    <button class="btn btn-primary" onclick="console.log('Кнопка откликнуться нажата, ID:', ${id}); respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
                         📩 Откликнуться
                     </button>
                 </div>
@@ -1227,7 +1231,15 @@ async function viewAvailableOfferDetails(offerId) {
 }
 
 async function respondToOffer(offerId) {
-    await ResponseManager.acceptOffer(offerId);
+    console.log('respondToOffer вызвана с offerId:', offerId);
+    console.log('ResponseManager объект:', ResponseManager);
+    
+    try {
+        await ResponseManager.acceptOffer(offerId);
+    } catch (error) {
+        console.error('Ошибка в respondToOffer:', error);
+        alert('Ошибка: ' + error.message);
+    }
 }
 
 async function viewOfferDetails(offerId) {
