@@ -896,12 +896,32 @@ const ResponseManager = {
             modalElement.style.alignItems = 'center';
             modalElement.style.justifyContent = 'center';
             modalElement.style.background = 'rgba(0, 0, 0, 0.5)';
+            // Добавляем тестовую рамку для видимости
+            modalElement.style.border = '5px solid red';
             console.log('Стили модального окна применены');
         }
         
         console.log('Добавление модального окна в DOM...');
         document.body.appendChild(modalElement);
         console.log('Модальное окно добавлено в DOM');
+        
+        // Проверяем видимость модального окна
+        setTimeout(() => {
+            const addedModal = document.getElementById('responseModal');
+            if (addedModal) {
+                console.log('Модальное окно найдено в DOM:', addedModal);
+                console.log('Стили модального окна:', window.getComputedStyle(addedModal));
+                console.log('Видимость модального окна:', {
+                    display: addedModal.style.display,
+                    position: addedModal.style.position,
+                    zIndex: addedModal.style.zIndex,
+                    width: addedModal.style.width,
+                    height: addedModal.style.height
+                });
+            } else {
+                console.error('Модальное окно не найдено в DOM!');
+            }
+        }, 50);
 
         // Ждем, пока элемент появится в DOM, затем добавляем обработчик
         setTimeout(() => {
