@@ -892,7 +892,6 @@ def update_response_status_route(response_id):
             WHERE id = ?
         ''', (new_status, datetime.now().isoformat(), message, response_id))
 
-        contract_id = None
         if new_status == 'accepted':
             # Отклоняем остальные отклики
             execute_db_query('''
@@ -904,29 +903,10 @@ def update_response_status_route(response_id):
                 AND id != ? AND status = 'pending'
             ''', (datetime.now().isoformat(), response_data['offer_id'], response_id))
 
-            # Генерируем уникальный ID контракта
-            
-            contract_uuid = str(uuid.uuid4())
-
-            # Создаем контракт
-            execute_db_query('''
-                INSERT INTO contracts (id, offer_id, response_id, advertiser_id, publisher_id,
-                                    status, price, placement_deadline, monitoring_end, created_at)
-                VALUES (?, ?, ?, ?, ?, 'active', ?, 
-                        datetime('now', '+7 days'), datetime('now', '+14 days'), CURRENT_TIMESTAMP)
-            ''', (contract_uuid, response_data['offer_id'], response_id, response_data['created_by'], 
-                response_data['user_id'], response_data.get('offer_price', 0)))
-            
-            contract_id = contract_uuid
-
         result = {
             'success': True,
             'message': f'Отклик {"принят" if new_status == "accepted" else "отклонён"}. Пользователь получил уведомление.'
         }
-
-        if contract_id:
-            result['contract_id'] = contract_id
-            result['contract_created'] = True
 
         return jsonify(result)
 
@@ -1108,16 +1088,13 @@ def get_user_summary():
                                           COUNT(DISTINCT CASE WHEN o.status = 'active' THEN o.id END)              as active_offers,
                                           COUNT(DISTINCT or_resp.id)                                               as total_responses,
                                           COUNT(DISTINCT CASE WHEN or_resp.status = 'pending' THEN or_resp.id END) as pending_responses,
-                                          COUNT(DISTINCT c.id)                                                     as total_contracts,
-                                          COUNT(DISTINCT CASE WHEN c.status = 'active' THEN c.id END)              as active_contracts,
                                           COALESCE(
                                                   SUM(CASE WHEN o.status IN ('completed', 'active') THEN o.price ELSE 0 END),
                                                   0)                                                               as total_budget
                                    FROM offers o
                                             LEFT JOIN offer_responses or_resp ON o.id = or_resp.offer_id
-                                            LEFT JOIN contracts c ON (c.advertiser_id = ? OR c.publisher_id = ?)
                                    WHERE o.created_by = ?
-                                   """, (user['id'], user['id'], user['id']), fetch_one=True)
+                                   """, (user['id'],), fetch_one=True)
 
         return jsonify({
             'success': True,
@@ -1126,8 +1103,6 @@ def get_user_summary():
                 'active_offers': summary['active_offers'] or 0,
                 'total_responses': summary['total_responses'] or 0,
                 'pending_responses': summary['pending_responses'] or 0,
-                'total_contracts': summary['total_contracts'] or 0,
-                'active_contracts': summary['active_contracts'] or 0,
                 'total_budget': float(summary['total_budget']) if summary['total_budget'] else 0
             }
         })

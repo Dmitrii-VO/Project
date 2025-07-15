@@ -601,38 +601,8 @@ def accept_proposal(proposal_id: int):
             
             conn.commit()
             
-            # Создаем запись в contracts для отслеживания
-            contract_id = f"CONTRACT_{proposal_id}_{int(datetime.now().timestamp())}"
-            # Вычисляем monitoring_end
-            if placement_datetime:
-                monitoring_end = placement_datetime + timedelta(days=7)
-            else:
-                # Если дата не указана, размещение через 24 часа + 7 дней мониторинга
-                monitoring_end = datetime.now() + timedelta(days=8)
-
-            cursor.execute("""
-                INSERT INTO contracts (
-                    id, response_id, offer_id, advertiser_id, publisher_id,
-                    price, status, placement_deadline, monitoring_end, post_requirements,
-                    created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                contract_id,
-                proposal_id,
-                proposal['offer_id'],
-                proposal.get('advertiser_user_id', 1),
-                user_id,
-                proposal.get('offer_budget', 0),
-                'accepted',
-                placement_datetime.isoformat() if placement_datetime else (datetime.now() + timedelta(days=1)).isoformat(),
-                monitoring_end.isoformat(),  # ← ДОБАВИЛИ monitoring_end
-                message or 'Согласно условиям оффера',
-                datetime.now().isoformat(),
-                datetime.now().isoformat()
-            ))
-            
-            conn.commit()
-            placement_id = contract_id
+            # Генерируем placement_id для отслеживания размещения
+            placement_id = f"PLACEMENT_{proposal_id}_{int(datetime.now().timestamp())}"
             
         except Exception as e:
             conn.rollback()

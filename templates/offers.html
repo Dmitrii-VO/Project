@@ -47,13 +47,6 @@
                 </div>
             </div>
         </div>
-        <div class="nav-card" data-tab="contracts" onclick="switchTab('contracts')">
-            <div class="nav-icon">📋</div>
-            <div class="nav-content">
-                <h3>Контракты</h3>
-                <p>Активные договоры и выполнение</p>
-            </div>
-        </div>
 
         <!-- Tab: Мои офферы -->
         <div class="tab-content active" id="my-offers">
@@ -353,50 +346,6 @@
             </form>
         </div>
 
-        <!-- Tab: Контракты -->
-        <div class="tab-content" id="contracts">
-            <div class="action-bar">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <h2 style="margin: 0; color: #2d3748; font-size: 18px;">📋 Мои контракты</h2>
-                    <button onclick="loadUserContracts()" style="
-                        padding: 6px 12px;
-                        border: 1px solid #667eea;
-                        background: white;
-                        color: #667eea;
-                        border-radius: 6px;
-                        font-size: 12px;
-                        cursor: pointer;
-                    ">🔄 Обновить</button>
-                </div>
-            </div>
-
-            <!-- Статистика контрактов -->
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 20px;">
-                <div style="background: #ebf8ff; padding: 12px; border-radius: 8px; text-align: center;">
-                    <div style="font-size: 20px; font-weight: bold; color: #3182ce;" id="activeContractsCount">-</div>
-                    <div style="font-size: 12px; color: #2b6cb0;">Активные</div>
-                </div>
-                <div style="background: #f0fff4; padding: 12px; border-radius: 8px; text-align: center;">
-                    <div style="font-size: 20px; font-weight: bold; color: #38a169;" id="completedContractsCount">-</div>
-                    <div style="font-size: 12px; color: #276749;">Завершенные</div>
-                </div>
-                <div style="background: #fffaf0; padding: 12px; border-radius: 8px; text-align: center;">
-                    <div style="font-size: 20px; font-weight: bold; color: #d69e2e;" id="totalEarningsAmount">-</div>
-                    <div style="font-size: 12px; color: #b7791f;">Заработано</div>
-                </div>
-            </div>
-
-            <!-- Список контрактов -->
-            <div id="contractsGrid">
-                <!-- Контракты будут загружены здесь -->
-            </div>
-
-            <!-- Загрузка -->
-            <div id="contractsLoading" class="loading-state" style="display: none; text-align: center; padding: 40px;">
-                <div class="loading-spinner"></div>
-                <p>Загрузка контрактов...</p>
-            </div>
-        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/offers.js') }}"></script>

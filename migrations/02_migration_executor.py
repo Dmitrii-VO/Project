@@ -29,7 +29,7 @@ class UniversalDatabaseSetup:
         self.setup_version = "1.0_universal_setup"
         
         # Список основных таблиц, которые должны существовать
-        self.core_tables = ['users', 'channels', 'offers', 'contracts', 'payments', 'channel_offers']
+        self.core_tables = ['users', 'channels', 'offers', 'payments', 'channel_offers']
         
         # Список новых таблиц для системы офферов
         self.new_tables = ['offer_proposals', 'offer_placements', 'placement_checks', 'offer_statistics']
@@ -193,38 +193,10 @@ class UniversalDatabaseSetup:
             FOREIGN KEY (created_by) REFERENCES users(id)
         );
         
-        -- Таблица контрактов
-        CREATE TABLE IF NOT EXISTS contracts (
-            id TEXT PRIMARY KEY,
-            offer_id INTEGER NOT NULL,
-            publisher_id INTEGER NOT NULL,
-            advertiser_id INTEGER NOT NULL,
-            status TEXT DEFAULT 'pending',
-            terms TEXT,
-            amount DECIMAL(12, 2) NOT NULL,
-            currency TEXT DEFAULT 'RUB',
-            start_date DATETIME,
-            end_date DATETIME,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            completed_at DATETIME,
-            cancelled_at DATETIME,
-            cancellation_reason TEXT,
-            payment_status TEXT DEFAULT 'pending',
-            escrow_amount DECIMAL(12, 2) DEFAULT 0,
-            platform_fee DECIMAL(12, 2) DEFAULT 0,
-            performance_metrics TEXT,
-            dispute_status TEXT,
-            auto_renewal BOOLEAN DEFAULT 0,
-            FOREIGN KEY (offer_id) REFERENCES offers(id),
-            FOREIGN KEY (publisher_id) REFERENCES users(id),
-            FOREIGN KEY (advertiser_id) REFERENCES users(id)
-        );
-        
         -- Таблица платежей
         CREATE TABLE IF NOT EXISTS payments (
             id TEXT PRIMARY KEY,
-            contract_id TEXT NOT NULL,
+            placement_id TEXT NOT NULL,
             amount DECIMAL(12, 2) NOT NULL,
             status TEXT DEFAULT 'pending',
             publisher_id INTEGER NOT NULL,
@@ -234,7 +206,6 @@ class UniversalDatabaseSetup:
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             processed_at DATETIME,
             completed_at DATETIME,
-            FOREIGN KEY (contract_id) REFERENCES contracts(id),
             FOREIGN KEY (publisher_id) REFERENCES users(id),
             FOREIGN KEY (advertiser_id) REFERENCES users(id)
         );
@@ -274,15 +245,8 @@ class UniversalDatabaseSetup:
         CREATE INDEX IF NOT EXISTS idx_offers_created_at ON offers(created_at);
         CREATE INDEX IF NOT EXISTS idx_offers_expires_at ON offers(expires_at);
         
-        -- Индексы для contracts
-        CREATE INDEX IF NOT EXISTS idx_contracts_offer_id ON contracts(offer_id);
-        CREATE INDEX IF NOT EXISTS idx_contracts_publisher_id ON contracts(publisher_id);
-        CREATE INDEX IF NOT EXISTS idx_contracts_advertiser_id ON contracts(advertiser_id);
-        CREATE INDEX IF NOT EXISTS idx_contracts_status ON contracts(status);
-        CREATE INDEX IF NOT EXISTS idx_contracts_created_at ON contracts(created_at);
-        
         -- Индексы для payments
-        CREATE INDEX IF NOT EXISTS idx_payments_contract_id ON payments(contract_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_placement_id ON payments(placement_id);
         CREATE INDEX IF NOT EXISTS idx_payments_publisher_id ON payments(publisher_id);
         CREATE INDEX IF NOT EXISTS idx_payments_advertiser_id ON payments(advertiser_id);
         CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
