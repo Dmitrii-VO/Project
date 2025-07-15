@@ -287,6 +287,13 @@ class TelegramVerificationService:
 # Создаем единственный экземпляр сервиса
 verification_service = TelegramVerificationService()
 
+
+# === ФУНКЦИИ-ОБЕРТКИ ===
+def verify_channel(channel_id: str, verification_code: str):
+    """Функция-обертка для удобного использования"""
+    return verification_service.verify_channel(channel_id, verification_code)
+
+
 # === ЭКСПОРТ ===
 __all__ = [
     'TelegramVerificationService',
