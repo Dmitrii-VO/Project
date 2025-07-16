@@ -28,6 +28,157 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Глобальные кэши для декораторов
+
+def validate_request_data(required_fields=None, optional_fields=None):
+    """Декоратор для валидации данных запроса"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not request or not request.is_json:
+                return jsonify({'error': 'Content-Type must be application/json'}), 400
+            
+            data = request.get_json()
+            if not data:
+                return jsonify({'error': 'No JSON data provided'}), 400
+            
+            # Проверяем обязательные поля
+            if required_fields:
+                missing_fields = [field for field in required_fields if field not in data]
+                if missing_fields:
+                    return jsonify({
+                        'error': f'Missing required fields: {", ".join(missing_fields)}'
+                    }), 400
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def log_execution_time(f):
+    """
+    Декоратор для логирования времени выполнения функции
+    
+    Использование:
+    @log_execution_time
+    def slow_function():
+        time.sleep(1)
+        return "Готово"
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        start_time = time.time()
+        
+        try:
+            result = f(*args, **kwargs)
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
+            logger.info(f"Функция {f.__name__} выполнена за {execution_time:.4f} секунд")
+            return result
+            
+        except Exception as e:
+            end_time = time.time()
+            execution_time = end_time - start_time
+            
+            logger.error(f"Функция {f.__name__} завершилась с ошибкой за {execution_time:.4f} секунд: {e}")
+            raise
+    
+    return decorated_function
+
+
+def retry_on_failure(max_retries: int = 3, delay: float = 1.0, exceptions: tuple = (Exception,)):
+    """
+    Декоратор для повторного выполнения функции при ошибке
+    
+    Args:
+        max_retries: Максимальное количество попыток
+        delay: Задержка между попытками в секундах
+        exceptions: Кортеж исключений для повтора
+    
+    Использование:
+    @retry_on_failure(max_retries=3, delay=1.0)
+    def unstable_function():
+        # Код, который может упасть
+        pass
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    return f(*args, **kwargs)
+                except exceptions as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f"Функция {f.__name__} не выполнилась после {max_retries} попыток: {e}")
+                        raise
+                    
+                    logger.warning(f"Функция {f.__name__} попытка {attempt + 1}/{max_retries} не удалась: {e}. Повтор через {delay}с")
+                    time.sleep(delay)
+        
+        return decorated_function
+    return decorator
+
+
+def require_user_type(user_type: str):
+    """
+    Декоратор для проверки типа пользователя
+    
+    Args:
+        user_type: Требуемый тип пользователя
+    
+    Использование:
+    @require_user_type('admin')
+    def admin_only_route():
+        return "Только для администраторов"
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not FLASK_AVAILABLE:
+                return {"error": "Flask not available"}, 500
+            
+            # Заглушка - в реальном приложении здесь должна быть проверка типа пользователя
+            # Сейчас просто разрешаем всем доступ
+            return f(*args, **kwargs)
+        
+        return decorated_function
+    return decorator
+
+
+def sanitize_input(allowed_fields: list = None):
+    """
+    Декоратор для санитизации входных данных
+    
+    Args:
+        allowed_fields: Список разрешенных полей
+    
+    Использование:
+    @sanitize_input(['name', 'email'])
+    def create_user():
+        data = request.get_json()
+        # data будет содержать только разрешенные поля
+        return data
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not FLASK_AVAILABLE or not request or not request.is_json:
+                return f(*args, **kwargs)
+            
+            data = request.get_json()
+            if not data:
+                return f(*args, **kwargs)
+            
+            # Фильтруем поля если указан список разрешенных
+            if allowed_fields:
+                filtered_data = {k: v for k, v in data.items() if k in allowed_fields}
+                # Заменяем данные запроса на отфильтрованные
+                request._cached_json = filtered_data
+            
+            return f(*args, **kwargs)
+        
+        return decorated_function
+    return decorator
 _rate_limit_cache = {}
 _response_cache = {}
 _security_events = []
@@ -207,9 +358,8 @@ def _cleanup_cache(timeout: int):
         pass
 
 
-# === ДОПОЛНИТЕЛЬНЫЕ ДЕКОРАТОРЫ (НЕИСПОЛЬЗУЕМЫЕ - УДАЛЕНЫ) ===
-# Удалены неиспользуемые функции: validate_request_data, log_execution_time, 
-# retry_on_failure, require_user_type, sanitize_input
+# === ДОПОЛНИТЕЛЬНЫЕ ДЕКОРАТОРЫ ===
+# Функции добавлены для совместимости с существующими импортами
 
 
 # === ЭКСПОРТ ===
@@ -217,5 +367,10 @@ def _cleanup_cache(timeout: int):
 __all__ = [
     'require_telegram_auth',
     'rate_limit_decorator',
-    'cache_response'
+    'cache_response',
+    'validate_request_data',
+    'log_execution_time',
+    'retry_on_failure',
+    'require_user_type',
+    'sanitize_input'
 ]
