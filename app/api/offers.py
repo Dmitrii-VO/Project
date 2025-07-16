@@ -749,7 +749,85 @@ def respond_to_offer(offer_id):
                 if not channel:
                     return jsonify({'success': False, 'error': 'Канал не найден или не верифицирован'}), 400
 
-                # Создаем отклик
+                # Получаем информацию об оффере для уведомления
+                offer = execute_db_query("""
+                    SELECT o.*, u.telegram_id as owner_telegram_id, u.first_name, u.username as owner_username
+                    FROM offers o
+                    JOIN users u ON o.created_by = u.id
+                    WHERE o.id = ?
+                """, (offer_id,), fetch_one=True)
+
+                if not offer:
+                    return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+
+                # Проверяем, есть ли уже отклик от этого пользователя с этим каналом
+                existing_response = execute_db_query("""
+                    SELECT id, status, created_at
+                    FROM offer_responses
+                    WHERE offer_id = ? AND user_id = ? AND channel_id = ?
+                """, (offer_id, user['id'], channel_id), fetch_one=True)
+
+                if existing_response:
+                    status = existing_response['status']
+                    created_at = existing_response['created_at']
+                    
+                    # Формируем подходящее сообщение об ошибке в зависимости от статуса
+                    if status == 'pending':
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Вы уже отправили отклик на этот оффер. Дождитесь ответа рекламодателя.',
+                            'existing_response': {
+                                'id': existing_response['id'],
+                                'status': status,
+                                'created_at': created_at
+                            }
+                        }), 409
+                    elif status == 'accepted':
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Ваш отклик уже принят рекламодателем. Повторный отклик невозможен.',
+                            'existing_response': {
+                                'id': existing_response['id'],
+                                'status': status,
+                                'created_at': created_at
+                            }
+                        }), 409
+                    elif status == 'rejected':
+                        return jsonify({
+                            'success': False, 
+                            'error': 'Ваш отклик был отклонен рекламодателем. Повторный отклик невозможен.',
+                            'existing_response': {
+                                'id': existing_response['id'],
+                                'status': status,
+                                'created_at': created_at
+                            }
+                        }), 409
+                    else:
+                        # Для других статусов (viewed, etc.)
+                        return jsonify({
+                            'success': False, 
+                            'error': f'Вы уже отправили отклик на этот оффер (статус: {status}). Повторный отклик невозможен.',
+                            'existing_response': {
+                                'id': existing_response['id'],
+                                'status': status,
+                                'created_at': created_at
+                            }
+                        }), 409
+
+                # Дополнительная проверка: нельзя откликаться на собственный оффер
+                if offer['owner_telegram_id'] == telegram_id:
+                    return jsonify({
+                        'success': False, 
+                        'error': 'Вы не можете откликаться на собственный оффер'
+                    }), 403
+
+                # Проверяем статус оффера
+                if offer['status'] != 'active':
+                    return jsonify({
+                        'success': False, 
+                        'error': f'Оффер неактивен (статус: {offer["status"]}). Отклик невозможен.'
+                    }), 400
+
                 # Создаем отклик
                 response_id = execute_db_query("""
                                                INSERT INTO offer_responses (offer_id, user_id, channel_id, message,
@@ -762,6 +840,50 @@ def respond_to_offer(offer_id):
                                                    channel.get('title', ''), channel.get('username', ''),
                                                    channel.get('subscriber_count', 0)
                                                ))
+
+                # Отправляем немедленное уведомление рекламодателю
+                try:
+                    from app.telegram.telegram_notifications import TelegramNotificationService
+                    
+                    # Получаем данные отправителя отклика
+                    sender = execute_db_query("""
+                        SELECT first_name, last_name, username, telegram_id
+                        FROM users WHERE id = ?
+                    """, (user['id'],), fetch_one=True)
+                    
+                    # Формируем имя отправителя
+                    sender_name = []
+                    if sender.get('first_name'):
+                        sender_name.append(sender['first_name'])
+                    if sender.get('last_name'):
+                        sender_name.append(sender['last_name'])
+                    full_name = ' '.join(sender_name) if sender_name else sender.get('username', 'Администратор')
+                    
+                    # Формируем уведомление
+                    notification_text = f"📬 <b>Новый отклик на ваш оффер!</b>\n\n"
+                    notification_text += f"🎯 <b>Оффер:</b> {offer['title']}\n"
+                    notification_text += f"📺 <b>Канал:</b> @{channel.get('username', 'канал')} ({channel.get('subscriber_count', 0):,} подписчиков)\n"
+                    notification_text += f"👤 <b>Администратор:</b> {full_name}\n\n"
+                    notification_text += f"💬 <b>Сообщение:</b>\n{message}\n\n"
+                    notification_text += f"📱 Посмотрите детали в приложении"
+                    
+                    # Отправляем уведомление
+                    TelegramNotificationService.send_telegram_notification(
+                        offer['owner_telegram_id'],
+                        notification_text,
+                        {
+                            'type': 'new_response',
+                            'offer_id': offer_id,
+                            'response_id': response_id,
+                            'channel_id': channel['id']
+                        }
+                    )
+                    
+                    logger.info(f"✅ Уведомление о новом отклике отправлено рекламодателю {offer['owner_telegram_id']}")
+                    
+                except Exception as notification_error:
+                    logger.error(f"❌ Ошибка отправки уведомления о новом отклике: {notification_error}")
+                    # Не прерываем выполнение, если уведомление не отправилось
 
                 return jsonify({
                     'success': True,
@@ -974,6 +1096,78 @@ def debug_verify_post():
 
     except Exception as e:
         logger.error(f"Ошибка диагностики поста: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@offers_bp.route('/<int:offer_id>/my-responses', methods=['GET'])
+def get_my_responses_for_offer(offer_id):
+    """Получение откликов текущего пользователя на конкретный оффер"""
+    try:
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+
+        # Получаем user_db_id
+        user_db_id = auth_service.ensure_user_exists()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
+
+        # Проверяем, что оффер существует
+        offer = execute_db_query("""
+            SELECT id, title, status FROM offers WHERE id = ?
+        """, (offer_id,), fetch_one=True)
+
+        if not offer:
+            return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+
+        # Получаем все отклики пользователя на этот оффер
+        responses = execute_db_query("""
+            SELECT 
+                or_resp.id,
+                or_resp.offer_id,
+                or_resp.channel_id,
+                or_resp.message,
+                or_resp.status,
+                or_resp.created_at,
+                or_resp.updated_at,
+                c.title as channel_title,
+                c.username as channel_username,
+                c.subscriber_count
+            FROM offer_responses or_resp
+            JOIN channels c ON or_resp.channel_id = c.id
+            WHERE or_resp.offer_id = ? AND or_resp.user_id = ?
+            ORDER BY or_resp.created_at DESC
+        """, (offer_id, user_db_id), fetch_all=True)
+
+        # Форматируем результат
+        formatted_responses = []
+        for response in responses:
+            formatted_responses.append({
+                'id': response['id'],
+                'offer_id': response['offer_id'],
+                'channel_id': response['channel_id'],
+                'message': response['message'],
+                'status': response['status'],
+                'created_at': response['created_at'],
+                'updated_at': response['updated_at'],
+                'channel': {
+                    'title': response['channel_title'],
+                    'username': response['channel_username'],
+                    'subscriber_count': response['subscriber_count']
+                }
+            })
+
+        return jsonify({
+            'success': True,
+            'responses': formatted_responses,
+            'offer': {
+                'id': offer['id'],
+                'title': offer['title'],
+                'status': offer['status']
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка получения откликов пользователя: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # === ДОПОЛНИТЕЛЬНЫЕ ENDPOINTS ===
@@ -1300,6 +1494,104 @@ def complete_draft_offer(offer_id):
         
     except Exception as e:
         logger.error(f"Ошибка завершения черновика: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+
+
+@offers_bp.route('/responses/notifications', methods=['GET'])
+def get_response_notifications():
+    """Получение количества новых откликов для уведомлений"""
+    try:
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+
+        # Получаем user_db_id
+        user_db_id = auth_service.ensure_user_exists()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
+
+        # Получаем количество новых откликов (за последние 24 часа)
+        new_responses = execute_db_query("""
+            SELECT COUNT(*) as count
+            FROM offer_responses or_resp
+            JOIN offers o ON or_resp.offer_id = o.id
+            WHERE o.created_by = ? 
+            AND or_resp.status = 'pending'
+            AND or_resp.created_at > datetime('now', '-1 day')
+        """, (user_db_id,), fetch_one=True)
+
+        # Получаем общее количество непрочитанных откликов
+        total_unread = execute_db_query("""
+            SELECT COUNT(*) as count
+            FROM offer_responses or_resp
+            JOIN offers o ON or_resp.offer_id = o.id
+            WHERE o.created_by = ? 
+            AND or_resp.status = 'pending'
+        """, (user_db_id,), fetch_one=True)
+
+        # Получаем количество офферов с новыми откликами
+        offers_with_responses = execute_db_query("""
+            SELECT COUNT(DISTINCT o.id) as count
+            FROM offers o
+            JOIN offer_responses or_resp ON o.id = or_resp.offer_id
+            WHERE o.created_by = ? 
+            AND or_resp.status = 'pending'
+            AND or_resp.created_at > datetime('now', '-1 day')
+        """, (user_db_id,), fetch_one=True)
+
+        return jsonify({
+            'success': True,
+            'notifications': {
+                'new_responses_24h': new_responses['count'] or 0,
+                'total_unread': total_unread['count'] or 0,
+                'offers_with_new_responses': offers_with_responses['count'] or 0,
+                'has_new_responses': (new_responses['count'] or 0) > 0
+            }
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка получения уведомлений об откликах: {e}")
+        return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
+
+
+@offers_bp.route('/responses/<int:response_id>/mark-read', methods=['POST'])
+def mark_response_as_read(response_id):
+    """Отметить отклик как прочитанный"""
+    try:
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+
+        user_db_id = auth_service.ensure_user_exists()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
+
+        # Проверяем права доступа к отклику
+        response = execute_db_query("""
+            SELECT or_resp.*, o.created_by
+            FROM offer_responses or_resp
+            JOIN offers o ON or_resp.offer_id = o.id
+            WHERE or_resp.id = ? AND o.created_by = ?
+        """, (response_id, user_db_id), fetch_one=True)
+
+        if not response:
+            return jsonify({'success': False, 'error': 'Отклик не найден'}), 404
+
+        # Обновляем статус на просмотренный (если это был pending)
+        if response['status'] == 'pending':
+            execute_db_query("""
+                UPDATE offer_responses 
+                SET status = 'viewed', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (response_id,))
+
+        return jsonify({
+            'success': True,
+            'message': 'Отклик отмечен как прочитанный'
+        })
+
+    except Exception as e:
+        logger.error(f"Ошибка отметки отклика как прочитанного: {e}")
         return jsonify({'success': False, 'error': 'Внутренняя ошибка сервера'}), 500
 
 

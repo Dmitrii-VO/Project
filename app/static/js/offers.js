@@ -407,7 +407,7 @@ async function loadAvailableOffers(filters = {}) {
     if (loading) loading.style.display = 'none';
 }
 
-function renderAvailableOffers(offers) {
+async function renderAvailableOffers(offers) {
     console.log('renderAvailableOffers вызвана с данными:', offers);
     const container = document.getElementById('findOffersGrid');
 
@@ -425,14 +425,27 @@ function renderAvailableOffers(offers) {
         return;
     }
 
-    container.innerHTML = offers.map(offer => {
+    // Для каждого оффера получаем информацию о существующих откликах
+    const offersWithResponses = await Promise.all(offers.map(async (offer) => {
+        try {
+            const responseResult = await ApiClient.get(`/api/offers/${offer.id}/my-responses`);
+            const existingResponses = responseResult.success ? responseResult.responses : [];
+            return { ...offer, existingResponses };
+        } catch (error) {
+            console.warn(`Не удалось загрузить отклики для оффера ${offer.id}:`, error);
+            return { ...offer, existingResponses: [] };
+        }
+    }));
+
+    container.innerHTML = offersWithResponses.map(offer => {
         const {
             id, title = 'Без названия', description = 'Нет описания',
             price = 0, budget_total = 0, currency = 'RUB',
             target_audience = 'Не указано', requirements = 'Нет требований',
             category = 'general', status = 'active',
             created_at, expires_at,
-            creator_username = 'Неизвестный автор', creator_name = ''
+            creator_username = 'Неизвестный автор', creator_name = '',
+            existingResponses = []
         } = offer;
 
         const isExpired = expires_at && new Date(expires_at) < new Date();
@@ -482,13 +495,32 @@ function renderAvailableOffers(offers) {
                     <strong>🎯 Целевая аудитория:</strong> ${target_audience}
                 </div>
                 
+                ${existingResponses.length > 0 ? `
+                <div class="response-status" style="margin-bottom: 12px; padding: 8px; background: #e6fffa; border-left: 4px solid #38b2ac; border-radius: 4px; font-size: 13px;">
+                    <strong>📝 Ваши отклики:</strong> ${existingResponses.length} шт.
+                    <div style="margin-top: 4px; font-size: 12px; color: #4a5568;">
+                        ${existingResponses.map(resp => `
+                            <div style="margin-top: 2px;">
+                                • ${resp.channel.title}: ${ResponseManager.getResponseStatusText(resp.status)}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+                
                 <div class="offer-actions" style="display: flex; gap: 8px; justify-content: flex-end;">
                     <button class="btn btn-outline" onclick="viewAvailableOfferDetails(${id})" style="padding: 6px 12px; font-size: 12px; border: 1px solid #e2e8f0; background: white; color: #4a5568; border-radius: 4px;">
                         👁️ Подробнее
                     </button>
-                    <button class="btn btn-primary" onclick="console.log('Кнопка откликнуться нажата, ID:', ${id}); respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
-                        📩 Откликнуться
-                    </button>
+                    ${existingResponses.length > 0 ? `
+                        <button class="btn btn-secondary" onclick="respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #a0aec0; color: white; border: none; border-radius: 4px;">
+                            ✅ Откликнулись
+                        </button>
+                    ` : `
+                        <button class="btn btn-primary" onclick="console.log('Кнопка откликнуться нажата, ID:', ${id}); respondToOffer(${id})" style="padding: 6px 12px; font-size: 12px; background: #4299e1; color: white; border: none; border-radius: 4px;">
+                            📩 Откликнуться
+                        </button>
+                    `}
                 </div>
             </div>
         `;
@@ -832,17 +864,63 @@ const ResponseManager = {
         }
     },
 
-    showResponseModal(offerId, offer, verifiedChannels) {
+    async showResponseModal(offerId, offer, verifiedChannels) {
+        // Проверяем существующие отклики пользователя на этот оффер
+        let existingResponses = [];
+        try {
+            const responseResult = await ApiClient.get(`/api/offers/${offerId}/my-responses`);
+            if (responseResult.success) {
+                existingResponses = responseResult.responses || [];
+            }
+        } catch (error) {
+            console.warn('Не удалось загрузить существующие отклики:', error);
+        }
 
-        const channelOptions = verifiedChannels.map(channel => ({
-            value: channel.id,
-            text: `${channel.title} (@${channel.username}) - ${Utils.formatNumber(channel.subscriber_count)} подписчиков`
-        }));
+        const channelOptions = verifiedChannels.map(channel => {
+            // Проверяем, есть ли уже отклик с этим каналом
+            const existingResponse = existingResponses.find(r => r.channel_id === channel.id);
+            const statusText = existingResponse ? this.getResponseStatusText(existingResponse.status) : '';
+            
+            return {
+                value: channel.id,
+                text: `${channel.title} (@${channel.username}) - ${Utils.formatNumber(channel.subscriber_count)} подписчиков${statusText}`,
+                disabled: existingResponse ? true : false,
+                existingResponse: existingResponse
+            };
+        });
+
+        // Создаем опции для select с учетом статуса откликов
+        const selectOptions = channelOptions.map(option => {
+            const disabledAttr = option.disabled ? 'disabled' : '';
+            const selectedAttr = '';
+            return `<option value="${option.value}" ${disabledAttr} ${selectedAttr}>${option.text}</option>`;
+        }).join('');
+
+        // Показываем предупреждение о существующих откликах
+        let existingResponsesWarning = '';
+        if (existingResponses.length > 0) {
+            existingResponsesWarning = `
+                <div class="alert alert-info" style="margin-bottom: 20px;">
+                    <span>💡</span>
+                    <div>
+                        <strong>Информация:</strong> У вас уже есть ${existingResponses.length} отклик(ов) на этот оффер.
+                        Каналы с существующими откликами отмечены и недоступны для повторного отклика.
+                    </div>
+                </div>
+            `;
+        }
 
         const formContent = `
             ${Templates.infoCard(offer.title, '', '🎯')}
+            ${existingResponsesWarning}
             <form id="responseForm">
-                ${Templates.formField('Выберите канал', 'select', 'selectedChannel', { required: true, items: channelOptions })}
+                <div class="form-field">
+                    <label for="selectedChannel">Выберите канал <span class="required">*</span></label>
+                    <select id="selectedChannel" required>
+                        <option value="">Выберите канал...</option>
+                        ${selectOptions}
+                    </select>
+                </div>
                 ${Templates.formField('Сообщение рекламодателю', 'textarea', 'responseMessage', { 
                     required: true, 
                     placeholder: 'Расскажите, почему ваш канал подходит для этого оффера...',
@@ -889,6 +967,16 @@ const ResponseManager = {
                 });
             }
         }, 100);
+    },
+
+    getResponseStatusText(status) {
+        const statusMap = {
+            'pending': ' [⏳ Ожидает ответа]',
+            'accepted': ' [✅ Принят]',
+            'rejected': ' [❌ Отклонен]',
+            'viewed': ' [👀 Просмотрен]'
+        };
+        return statusMap[status] || ` [${status}]`;
     },
 
     async submitResponse(offerId, modal) {
