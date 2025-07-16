@@ -7,17 +7,17 @@ import sys
 import sqlite3
 import uuid
 from datetime import datetime
+from app.config.telegram_config import AppConfig
 from app.models.database import db_manager
 from flask import Blueprint, request, jsonify
 import os
 from app.models import execute_db_query
 from app.services.auth_service import auth_service
-from dotenv import load_dotenv
-DATABASE_PATH = os.getenv('DATABASE_PATH')
 logger = logging.getLogger(__name__)
 
 # === BLUEPRINT ===
 offers_bp = Blueprint('offers', __name__)
+
 
 # === API ENDPOINTS ===
 
@@ -917,14 +917,22 @@ def get_offer_responses(offer_id):
                 if offer['owner_telegram_id'] != telegram_id:
                     return jsonify({'success': False, 'error': 'Нет доступа к этому офферу'}), 403
 
-                # Получаем отклики
+                # Получаем отклики с информацией о размещениях
                 responses = execute_db_query("""
                                              SELECT or_resp.*,
                                                     u.first_name || ' ' || COALESCE(u.last_name, '') as channel_owner_name,
                                                     u.username                                       as channel_owner_username,
-                                                    u.telegram_id                                    as channel_owner_telegram_id
+                                                    u.telegram_id                                    as channel_owner_telegram_id,
+                                                    pl.id as placement_id,
+                                                    pl.status as placement_status,
+                                                    pl.deadline as placement_deadline,
+                                                    pl.funds_reserved,
+                                                    pl.ereit_token,
+                                                    pl.generated_post_text,
+                                                    pl.created_at as placement_created_at
                                              FROM offer_responses or_resp
                                                       JOIN users u ON or_resp.user_id = u.id
+                                                      LEFT JOIN offer_placements pl ON or_resp.id = pl.response_id
                                              WHERE or_resp.offer_id = ?
                                              ORDER BY or_resp.created_at DESC
                                              """, (offer_id,), fetch_all=True)
@@ -932,6 +940,19 @@ def get_offer_responses(offer_id):
                 # Форматируем отклики
                 formatted_responses = []
                 for response in responses:
+                    # Добавляем информацию о размещении, если она есть
+                    placement = None
+                    if response.get('placement_id'):
+                        placement = {
+                            'id': response['placement_id'],
+                            'status': response['placement_status'],
+                            'deadline': response['placement_deadline'],
+                            'funds_reserved': response['funds_reserved'],
+                            'ereit_token': response['ereit_token'],
+                            'generated_post_text': response['generated_post_text'],
+                            'created_at': response['placement_created_at']
+                        }
+                    
                     formatted_responses.append({
                         'id': response['id'],
                         'offer_id': response['offer_id'],
@@ -944,7 +965,8 @@ def get_offer_responses(offer_id):
                         'channel_subscribers': response.get('channel_subscribers', 0),
                         'channel_owner_name': response['channel_owner_name'].strip() or 'Пользователь',
                         'channel_owner_username': response['channel_owner_username'] or '',
-                        'channel_owner_telegram_id': response['channel_owner_telegram_id']
+                        'channel_owner_telegram_id': response['channel_owner_telegram_id'],
+                        'placement': placement
                     })
 
                 return jsonify({
@@ -964,35 +986,49 @@ def get_offer_responses(offer_id):
 
 @offers_bp.route('/responses/<response_id>/status', methods=['PATCH'])
 def update_response_status_route(response_id):
-    """Обновление статуса отклика с автоматическим созданием контракта"""
+    """Обновление статуса отклика с автоматическими действиями при принятии"""
     try:
         telegram_id = auth_service.get_current_user_id()
         if not telegram_id:
-            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401  # ✅
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
         
         # Получаем или создаем пользователя в БД
         user_db_id = auth_service.ensure_user_exists()
         if not user_db_id:
             return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
+        
         data = request.get_json()
-
         new_status = data.get('status')
         message = data.get('message', '')
 
         if not new_status:
             return jsonify({'success': False, 'error': 'Статус не указан'}), 400
 
-        # Получаем данные отклика
+        # Получаем полные данные отклика с информацией о канале и пользователе
         response_data = execute_db_query('''
             SELECT or_resp.*,
                 o.created_by,
                 o.title as offer_title,
+                o.description as offer_description,
                 o.price as offer_price,
                 o.budget_total,
-                u.telegram_id as author_telegram_id
+                o.content,
+                u.telegram_id as author_telegram_id,
+                u.first_name as author_first_name,
+                u.last_name as author_last_name,
+                u.username as author_username,
+                ch.title as channel_title,
+                ch.username as channel_username,
+                ch.subscriber_count,
+                ch_owner.telegram_id as channel_owner_telegram_id,
+                ch_owner.first_name as channel_owner_first_name,
+                ch_owner.last_name as channel_owner_last_name,
+                ch_owner.username as channel_owner_username
             FROM offer_responses or_resp
             JOIN offers o ON or_resp.offer_id = o.id
             JOIN users u ON o.created_by = u.id
+            JOIN channels ch ON or_resp.channel_id = ch.id
+            JOIN users ch_owner ON ch.owner_id = ch_owner.id
             WHERE or_resp.id = ?
         ''', (response_id,), fetch_one=True)
 
@@ -1015,7 +1051,9 @@ def update_response_status_route(response_id):
         ''', (new_status, datetime.now().isoformat(), message, response_id))
 
         if new_status == 'accepted':
-            # Отклоняем остальные отклики
+            # === АВТОМАТИЧЕСКИЕ ДЕЙСТВИЯ ПРИ ПРИНЯТИИ ===
+            
+            # 1. Отклоняем остальные отклики
             execute_db_query('''
                 UPDATE offer_responses
                 SET status = 'rejected',
@@ -1024,17 +1062,148 @@ def update_response_status_route(response_id):
                 WHERE offer_id = ?
                 AND id != ? AND status = 'pending'
             ''', (datetime.now().isoformat(), response_data['offer_id'], response_id))
+            
+            # 2. Резервирование средств (заглушка)
+            offer_price = float(response_data['budget_total'] or response_data['offer_price'] or 0)
+            reserved_amount = offer_price
+            
+            # Функция резервирования средств (пока заглушка)
+            def reserve_funds(user_id, amount):
+                """Заглушка для резервирования средств"""
+                logger.info(f"💰 Резервирование {amount} руб. для пользователя {user_id}")
+                return True  # Всегда успешно пока что
+            
+            funds_reserved = reserve_funds(user_db_id, reserved_amount)
+            
+            # 3. Генерация eREIT токена
+            import uuid
+            import hashlib
+            ereit_token = f"EREIT_{str(uuid.uuid4())[:8].upper()}"
+            
+            # 4. Генерация рекламного поста
+            generated_post = generate_ad_post(response_data, ereit_token)
+            
+            # 5. Установка дедлайна (24 часа)
+            from datetime import timedelta
+            placement_deadline = datetime.now() + timedelta(hours=24)
+            
+            # 6. Создание записи в offer_placements
+            placement_id = execute_db_query('''
+                INSERT INTO offer_placements (
+                    proposal_id,
+                    response_id, 
+                    status, 
+                    deadline, 
+                    placement_deadline,
+                    funds_reserved,
+                    reserved_at,
+                    generated_post_text,
+                    ereit_token,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                response_id,  # proposal_id - используем response_id как временную замену
+                response_id,  # response_id
+                'pending_placement',
+                placement_deadline.isoformat(),
+                placement_deadline.isoformat(),
+                reserved_amount,
+                datetime.now().isoformat(),
+                generated_post,
+                ereit_token,
+                datetime.now().isoformat(),
+                datetime.now().isoformat()
+            ))
+            
+            # 7. Отправка уведомления владельцу канала
+            try:
+                from app.telegram.telegram_notifications import TelegramNotificationService
+                
+                # Форматируем дату дедлайна
+                deadline_str = placement_deadline.strftime("%d %B, %H:%M")
+                
+                # Создаем уведомление
+                notification_text = f"""✅ <b>Ваше предложение принято!</b>
 
-        result = {
-            'success': True,
-            'message': f'Отклик {"принят" if new_status == "accepted" else "отклонён"}. Пользователь получил уведомление.'
-        }
+🎯 <b>Оффер:</b> {response_data['offer_title']}
+💰 <b>Оплата:</b> {reserved_amount:,.0f} руб.
+📅 <b>Разместить до:</b> {deadline_str}
+
+📝 <b>Рекламный пост:</b>
+{generated_post}
+
+⚡ <b>Действия:</b>
+1. Скопируйте текст выше
+2. Опубликуйте в канале @{response_data['channel_username']}
+3. Подтвердите размещение командой /post_published
+
+⏰ <b>У вас есть 24 часа для размещения</b>"""
+                
+                success = TelegramNotificationService.send_telegram_notification(
+                    response_data['channel_owner_telegram_id'],
+                    notification_text,
+                    {
+                        'type': 'offer_accepted',
+                        'offer_id': response_data['offer_id'],
+                        'response_id': response_id,
+                        'placement_id': placement_id,
+                        'ereit_token': ereit_token
+                    }
+                )
+                
+                if success:
+                    logger.info(f"✅ Уведомление о принятии отправлено владельцу канала {response_data['channel_owner_telegram_id']}")
+                else:
+                    logger.error(f"❌ Не удалось отправить уведомление владельцу канала {response_data['channel_owner_telegram_id']}")
+                    
+            except Exception as notification_error:
+                logger.error(f"❌ Ошибка отправки уведомления о принятии: {notification_error}")
+            
+            result = {
+                'success': True,
+                'message': f'Отклик принят! Владелец канала получил уведомление с инструкциями по размещению.',
+                'placement_id': placement_id,
+                'deadline': placement_deadline.isoformat(),
+                'reserved_amount': reserved_amount,
+                'ereit_token': ereit_token
+            }
+        else:
+            # Для отклонения отправляем обычное уведомление
+            result = {
+                'success': True,
+                'message': f'Отклик отклонён. Пользователь получил уведомление.'
+            }
 
         return jsonify(result)
 
     except Exception as e:
         logger.error(f"Ошибка обновления статуса отклика: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
+
+def generate_ad_post(response_data, ereit_token):
+    """Генерация рекламного поста с eREIT токеном"""
+    try:
+        # Базовый текст из оффера
+        base_text = response_data.get('ad_text') or response_data.get('content') or response_data.get('offer_description', '')
+        
+        # Если нет готового текста, создаем базовый
+        if not base_text:
+            base_text = f"🎯 {response_data['offer_title']}\n\n📢 Новое предложение для наших подписчиков!"
+        
+        # Добавляем eREIT токен
+        post_text = f"""{base_text}
+
+🔗 Подробности и участие: [ссылка с eREIT токеном]
+
+💎 Код отслеживания: {ereit_token}
+📊 Эксклюзивно для подписчиков @{response_data['channel_username']}"""
+        
+        return post_text
+        
+    except Exception as e:
+        logger.error(f"Ошибка генерации рекламного поста: {e}")
+        return f"🎯 {response_data.get('offer_title', 'Рекламное предложение')}\n\n💎 Код: {ereit_token}"
 
 # === ОТЛАДОЧНЫЕ ENDPOINTS ===
 @offers_bp.route('/debug/verify-post', methods=['POST'])
@@ -1168,6 +1337,104 @@ def get_my_responses_for_offer(offer_id):
 
     except Exception as e:
         logger.error(f"Ошибка получения откликов пользователя: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@offers_bp.route('/placements/<int:placement_id>/cancel', methods=['PATCH'])
+def cancel_placement(placement_id):
+    """Отмена размещения рекламодателем"""
+    try:
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+        
+        user_db_id = auth_service.ensure_user_exists()
+        if not user_db_id:
+            return jsonify({'success': False, 'error': 'Ошибка получения пользователя'}), 500
+        
+        data = request.get_json()
+        reason = data.get('reason', 'Отменено рекламодателем')
+        
+        # Получаем информацию о размещении
+        placement = execute_db_query("""
+            SELECT pl.*, or_resp.offer_id, o.created_by, o.title as offer_title,
+                   ch.title as channel_title, ch.username as channel_username,
+                   ch_owner.telegram_id as channel_owner_telegram_id
+            FROM offer_placements pl
+            JOIN offer_responses or_resp ON pl.response_id = or_resp.id
+            JOIN offers o ON or_resp.offer_id = o.id
+            JOIN channels ch ON or_resp.channel_id = ch.id
+            JOIN users ch_owner ON ch.owner_id = ch_owner.id
+            WHERE pl.id = ?
+        """, (placement_id,), fetch_one=True)
+        
+        if not placement:
+            return jsonify({'success': False, 'error': 'Размещение не найдено'}), 404
+        
+        # Проверяем права доступа
+        if placement['created_by'] != user_db_id:
+            return jsonify({'success': False, 'error': 'Нет прав для отмены размещения'}), 403
+        
+        # Проверяем, что размещение можно отменить
+        if placement['status'] not in ['pending_placement']:
+            return jsonify({'success': False, 'error': 'Размещение нельзя отменить в текущем статусе'}), 400
+        
+        # Отменяем размещение
+        execute_db_query("""
+            UPDATE offer_placements
+            SET status = 'cancelled',
+                cancellation_reason = ?,
+                cancelled_at = ?,
+                cancelled_by = ?,
+                updated_at = ?
+            WHERE id = ?
+        """, (reason, datetime.now().isoformat(), user_db_id, datetime.now().isoformat(), placement_id))
+        
+        # Обновляем статус отклика
+        execute_db_query("""
+            UPDATE offer_responses
+            SET status = 'cancelled',
+                updated_at = ?,
+                admin_message = ?
+            WHERE id = ?
+        """, (datetime.now().isoformat(), f'Размещение отменено: {reason}', placement['response_id']))
+        
+        # Отправляем уведомление владельцу канала
+        try:
+            from app.telegram.telegram_notifications import TelegramNotificationService
+            
+            notification_text = f"""🚫 <b>Размещение отменено</b>
+
+🎯 <b>Оффер:</b> {placement['offer_title']}
+📺 <b>Канал:</b> @{placement['channel_username']}
+💰 <b>Сумма:</b> {placement['funds_reserved']} руб.
+
+📝 <b>Причина:</b> {reason}
+
+💡 Средства не были списаны с вашего баланса."""
+            
+            TelegramNotificationService.send_telegram_notification(
+                placement['channel_owner_telegram_id'],
+                notification_text,
+                {
+                    'type': 'placement_cancelled',
+                    'placement_id': placement_id,
+                    'offer_id': placement['offer_id']
+                }
+            )
+            
+            logger.info(f"✅ Уведомление об отмене размещения отправлено владельцу канала {placement['channel_owner_telegram_id']}")
+            
+        except Exception as notification_error:
+            logger.error(f"❌ Ошибка отправки уведомления об отмене: {notification_error}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Размещение успешно отменено',
+            'placement_id': placement_id
+        })
+        
+    except Exception as e:
+        logger.error(f"Ошибка отмены размещения: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # === ДОПОЛНИТЕЛЬНЫЕ ENDPOINTS ===

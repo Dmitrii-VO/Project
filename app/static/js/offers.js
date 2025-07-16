@@ -1069,6 +1069,7 @@ const ResponseManager = {
             const channelsubscriber = response.channel_subscriber || 0;
             const message = response.message || '';
             const status = response.status || 'pending';
+            const placement = response.placement || null;
 
             return `
                 <div style="border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: white;">
@@ -1077,7 +1078,7 @@ const ResponseManager = {
                             <h5 style="margin: 0 0 4px 0; color: #2d3748; font-size: 16px;">📺 ${channelTitle}</h5>
                             <div style="font-size: 14px; color: #718096;">@${channelUsername} • 👥 ${Utils.formatNumber(channelsubscriber)} подписчиков</div>
                         </div>
-                        <div style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: #fed7d7; color: #c53030;">${this.getStatusText(status)}</div>
+                        <div style="padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: ${this.getStatusColor(status)}; color: #2d3748;">${this.getStatusText(status)}</div>
                     </div>
 
                     ${message ? `
@@ -1087,15 +1088,87 @@ const ResponseManager = {
                         </div>
                     ` : ''}
 
+                    ${placement ? this.renderPlacementInfo(placement) : ''}
+
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                         ${status === 'pending' ? `
                             <button onclick="ResponseManager.respondToResponse('${response.id}', 'accepted')" style="padding: 6px 12px; background: #48bb78; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✅ Принять</button>
                             <button onclick="ResponseManager.respondToResponse('${response.id}', 'rejected')" style="padding: 6px 12px; background: #f56565; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">❌ Отклонить</button>
                         ` : ''}
+                        ${status === 'accepted' && placement && placement.status === 'pending_placement' ? `
+                            <button onclick="ResponseManager.cancelPlacement('${placement.id}')" style="padding: 6px 12px; background: #ed8936; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🚫 Отменить размещение</button>
+                        ` : ''}
                     </div>
                 </div>
             `;
         }).join('');
+    },
+
+    renderPlacementInfo(placement) {
+        if (!placement) return '';
+
+        const deadline = new Date(placement.deadline);
+        const now = new Date();
+        const isExpired = deadline < now;
+        const timeLeft = this.getTimeLeft(deadline);
+
+        return `
+            <div style="background: #e6fffa; padding: 12px; border-radius: 6px; margin: 12px 0; border-left: 4px solid #38b2ac;">
+                <div style="font-size: 12px; color: #38b2ac; font-weight: 600; margin-bottom: 8px;">📅 РАЗМЕЩЕНИЕ</div>
+                <div style="font-size: 14px; color: #2d3748; margin-bottom: 4px;">
+                    💰 Зарезервировано: <strong>${placement.funds_reserved || 0} руб.</strong>
+                </div>
+                <div style="font-size: 14px; color: #2d3748; margin-bottom: 4px;">
+                    📅 Дедлайн: <strong>${deadline.toLocaleString('ru-RU')}</strong>
+                </div>
+                <div style="font-size: 14px; color: ${isExpired ? '#e53e3e' : '#38b2ac'}; font-weight: 600;" data-deadline="${placement.deadline}">
+                    ⏰ ${isExpired ? 'Срок истёк' : timeLeft}
+                </div>
+                ${placement.ereit_token ? `
+                    <div style="font-size: 12px; color: #718096; margin-top: 4px;">
+                        🔗 Токен: <code>${placement.ereit_token}</code>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    },
+
+    getTimeLeft(deadline) {
+        const now = new Date();
+        const diff = deadline - now;
+        
+        if (diff <= 0) return 'Срок истёк';
+        
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        
+        if (hours > 0) {
+            return `Осталось: ${hours}ч ${minutes}мин`;
+        } else {
+            return `Осталось: ${minutes}мин`;
+        }
+    },
+
+    async cancelPlacement(placementId) {
+        if (!confirm('Вы уверены, что хотите отменить размещение? Это действие нельзя отменить.')) {
+            return;
+        }
+
+        try {
+            const result = await ApiClient.patch(`/api/offers/placements/${placementId}/cancel`, {
+                reason: 'Отменено рекламодателем'
+            });
+
+            if (result.success) {
+                alert('✅ Размещение отменено');
+                // Обновляем список откликов
+                location.reload();
+            } else {
+                throw new Error(result.error || 'Ошибка отмены размещения');
+            }
+        } catch (error) {
+            alert(`❌ Ошибка: ${error.message}`);
+        }
     },
 
     renderEmptyResponses() {
@@ -1112,9 +1185,24 @@ const ResponseManager = {
         const texts = {
             'pending': 'На рассмотрении',
             'accepted': 'Принят',
-            'rejected': 'Отклонён'
+            'rejected': 'Отклонён',
+            'pending_placement': 'Ожидает размещения',
+            'placed': 'Размещено',
+            'expired': 'Срок истёк'
         };
         return texts[status] || status;
+    },
+
+    getStatusColor(status) {
+        const colors = {
+            'pending': '#feb2b2',
+            'accepted': '#9ae6b4',
+            'rejected': '#fed7d7',
+            'pending_placement': '#fef5e7',
+            'placed': '#c6f6d5',
+            'expired': '#fed7d7'
+        };
+        return colors[status] || '#e2e8f0';
     },
 
     async respondToResponse(responseId, action) {
@@ -2137,5 +2225,23 @@ window.acceptOffer = (offerId) => ResponseManager.acceptOffer(offerId);
 document.addEventListener('DOMContentLoaded', function() {
     loadMyOffers();
     setupOffersSearch();
+    startTimerUpdates(); // Запускаем обновление таймеров
 });
+
+// Функция для обновления таймеров
+function startTimerUpdates() {
+    setInterval(() => {
+        const timers = document.querySelectorAll('[data-deadline]');
+        timers.forEach(timer => {
+            const deadline = new Date(timer.getAttribute('data-deadline'));
+            const timeLeft = ResponseManager.getTimeLeft(deadline);
+            timer.textContent = timeLeft;
+            
+            // Если срок истёк, обновляем цвет
+            if (timeLeft === 'Срок истёк') {
+                timer.style.color = '#e53e3e';
+            }
+        });
+    }, 60000); // Обновляем каждую минуту
+}
 

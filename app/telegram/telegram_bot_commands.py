@@ -215,6 +215,10 @@ class TelegramBotExtension:
             BotCommand(
                 command="help_offers",
                 description="❓ Помощь по системе офферов"
+            ),
+            BotCommand(
+                command="post_published",
+                description="✅ Подтвердить размещение рекламного поста"
             )
         ]
 
@@ -500,7 +504,8 @@ class TelegramBotExtension:
             'my_offers': self.handle_my_offers,
             'my_channels': self.handle_my_channels,
             'proposal_stats': self.handle_proposal_stats,
-            'help_offers': self.handle_help_offers
+            'help_offers': self.handle_help_offers,
+            'post_published': self.handle_post_published
         }
         
         handler = command_map.get(command)
@@ -509,6 +514,104 @@ class TelegramBotExtension:
         else:
             return {
                 'text': f"❌ Неизвестная команда: /{command}\n\nИспользуйте /help_offers для списка команд.",
+                'parse_mode': 'HTML'
+            }
+    
+    def handle_post_published(self, telegram_id: int) -> dict:
+        """Обработка команды /post_published - подтверждение размещения"""
+        try:
+            from app.models import execute_db_query
+            
+            # Получаем пользователя из БД
+            user = self.get_user_by_telegram_id(telegram_id)
+            if not user:
+                return {
+                    'text': "❌ Пользователь не найден в системе.",
+                    'parse_mode': 'HTML'
+                }
+            
+            # Ищем активные размещения пользователя со статусом pending_placement
+            placements = execute_db_query("""
+                SELECT p.*, 
+                       o.title as offer_title,
+                       o.description as offer_description,
+                       o.price as offer_price,
+                       u.telegram_id as advertiser_telegram_id,
+                       u.first_name as advertiser_first_name,
+                       u.last_name as advertiser_last_name,
+                       r.channel_username
+                FROM offer_placements p
+                JOIN offer_responses r ON p.response_id = r.id
+                JOIN users ch_owner ON r.user_id = ch_owner.id
+                JOIN offers o ON r.offer_id = o.id
+                JOIN users u ON o.created_by = u.id
+                WHERE ch_owner.telegram_id = ? 
+                AND p.status = 'pending_placement'
+                ORDER BY p.created_at DESC
+                LIMIT 1
+            """, (telegram_id,), fetch_one=True)
+            
+            if not placements:
+                return {
+                    'text': """❌ У вас нет активных размещений для подтверждения.
+                    
+📌 Эта команда используется для подтверждения размещения рекламного поста после того, как вы опубликовали его в своем канале.
+
+🔄 Если у вас есть принятые предложения, проверьте ваши активные размещения в веб-приложении.""",
+                    'parse_mode': 'HTML'
+                }
+            
+            # Обновляем статус размещения на активное
+            execute_db_query("""
+                UPDATE offer_placements 
+                SET status = 'active',
+                    placement_start = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+            """, (placements['id'],))
+            
+            # Уведомляем рекламодателя о размещении
+            try:
+                from app.telegram.telegram_notifications import TelegramNotificationService
+                notification_service = TelegramNotificationService()
+                
+                advertiser_message = f"""🎉 <b>Ваша реклама размещена!</b>
+
+📢 <b>Канал:</b> @{placements.get('channel_username', 'неизвестно')}
+📋 <b>Оффер:</b> {placements['offer_title']}
+💰 <b>Сумма:</b> {placements['offer_price']} руб.
+🔗 <b>eREIT токен:</b> {placements['ereit_token']}
+
+✅ Владелец канала подтвердил размещение рекламного поста.
+📊 Отслеживание эффективности начато."""
+                
+                notification_service.send_notification(
+                    user_id=placements['advertiser_telegram_id'],
+                    message=advertiser_message,
+                    notification_type='placement_confirmed'
+                )
+                
+            except Exception as e:
+                logger.error(f"Ошибка отправки уведомления рекламодателю: {e}")
+            
+            return {
+                'text': f"""✅ <b>Размещение подтверждено!</b>
+
+📢 <b>Оффер:</b> {placements['offer_title']}
+💰 <b>Сумма:</b> {placements['offer_price']} руб.
+🔗 <b>eREIT токен:</b> {placements['ereit_token']}
+
+🎉 Рекламодатель уведомлен о размещении.
+📊 Отслеживание результатов активировано.
+
+💼 Следите за статистикой в веб-приложении.""",
+                'parse_mode': 'HTML'
+            }
+            
+        except Exception as e:
+            logger.error(f"Ошибка обработки команды /post_published: {e}")
+            return {
+                'text': "❌ Произошла ошибка при обработке команды. Попробуйте позже.",
                 'parse_mode': 'HTML'
             }
 
