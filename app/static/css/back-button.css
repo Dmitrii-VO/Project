@@ -1,0 +1,61 @@
+/* ==========================================
+   СТИЛИ КНОПКИ НАЗАД
+   ========================================== */
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-md);
+  color: white;
+  text-decoration: none;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+  z-index: 10;
+}
+
+.back-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateX(-2px);
+}
+
+.back-btn:active {
+  transform: translateX(0);
+}
+
+/* Адаптивность для мобильных устройств */
+@media (max-width: 768px) {
+  .back-btn {
+    top: var(--space-3);
+    left: var(--space-3);
+    padding: var(--space-2);
+    font-size: var(--text-xs);
+  }
+}
+
+/* Для hero-section с относительным позиционированием */
+.hero-section {
+  position: relative;
+}
+
+.hero-section .back-btn {
+  position: absolute;
+  top: var(--space-4);
+  left: var(--space-4);
+}
+
+@media (max-width: 768px) {
+  .hero-section .back-btn {
+    top: var(--space-3);
+    left: var(--space-3);
+  }
+}

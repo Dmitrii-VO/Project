@@ -1,842 +1,336 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Платежи - Telegram Mini App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <style>
-        /* ТОЧНО ТЕ ЖЕ CSS ПЕРЕМЕННЫЕ, ЧТО В INDEX.HTML */
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --success-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            --warning-gradient: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
-            --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
-
-            --primary-color: #667eea;
-            --secondary-color: #764ba2;
-            --success-color: #4facfe;
-            --warning-color: #ff9a56;
-            --danger-color: #ff6b6b;
-
-            --text-primary: #2d3748;
-            --text-secondary: #718096;
-            --text-muted: #a0aec0;
-            --bg-primary: #ffffff;
-            --bg-secondary: #f7fafc;
-            --border-color: #e2e8f0;
-
-            --border-radius: 12px;
-            --border-radius-sm: 6px;
-            --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
-            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
-            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-            --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            font-family: var(--font-family);
-            background: var(--bg-secondary);
-            color: var(--text-primary);
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 12px;
-        }
-
-        /* HERO SECTION В СТИЛЕ INDEX.HTML */
-        .hero-section {
-            text-align: center;
-            padding: 24px 16px;
-            background: var(--primary-gradient);
-            color: white;
-            border-radius: var(--border-radius);
-            margin-bottom: 20px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .hero-section::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="1" fill="white" opacity="0.1"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
-            opacity: 0.3;
-        }
-
-        .hero-content {
-            position: relative;
-            z-index: 2;
-        }
-
-        .hero-icon {
-            font-size: 24px;
-            margin-bottom: 12px;
-            display: block;
-            animation: bounceIn 1s ease-out;
-        }
-
-        .hero-title {
-            font-size: 32px;
-            font-weight: 800;
-            margin-bottom: 8px;
-            letter-spacing: -0.02em;
-            animation: fadeInUp 1s ease-out 0.2s both;
-        }
-
-        .hero-subtitle {
-            font-size: 16px;
-            opacity: 0.9;
-            margin-bottom: 0;
-            font-weight: 400;
-            animation: fadeInUp 1s ease-out 0.4s both;
-        }
-
-        /* BACK BUTTON */
-        .back-btn {
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: var(--border-radius-sm);
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            z-index: 3;
-        }
-
-        .back-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: translateY(-50%) scale(1.05);
-        }
-
-        /* STATS GRID В СТИЛЕ INDEX.HTML */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 32px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 16px;
-            border-radius: var(--border-radius);
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            text-align: center;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            position: relative;
-            overflow: hidden;
-        }
-
-        .stat-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 3px;
-            background: linear-gradient(90deg, #667eea, #764ba2);
-        }
-
-        .stat-icon {
-            font-size: 18px;
-            margin-bottom: 8px;
-            display: block;
-        }
-
-        .stat-number {
-            font-size: 24px;
-            font-weight: 800;
-            color: #2d3748;
-            margin-bottom: 6px;
-            min-height: 30px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .stat-label {
-            color: #718096;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        /* NAVIGATION GRID В СТИЛЕ INDEX.HTML */
-        .navigation-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .nav-card {
-            background: white;
-            padding: 16px;
-            border-radius: var(--border-radius);
-            text-decoration: none;
-            color: inherit;
-            transition: var(--transition);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-            cursor: pointer;
-        }
-
-        .nav-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            text-decoration: none;
-            color: inherit;
-        }
-
-        .nav-card.active {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .nav-icon {
-            font-size: 20px;
-            flex-shrink: 0;
-            width: 24px;
-            text-align: center;
-        }
-
-        .nav-content h3 {
-            font-size: 16px;
-            font-weight: 700;
-            margin-bottom: 4px;
-            color: inherit;
-        }
-
-        .nav-content p {
-            color: inherit;
-            opacity: 0.8;
-            margin: 0;
-            font-size: 12px;
-            line-height: 1.4;
-        }
-
-        /* PAYMENT CARDS */
-        .payment-section {
-            background: white;
-            border-radius: var(--border-radius);
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
-
-        .section-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin: 0;
-        }
-
-        .section-badge {
-            background: var(--success-gradient);
-            color: white;
-            padding: 4px 8px;
-            border-radius: var(--border-radius-sm);
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .payment-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .payment-item {
-            background: var(--bg-secondary);
-            border-radius: var(--border-radius-sm);
-            padding: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            transition: var(--transition);
-        }
-
-        .payment-item:hover {
-            background: #f1f5f9;
-            transform: translateX(4px);
-        }
-
-        .payment-info {
-            flex: 1;
-        }
-
-        .payment-title {
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: var(--text-primary);
-        }
-
-        .payment-date {
-            color: var(--text-secondary);
-            font-size: 12px;
-        }
-
-        .payment-amount {
-            font-weight: 700;
-            font-size: 16px;
-            color: var(--success-color);
-        }
-
-        .payment-status {
-            padding: 4px 8px;
-            border-radius: var(--border-radius-sm);
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .payment-status.completed {
-            background: #d1fae5;
-            color: #065f46;
-        }
-
-        .payment-status.pending {
-            background: #fef3c7;
-            color: #92400e;
-        }
-
-        .payment-status.failed {
-            background: #fee2e2;
-            color: #991b1b;
-        }
-
-        /* QUICK ACTIONS */
-        .quick-actions {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .action-btn {
-            background: var(--primary-gradient);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius);
-            padding: 16px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            text-decoration: none;
-        }
-
-        .action-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-            text-decoration: none;
-            color: white;
-        }
-
-        .action-btn.secondary {
-            background: var(--success-gradient);
-        }
-
-        .action-btn.tertiary {
-            background: var(--warning-gradient);
-            color: var(--text-primary);
-        }
-
-        /* LOADING */
-        .loading {
-            color: var(--text-muted);
-            font-size: 12px;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        /* ANIMATIONS */
-        @keyframes bounceIn {
-            0% { transform: scale(0.3); opacity: 0; }
-            50% { transform: scale(1.05); }
-            70% { transform: scale(0.9); }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        /* МОБИЛЬНАЯ АДАПТИВНОСТЬ КАК В INDEX.HTML */
-        @media (max-width: 768px) {
-            .container {
-                padding: 8px;
-            }
-
-            .hero-section {
-                padding: 16px 12px;
-                margin-bottom: 16px;
-                border-radius: 8px;
-            }
-
-            .hero-icon {
-                font-size: 2rem;
-                margin-bottom: 8px;
-            }
-
-            .hero-title {
-                font-size: 24px;
-                margin-bottom: 6px;
-                line-height: 1.3;
-            }
-
-            .hero-subtitle {
-                font-size: 14px;
-                line-height: 1.4;
-            }
-
-            .back-btn {
-                left: 12px;
-                padding: 6px 10px;
-                font-size: 12px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 8px;
-                margin-bottom: 20px;
-            }
-
-            .stat-card {
-                padding: 12px;
-                border-radius: 8px;
-            }
-
-            .stat-icon {
-                font-size: 1.25rem;
-                margin-bottom: 6px;
-            }
-
-            .stat-number {
-                font-size: 18px;
-                margin-bottom: 4px;
-                min-height: 24px;
-            }
-
-            .stat-label {
-                font-size: 10px;
-                font-weight: 500;
-            }
-
-            .navigation-grid {
-                grid-template-columns: 1fr;
-                gap: 8px;
-                margin-bottom: 16px;
-            }
-
-            .nav-card {
-                padding: 12px;
-                gap: 8px;
-                border-radius: 8px;
-            }
-
-            .nav-card:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            }
-
-            .nav-icon {
-                font-size: 1.25rem;
-                width: 20px;
-            }
-
-            .nav-content h3 {
-                font-size: 14px;
-                margin-bottom: 2px;
-                line-height: 1.3;
-            }
-
-            .nav-content p {
-                font-size: 11px;
-                line-height: 1.4;
-            }
-
-            .payment-section {
-                padding: 16px;
-                margin-bottom: 16px;
-            }
-
-            .payment-item {
-                padding: 12px;
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
-            }
-
-            .quick-actions {
-                grid-template-columns: 1fr;
-                gap: 8px;
-            }
-
-            .action-btn {
-                padding: 12px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .container {
-                padding: 6px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-                gap: 6px;
-                margin-bottom: 16px;
-            }
-
-            .hero-section {
-                padding: 12px 8px;
-            }
-
-            .hero-icon {
-                font-size: 1.75rem;
-            }
-
-            .hero-title {
-                font-size: 20px;
-            }
-
-            .nav-card {
-                padding: 8px;
-                gap: 6px;
-            }
-
-            .stat-card {
-                padding: 8px;
-            }
-
-            .stat-icon {
-                margin-bottom: 4px;
-            }
-
-            .stat-number {
-                margin-bottom: 2px;
-            }
-        }
-
-        /* Touch устройства */
-        @media (max-width: 768px) {
-            .nav-card,
-            .stat-card,
-            .action-btn {
-                min-height: 44px;
-                touch-action: manipulation;
-            }
-
-            @media (hover: none) {
-                .nav-card:hover,
-                .stat-card:hover,
-                .action-btn:hover {
-                    transform: none;
-                    box-shadow: inherit;
-                }
-            }
-
-            body {
-                -webkit-text-size-adjust: 100%;
-                -ms-text-size-adjust: 100%;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- Hero Section -->
-        <div class="hero-section">
-            <button class="back-btn" onclick="goBack()">← Назад</button>
-            <div class="hero-content">
-                <span class="hero-icon">💳</span>
-                <h1 class="hero-title">Платежи</h1>
-                <p class="hero-subtitle">Управление финансами и историей транзакций</p>
+{% extends "base.html" %}
+
+{% block title %}Платежи - Telegram Mini App{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Hero Section -->
+    <div class="hero-section animate-fade-in">
+        <button class="back-btn" onclick="goBack()">← Назад</button>
+        <div class="hero-content">
+            <span class="hero-icon">💳</span>
+            <h1 class="hero-title">Платежи</h1>
+            <p class="hero-subtitle">Управление финансами и историей транзакций</p>
+        </div>
+    </div>
+
+    <!-- Stats Grid -->
+    <div class="stats-grid">
+        <div class="stat-card animate-fade-in animate-delay-100">
+            <div class="stat-icon">💰</div>
+            <div class="stat-number" id="total-balance">
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
+            <div class="stat-label">Текущий баланс</div>
         </div>
 
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">💰</div>
-                <div class="stat-number" id="total-balance">
-                    <span class="loading">Загрузка...</span>
-                </div>
-                <div class="stat-label">Текущий баланс</div>
+        <div class="stat-card animate-fade-in animate-delay-200">
+            <div class="stat-icon">📈</div>
+            <div class="stat-number" id="monthly-income">
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
-
-            <div class="stat-card">
-                <div class="stat-icon">📈</div>
-                <div class="stat-number" id="monthly-income">
-                    <span class="loading">Загрузка...</span>
-                </div>
-                <div class="stat-label">Доход за месяц</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-icon">📊</div>
-                <div class="stat-number" id="pending-payments">
-                    <span class="loading">Загрузка...</span>
-                </div>
-                <div class="stat-label">Ожидает выплаты</div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-icon">✅</div>
-                <div class="stat-number" id="completed-payments">
-                    <span class="loading">Загрузка...</span>
-                </div>
-                <div class="stat-label">Завершено</div>
-            </div>
+            <div class="stat-label">Доход за месяц</div>
         </div>
 
-        <!-- Navigation Grid -->
-        <div class="navigation-grid">
-            <div class="nav-card active" onclick="showSection('history')">
-                <div class="nav-icon">📋</div>
-                <div class="nav-content">
-                    <h3>История</h3>
-                    <p>Все транзакции и платежи</p>
-                </div>
+        <div class="stat-card animate-fade-in animate-delay-300">
+            <div class="stat-icon">📊</div>
+            <div class="stat-number" id="pending-payments">
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
-
-            <div class="nav-card" onclick="showSection('withdraw')">
-                <div class="nav-icon">💸</div>
-                <div class="nav-content">
-                    <h3>Вывод средств</h3>
-                    <p>Заявки на вывод заработанных средств</p>
-                </div>
-            </div>
-
-            <div class="nav-card" onclick="showSection('methods')">
-                <div class="nav-icon">🏦</div>
-                <div class="nav-content">
-                    <h3>Способы оплаты</h3>
-                    <p>Настройка банковских карт и кошельков</p>
-                </div>
-            </div>
-
-            <div class="nav-card" onclick="showSection('analytics')">
-                <div class="nav-icon">📊</div>
-                <div class="nav-content">
-                    <h3>Аналитика доходов</h3>
-                    <p>Детальная статистика заработка</p>
-                </div>
-            </div>
+            <div class="stat-label">Ожидает выплаты</div>
         </div>
 
+        <div class="stat-card animate-fade-in animate-delay-400">
+            <div class="stat-icon">✅</div>
+            <div class="stat-number" id="completed-payments">
+                <span class="loading-skeleton">Загрузка...</span>
+            </div>
+            <div class="stat-label">Завершено</div>
+        </div>
+    </div>
+
+    <!-- Современные табы -->
+    <div class="tabs">
+        <nav class="tabs-nav">
+            <li><a href="#" class="active" data-tab="history">История</a></li>
+            <li><a href="#" data-tab="withdraw">Вывод средств</a></li>
+            <li><a href="#" data-tab="methods">Способы оплаты</a></li>
+            <li><a href="#" data-tab="analytics">Аналитика доходов</a></li>
+        </nav>
+    </div>
+
+    <!-- Tab: История -->
+    <div class="tabs-content active" id="history">
         <!-- Quick Actions -->
-        <div class="quick-actions">
-            <button class="action-btn" onclick="requestWithdraw()">
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 24px;">
+            <button class="btn btn-primary" onclick="requestWithdraw()">
                 <span>💸</span>
                 Вывести средства
             </button>
-            <button class="action-btn secondary" onclick="addPaymentMethod()">
+            <button class="btn btn-secondary" onclick="addPaymentMethod()">
                 <span>➕</span>
                 Добавить карту
             </button>
-            <a href="/analytics" class="action-btn tertiary">
+            <a href="/analytics" class="btn btn-outline">
                 <span>📊</span>
                 Подробная аналитика
             </a>
         </div>
 
         <!-- Recent Payments Section -->
-        <div class="payment-section">
-            <div class="section-header">
-                <h2 class="section-title">Последние платежи</h2>
-                <span class="section-badge">5 новых</span>
+        <div class="card animate-slide-in animate-delay-100">
+            <div class="card-header">
+                <h3 class="card-title">Последние платежи</h3>
+                <span class="badge badge-success">5 новых</span>
             </div>
-            <div class="payment-list" id="recent-payments">
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Оплата за рекламу в @tech_channel</div>
-                        <div class="payment-date">15 июня 2025, 14:32</div>
+            <div class="card-body">
+                <div class="payment-list" id="recent-payments">
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Оплата за рекламу в @tech_channel</div>
+                            <div class="payment-date">15 июня 2025, 14:32</div>
+                        </div>
+                        <div class="payment-amount success">+₽ 2,500</div>
+                        <div class="badge badge-success">Завершен</div>
                     </div>
-                    <div class="payment-amount">+₽ 2,500</div>
-                    <div class="payment-status completed">Завершен</div>
-                </div>
 
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Комиссия за размещение</div>
-                        <div class="payment-date">14 июня 2025, 10:15</div>
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Комиссия за размещение</div>
+                            <div class="payment-date">14 июня 2025, 10:15</div>
+                        </div>
+                        <div class="payment-amount warning">-₽ 125</div>
+                        <div class="badge badge-success">Завершен</div>
                     </div>
-                    <div class="payment-amount">-₽ 125</div>
-                    <div class="payment-status completed">Завершен</div>
-                </div>
 
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Вывод на карту *1234</div>
-                        <div class="payment-date">13 июня 2025, 16:45</div>
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Вывод на карту *1234</div>
+                            <div class="payment-date">13 июня 2025, 16:45</div>
+                        </div>
+                        <div class="payment-amount warning">-₽ 10,000</div>
+                        <div class="badge badge-warning">Обработка</div>
                     </div>
-                    <div class="payment-amount">-₽ 10,000</div>
-                    <div class="payment-status pending">Обработка</div>
-                </div>
 
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Доход от @news_channel</div>
-                        <div class="payment-date">12 июня 2025, 09:20</div>
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Доход от @news_channel</div>
+                            <div class="payment-date">12 июня 2025, 09:20</div>
+                        </div>
+                        <div class="payment-amount success">+₽ 1,750</div>
+                        <div class="badge badge-success">Завершен</div>
                     </div>
-                    <div class="payment-amount">+₽ 1,750</div>
-                    <div class="payment-status completed">Завершен</div>
-                </div>
 
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Бонус за активность</div>
-                        <div class="payment-date">11 июня 2025, 12:00</div>
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Бонус за активность</div>
+                            <div class="payment-date">11 июня 2025, 12:00</div>
+                        </div>
+                        <div class="payment-amount success">+₽ 500</div>
+                        <div class="badge badge-success">Завершен</div>
                     </div>
-                    <div class="payment-amount">+₽ 500</div>
-                    <div class="payment-status completed">Завершен</div>
                 </div>
             </div>
         </div>
 
         <!-- Pending Withdrawals Section -->
-        <div class="payment-section">
-            <div class="section-header">
-                <h2 class="section-title">Ожидающие выплаты</h2>
-                <span class="section-badge">2 заявки</span>
+        <div class="card animate-slide-in animate-delay-200">
+            <div class="card-header">
+                <h3 class="card-title">Ожидающие выплаты</h3>
+                <span class="badge badge-info">2 заявки</span>
             </div>
-            <div class="payment-list" id="pending-withdrawals">
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Заявка на вывод #12345</div>
-                        <div class="payment-date">Подана 18 июня 2025, 11:30</div>
+            <div class="card-body">
+                <div class="payment-list" id="pending-withdrawals">
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Заявка на вывод #12345</div>
+                            <div class="payment-date">Подана 18 июня 2025, 11:30</div>
+                        </div>
+                        <div class="payment-amount">₽ 5,000</div>
+                        <div class="badge badge-warning">Проверка</div>
                     </div>
-                    <div class="payment-amount">₽ 5,000</div>
-                    <div class="payment-status pending">Проверка</div>
-                </div>
 
-                <div class="payment-item">
-                    <div class="payment-info">
-                        <div class="payment-title">Заявка на вывод #12344</div>
-                        <div class="payment-date">Подана 17 июня 2025, 15:20</div>
+                    <div class="payment-item">
+                        <div class="payment-info">
+                            <div class="payment-title">Заявка на вывод #12344</div>
+                            <div class="payment-date">Подана 17 июня 2025, 15:20</div>
+                        </div>
+                        <div class="payment-amount">₽ 3,250</div>
+                        <div class="badge badge-warning">Ожидание</div>
                     </div>
-                    <div class="payment-amount">₽ 3,250</div>
-                    <div class="payment-status pending">Ожидание</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Telegram WebApp initialization
-        if (window.Telegram && window.Telegram.WebApp) {
-            const tg = window.Telegram.WebApp;
-            tg.ready();
-            tg.expand();
-        }
-        // Navigation functionality
-        function showSection(section) {
-            // Remove active class from all nav cards
-            document.querySelectorAll('.nav-card').forEach(card => {
-                card.classList.remove('active');
-            });
+    <!-- Tab: Вывод средств -->
+    <div class="tabs-content" id="withdraw">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">💸 Вывод средств</h3>
+                <p class="card-subtitle">Заявки на вывод заработанных средств</p>
+            </div>
+            <div class="card-body">
+                <div class="empty-state">
+                    <div class="stat-icon">💸</div>
+                    <h3>Вывод средств</h3>
+                    <p>Здесь вы сможете подавать заявки на вывод заработанных средств.</p>
+                    <div class="notification notification-info">
+                        <div class="notification-content">
+                            <div class="notification-title">В разработке</div>
+                            <div class="notification-message">
+                                Функция вывода средств будет доступна в следующих обновлениях.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            // Add active class to clicked card
-            event.currentTarget.classList.add('active');
+    <!-- Tab: Способы оплаты -->
+    <div class="tabs-content" id="methods">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">🏦 Способы оплаты</h3>
+                <p class="card-subtitle">Настройка банковских карт и кошельков</p>
+            </div>
+            <div class="card-body">
+                <div class="empty-state">
+                    <div class="stat-icon">🏦</div>
+                    <h3>Способы оплаты</h3>
+                    <p>Здесь вы сможете добавлять и управлять способами получения платежей.</p>
+                    <div class="notification notification-info">
+                        <div class="notification-content">
+                            <div class="notification-title">В разработке</div>
+                            <div class="notification-message">
+                                Функция добавления способов оплаты будет доступна в следующих обновлениях.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            console.log('Showing section:', section);
+    <!-- Tab: Аналитика доходов -->
+    <div class="tabs-content" id="analytics">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📊 Аналитика доходов</h3>
+                <p class="card-subtitle">Детальная статистика заработка</p>
+            </div>
+            <div class="card-body">
+                <div class="empty-state">
+                    <div class="stat-icon">📊</div>
+                    <h3>Аналитика доходов</h3>
+                    <p>Здесь будет отображаться детальная статистика ваших доходов.</p>
+                    <div class="notification notification-info">
+                        <div class="notification-content">
+                            <div class="notification-title">В разработке</div>
+                            <div class="notification-message">
+                                Скоро здесь появится подробная аналитика доходов и трендов заработка.
+                            </div>
+                        </div>
+                    </div>
+                    <a href="/analytics" class="btn btn-primary">
+                        📊 Перейти к полной аналитике
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
 
-            // Here you would typically load data for the selected section
-            // For now, just log the action
-        }
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 
-        // Payment actions
-        function requestWithdraw() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.showAlert('Функция вывода средств будет доступна в следующих обновлениях');
-            } else {
-                alert('Функция вывода средств будет доступна в следующих обновлениях');
-            }
-        }
+<script>
+// Функция переключения табов
+function switchTab(tabName) {
+    // Удаляем активный класс со всех табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Скрываем все содержимое табов
+    document.querySelectorAll('.tabs-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Активируем нужный таб
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(tabName);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+}
 
-        function addPaymentMethod() {
-            if (window.Telegram && window.Telegram.WebApp) {
-                window.Telegram.WebApp.showAlert('Функция добавления карт будет доступна в следующих обновлениях');
-            } else {
-                alert('Функция добавления карт будет доступна в следующих обновлениях');
-            }
-        }
+// Обработчики кликов по табам
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('💳 Страница платежей инициализирована');
 
-        // Mock data loading
-        function loadPaymentStats() {
-            // Simulate loading delay
-            setTimeout(() => {
-                document.getElementById('total-balance').innerHTML = '₽ 15,430';
-                document.getElementById('monthly-income').innerHTML = '₽ 8,750';
-                document.getElementById('pending-payments').innerHTML = '₽ 8,250';
-                document.getElementById('completed-payments').innerHTML = '47';
-            }, 1000);
-        }
-
-        // Initialize payment data
-        document.addEventListener('DOMContentLoaded', function() {
-            loadPaymentStats();
+    // Настраиваем переключение табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.getAttribute('data-tab');
+            switchTab(tabName);
         });
-    </script>
-    <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-</body>
-</html>
+    });
+
+    // Загружаем данные платежей
+    loadPaymentStats();
+});
+
+// Функция для кнопки "Назад"
+function goBack() {
+    window.history.back();
+}
+
+// Navigation functionality
+function showSection(section) {
+    // Remove active class from all nav cards
+    document.querySelectorAll('.nav-card').forEach(card => {
+        card.classList.remove('active');
+    });
+
+    // Add active class to clicked card
+    event.currentTarget.classList.add('active');
+
+    console.log('Showing section:', section);
+
+    // Here you would typically load data for the selected section
+    // For now, just log the action
+}
+
+// Payment actions
+function requestWithdraw() {
+    if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.showAlert('Функция вывода средств будет доступна в следующих обновлениях');
+    } else {
+        alert('Функция вывода средств будет доступна в следующих обновлениях');
+    }
+}
+
+function addPaymentMethod() {
+    if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.showAlert('Функция добавления карт будет доступна в следующих обновлениях');
+    } else {
+        alert('Функция добавления карт будет доступна в следующих обновлениях');
+    }
+}
+
+// Mock data loading
+function loadPaymentStats() {
+    // Simulate loading delay
+    setTimeout(() => {
+        document.getElementById('total-balance').innerHTML = '₽ 15,430';
+        document.getElementById('monthly-income').innerHTML = '₽ 8,750';
+        document.getElementById('pending-payments').innerHTML = '₽ 8,250';
+        document.getElementById('completed-payments').innerHTML = '47';
+    }, 1000);
+}
+</script>
+{% endblock %}

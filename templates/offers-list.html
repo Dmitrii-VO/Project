@@ -1,54 +1,503 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Доступные офферы - Telegram Mini App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-</head>
-<body>
-    <div class="container">
-        <div class="hero-section">
-            <div class="hero-icon">🎯</div>
+{% extends "base.html" %}
+
+{% block title %}Доступные офферы - Telegram Mini App{% endblock %}
+
+{% block content %}
+<div class="container">
+    <!-- Hero Section -->
+    <div class="hero-section animate-fade-in">
+        <button class="back-btn" onclick="goBack()">← Назад</button>
+        <div class="hero-content">
+            <span class="hero-icon">🎯</span>
             <h1 class="hero-title">Доступные офферы</h1>
             <p class="hero-subtitle">Выберите подходящие предложения для ваших каналов</p>
         </div>
+    </div>
 
-        <div class="filters-section">
-            <div class="filter-group">
-                <label for="categoryFilter">Категория:</label>
-                <select id="categoryFilter">
-                    <option value="">Все категории</option>
-                    <option value="tech">Технологии</option>
-                    <option value="finance">Финансы</option>
-                    <option value="lifestyle">Стиль жизни</option>
-                    <option value="education">Образование</option>
-                </select>
+    <!-- Современные табы -->
+    <div class="tabs">
+        <nav class="tabs-nav">
+            <li><a href="#" class="active" data-tab="all-offers">Все офферы</a></li>
+            <li><a href="#" data-tab="my-responses">Мои отклики</a></li>
+            <li><a href="#" data-tab="favorites">Избранное</a></li>
+        </nav>
+    </div>
+
+    <!-- Tab: Все офферы -->
+    <div class="tabs-content active" id="all-offers">
+        <!-- Фильтры -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">🔧 Фильтры</h3>
+                <p class="card-subtitle">Настройте поиск по параметрам</p>
             </div>
+            <div class="card-body">
+                <div class="form-field">
+                    <label class="form-label" for="categoryFilter">Категория</label>
+                    <select class="form-select" id="categoryFilter">
+                        <option value="">Все категории</option>
+                        <option value="tech">Технологии</option>
+                        <option value="finance">Финансы</option>
+                        <option value="lifestyle">Стиль жизни</option>
+                        <option value="education">Образование</option>
+                        <option value="business">Бизнес</option>
+                        <option value="entertainment">Развлечения</option>
+                    </select>
+                </div>
 
-            <div class="filter-group">
-                <label for="budgetFilter">Минимальный бюджет:</label>
-                <input type="number" id="budgetFilter" placeholder="1000" min="1">
+                <div class="form-field">
+                    <label class="form-label" for="budgetFilter">Минимальный бюджет</label>
+                    <div class="form-group">
+                        <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">₽</span>
+                        <input type="number" class="form-input" id="budgetFilter" placeholder="1000" min="1" style="padding-left: 32px;">
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <label class="form-label" for="subscribersFilter">Минимальные подписчики</label>
+                    <input type="number" class="form-input" id="subscribersFilter" placeholder="Мин. подписчики" min="0">
+                </div>
+
+                <div class="form-field">
+                    <button class="btn btn-primary" onclick="applyFilters()">🔍 Применить фильтры</button>
+                    <button class="btn btn-secondary" onclick="clearFilters()">🗑️ Очистить</button>
+                </div>
             </div>
         </div>
 
-        <div id="offersContainer" class="offers-grid">
+        <!-- Список офферов -->
+        <div id="offersContainer" class="stats-grid">
             <!-- Офферы будут загружены через JavaScript -->
         </div>
 
-        <div id="loadingSpinner" style="text-align: center; padding: 40px;">
-            <div>⏳ Загрузка офферов...</div>
+        <!-- Состояние загрузки -->
+        <div id="loadingSpinner" class="empty-state" style="display: none;">
+            <div class="stat-icon">⏳</div>
+            <h3>Загрузка офферов...</h3>
+            <p>Поиск подходящих предложений для ваших каналов</p>
+        </div>
+
+        <!-- Пустое состояние -->
+        <div id="emptyState" class="empty-state" style="display: none;">
+            <div class="stat-icon">🔍</div>
+            <h3>Офферы не найдены</h3>
+            <p>Попробуйте изменить параметры фильтрации или вернитесь позже</p>
+            <button class="btn btn-primary" onclick="clearFilters()">
+                🔄 Сбросить фильтры
+            </button>
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/offers.js') }}"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            if (typeof AvailableOffersManager !== 'undefined') {
-                new AvailableOffersManager();
-            }
+    <!-- Tab: Мои отклики -->
+    <div class="tabs-content" id="my-responses">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📝 Мои отклики</h3>
+                <p class="card-subtitle">Ваши отклики на офферы и их статусы</p>
+            </div>
+            <div class="card-body">
+                <div class="empty-state">
+                    <div class="stat-icon">📝</div>
+                    <h3>Пока нет откликов</h3>
+                    <p>Когда вы откликнетесь на офферы, они будут отображаться здесь</p>
+                    <button class="btn btn-primary" onclick="switchTab('all-offers')">
+                        🎯 Просмотреть офферы
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Избранное -->
+    <div class="tabs-content" id="favorites">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">⭐ Избранные офферы</h3>
+                <p class="card-subtitle">Офферы, которые вы добавили в избранное</p>
+            </div>
+            <div class="card-body">
+                <div class="empty-state">
+                    <div class="stat-icon">⭐</div>
+                    <h3>Избранное пусто</h3>
+                    <p>Добавляйте интересные офферы в избранное для быстрого доступа</p>
+                    <button class="btn btn-primary" onclick="switchTab('all-offers')">
+                        🎯 Просмотреть офферы
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно детальной информации об оффере -->
+<div id="offerModal" class="modal-backdrop" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Детали оффера</h3>
+            <button class="modal-close" onclick="closeOfferModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="offerDetails">
+                <!-- Контент будет добавлен JavaScript -->
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeOfferModal()">
+                Закрыть
+            </button>
+            <button class="btn btn-primary" id="respondBtn" onclick="respondToOffer()">
+                📩 Откликнуться
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', filename='js/offers.js') }}"></script>
+
+<script>
+// Функция переключения табов
+function switchTab(tabName) {
+    // Удаляем активный класс со всех табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Скрываем все содержимое табов
+    document.querySelectorAll('.tabs-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Активируем нужный таб
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(tabName);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
+}
+
+// Обработчики кликов по табам
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 Страница доступных офферов инициализирована');
+
+    // Настраиваем переключение табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.getAttribute('data-tab');
+            switchTab(tabName);
         });
-    </script>
-</body>
-</html>
+    });
+
+    // Инициализация менеджера офферов
+    if (typeof AvailableOffersManager !== 'undefined') {
+        new AvailableOffersManager();
+    } else {
+        console.warn('AvailableOffersManager не найден, загружаем моковые данные');
+        loadMockOffers();
+    }
+});
+
+// Функция для кнопки "Назад"
+function goBack() {
+    window.history.back();
+}
+
+// Функции фильтрации
+function applyFilters() {
+    const category = document.getElementById('categoryFilter').value;
+    const budget = document.getElementById('budgetFilter').value;
+    const subscribers = document.getElementById('subscribersFilter').value;
+    
+    console.log('Применение фильтров:', { category, budget, subscribers });
+    
+    // Показать загрузку
+    showLoading();
+    
+    // Симуляция загрузки
+    setTimeout(() => {
+        hideLoading();
+        // Здесь должна быть логика фильтрации
+        loadMockOffers();
+    }, 1000);
+}
+
+function clearFilters() {
+    document.getElementById('categoryFilter').value = '';
+    document.getElementById('budgetFilter').value = '';
+    document.getElementById('subscribersFilter').value = '';
+    
+    console.log('Фильтры очищены');
+    loadMockOffers();
+}
+
+// Функции состояния
+function showLoading() {
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('offersContainer').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'none';
+}
+
+function hideLoading() {
+    document.getElementById('loadingSpinner').style.display = 'none';
+    document.getElementById('offersContainer').style.display = 'grid';
+}
+
+function showEmptyState() {
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('offersContainer').style.display = 'none';
+    document.getElementById('loadingSpinner').style.display = 'none';
+}
+
+// Загрузка моковых данных
+function loadMockOffers() {
+    const container = document.getElementById('offersContainer');
+    
+    // Моковые данные для демонстрации
+    const mockOffers = [
+        {
+            id: 1,
+            title: 'Продвижение IT-курсов',
+            budget: 50000,
+            category: 'tech',
+            description: 'Ищем каналы для продвижения онлайн-курсов программирования',
+            minSubscribers: 10000,
+            price: 2500
+        },
+        {
+            id: 2,
+            title: 'Реклама финансовых услуг',
+            budget: 75000,
+            category: 'finance',
+            description: 'Продвижение банковских продуктов и инвестиционных услуг',
+            minSubscribers: 25000,
+            price: 4000
+        },
+        {
+            id: 3,
+            title: 'Бизнес-тренинги',
+            budget: 30000,
+            category: 'business',
+            description: 'Реклама курсов по развитию бизнеса и предпринимательству',
+            minSubscribers: 15000,
+            price: 3000
+        }
+    ];
+    
+    container.innerHTML = mockOffers.map(offer => `
+        <div class="card animate-fade-in">
+            <div class="card-body">
+                <div class="offer-header">
+                    <h4 class="offer-title">${offer.title}</h4>
+                    <div class="offer-price">₽ ${offer.price.toLocaleString()}</div>
+                </div>
+                <p class="offer-description">${offer.description}</p>
+                <div class="offer-stats">
+                    <div class="offer-stat">
+                        <span class="stat-label">Бюджет:</span>
+                        <span class="stat-value">₽ ${offer.budget.toLocaleString()}</span>
+                    </div>
+                    <div class="offer-stat">
+                        <span class="stat-label">Мин. подписчики:</span>
+                        <span class="stat-value">${offer.minSubscribers.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div class="offer-actions">
+                    <button class="btn btn-outline" onclick="viewOfferDetails(${offer.id})">
+                        👁️ Подробнее
+                    </button>
+                    <button class="btn btn-primary" onclick="respondToOffer(${offer.id})">
+                        📩 Откликнуться
+                    </button>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Функции для работы с офферами
+function viewOfferDetails(offerId) {
+    console.log('Просмотр деталей оффера:', offerId);
+    // Открыть модальное окно с деталями
+    document.getElementById('offerModal').style.display = 'flex';
+}
+
+function respondToOffer(offerId) {
+    console.log('Отклик на оффер:', offerId);
+    if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.showAlert('Функция отклика на офферы будет доступна в следующих обновлениях');
+    } else {
+        alert('Функция отклика на офферы будет доступна в следующих обновлениях');
+    }
+}
+
+function closeOfferModal() {
+    document.getElementById('offerModal').style.display = 'none';
+}
+
+// Закрытие модального окна при клике на backdrop
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('modal-backdrop')) {
+        closeOfferModal();
+    }
+});
+</script>
+
+<style>
+/* Дополнительные стили для списка офферов */
+.offer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+}
+
+.offer-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 0;
+    flex: 1;
+}
+
+.offer-price {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--primary-color);
+    margin-left: 12px;
+}
+
+.offer-description {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+}
+
+.offer-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.offer-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    font-weight: 600;
+}
+
+.stat-value {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.offer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.payment-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 16px;
+    border-radius: var(--border-radius);
+    background: var(--bg-secondary);
+    transition: var(--transition);
+    margin-bottom: 12px;
+}
+
+.payment-item:hover {
+    background: #f1f5f9;
+    transform: translateX(4px);
+}
+
+.payment-info {
+    flex: 1;
+}
+
+.payment-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+
+.payment-date {
+    color: var(--text-secondary);
+    font-size: 12px;
+}
+
+.payment-amount {
+    font-weight: 700;
+    font-size: 16px;
+    margin-right: 12px;
+}
+
+.payment-amount.success {
+    color: var(--success-color);
+}
+
+.payment-amount.warning {
+    color: var(--warning-color);
+}
+
+.badge {
+    padding: 4px 8px;
+    border-radius: var(--border-radius-sm);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.badge-success {
+    background: rgba(34, 197, 94, 0.1);
+    color: #065f46;
+}
+
+.badge-warning {
+    background: rgba(251, 191, 36, 0.1);
+    color: #92400e;
+}
+
+.badge-info {
+    background: rgba(59, 130, 246, 0.1);
+    color: #1e40af;
+}
+
+@media (max-width: 768px) {
+    .offer-header {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .offer-price {
+        margin-left: 0;
+        align-self: flex-start;
+    }
+    
+    .offer-stats {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .offer-actions {
+        flex-direction: column;
+    }
+    
+    .payment-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+</style>
+{% endblock %}

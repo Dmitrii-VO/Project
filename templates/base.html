@@ -8,20 +8,24 @@
     <!-- Telegram WebApp Script -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
 
-    <!-- Стили -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
+    <!-- Современные стили -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-design-system.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/modern-components.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/back-button.css') }}">
 
     <!-- Дополнительные стили страницы -->
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Экран загрузки -->
+    <!-- Современный экран загрузки -->
     <div id="loading-screen">
         <div class="loading-content">
             <div class="loading-icon">📱</div>
-            <div>Загрузка приложения...</div>
+            <div class="loading-text">Загрузка приложения...</div>
+            <div class="loading-progress">
+                <div class="loading-progress-bar"></div>
+            </div>
         </div>
     </div>
 
@@ -34,6 +38,9 @@
         {% block content %}{% endblock %}
     </main>
 
+    <!-- Контейнер для toast уведомлений -->
+    <div class="toast-container" id="toast-container"></div>
+
     <!-- Базовые скрипты -->
     <script src="{{ url_for('static', filename='js/telegram-app.js') }}"></script>
     <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
@@ -44,12 +51,22 @@
     <!-- Инициализация -->
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            // Инициализация анимации загрузки
+            const loadingScreen = document.getElementById('loading-screen');
+            const appContainer = document.getElementById('app-container');
+            
             // Проверяем что TelegramApp загружен
             if (window.TelegramApp && typeof window.TelegramApp.init === 'function') {
                 window.TelegramApp.init();
             } else {
                 console.error('❌ TelegramApp не загружен или не имеет метода init');
             }
+            
+            // Показываем приложение после загрузки
+            setTimeout(() => {
+                loadingScreen.classList.add('hidden');
+                appContainer.classList.add('visible');
+            }, 1000);
         });
     </script>
 </body>

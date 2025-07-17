@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container">
     <!-- Hero Section -->
-    <div class="hero-section">
+    <div class="hero-section animate-fade-in">
         <div class="hero-content">
             <span class="hero-icon">🚀</span>
             <h1 class="hero-title">Telegram Mini App</h1>
@@ -13,36 +13,36 @@
         </div>
     </div>
 
-    <!-- Stats Grid -->
-    <div class="stats-grid">
-        <div class="stat-card">
+    <!-- Stats Grid 2x2 -->
+    <div class="stats-grid-2x2">
+        <div class="stat-card-compact animate-fade-in animate-delay-100">
             <div class="stat-icon">📺</div>
             <div class="stat-number" id="channels-count">
-                <span class="loading">Загрузка...</span>
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
             <div class="stat-label">Каналов</div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card-compact animate-fade-in animate-delay-200">
             <div class="stat-icon">📢</div>
             <div class="stat-number" id="offers-count">
-                <span class="loading">Загрузка...</span>
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
             <div class="stat-label">Офферов</div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card-compact animate-fade-in animate-delay-300">
             <div class="stat-icon">💰</div>
             <div class="stat-number" id="revenue-amount">
-                <span class="loading">Загрузка...</span>
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
             <div class="stat-label">Оборот</div>
         </div>
 
-        <div class="stat-card">
+        <div class="stat-card-compact animate-fade-in animate-delay-400">
             <div class="stat-icon">👥</div>
             <div class="stat-number" id="users-count">
-                <span class="loading">Загрузка...</span>
+                <span class="loading-skeleton">Загрузка...</span>
             </div>
             <div class="stat-label">Пользователей</div>
         </div>
@@ -50,7 +50,7 @@
 
     <!-- Navigation Grid -->
     <div class="navigation-grid">
-        <a href="/offers" class="nav-card offers">
+        <a href="/offers" class="nav-card offers animate-slide-in animate-delay-100">
             <div class="nav-icon">📢</div>
             <div class="nav-content">
                 <h3>Офферы</h3>
@@ -58,7 +58,7 @@
             </div>
         </a>
 
-        <a href="/channels" class="nav-card channels">
+        <a href="/channels" class="nav-card channels animate-slide-in animate-delay-200">
             <div class="nav-icon">📺</div>
             <div class="nav-content">
                 <h3>Каналы</h3>
@@ -66,7 +66,7 @@
             </div>
         </a>
 
-        <a href="/analytics" class="nav-card analytics">
+        <a href="/analytics" class="nav-card analytics animate-slide-in animate-delay-300">
             <div class="nav-icon">📊</div>
             <div class="nav-content">
                 <h3>Аналитика</h3>
@@ -74,7 +74,7 @@
             </div>
         </a>
 
-        <a href="/payments" class="nav-card payments">
+        <a href="/payments" class="nav-card payments animate-slide-in animate-delay-300">
             <div class="nav-icon">💳</div>
             <div class="nav-content">
                 <h3>Платежи</h3>

@@ -286,6 +286,214 @@ body {
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+/* КАРТОЧКА КАНАЛА В СТИЛЕ ПРОФИЛЯ */
+.channel-profile-card {
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 32px 24px;
+    text-align: center;
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}
+
+.channel-profile-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+.channel-profile-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+}
+
+.verification-badge {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: #4285f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 16px;
+    position: relative;
+    box-shadow: 0 4px 16px rgba(66, 133, 244, 0.3);
+}
+
+.verification-badge.verified {
+    background: #4285f4;
+}
+
+.verification-badge.pending {
+    background: #f59e0b;
+}
+
+.verification-badge.inactive {
+    background: #6b7280;
+}
+
+.verification-badge .icon {
+    font-size: 36px;
+    color: white;
+    font-weight: 700;
+}
+
+.channel-id {
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    letter-spacing: -0.02em;
+}
+
+.channel-verified-label {
+    color: var(--text-secondary);
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 24px;
+}
+
+.channel-stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.stat-block {
+    text-align: center;
+}
+
+.stat-block .stat-number {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    display: block;
+}
+
+.stat-block .stat-label {
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.channel-actions-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.profile-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-radius: var(--border-radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: var(--transition);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+}
+
+.profile-btn-primary {
+    background: var(--primary-gradient);
+    color: white;
+    border-color: transparent;
+}
+
+.profile-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    color: white;
+    text-decoration: none;
+}
+
+.profile-btn-secondary {
+    background: white;
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+.profile-btn-secondary:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+/* АДАПТИВНОСТЬ ДЛЯ КАРТОЧКИ ПРОФИЛЯ */
+@media (max-width: 768px) {
+    .channel-profile-card {
+        padding: 24px 16px;
+    }
+    
+    .verification-badge {
+        width: 64px;
+        height: 64px;
+    }
+    
+    .verification-badge .icon {
+        font-size: 28px;
+    }
+    
+    .channel-id {
+        font-size: 36px;
+    }
+    
+    .channel-stats-row {
+        gap: 16px;
+        margin-bottom: 20px;
+    }
+    
+    .stat-block .stat-number {
+        font-size: 24px;
+    }
+    
+    .channel-actions-row {
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+    
+    .profile-btn {
+        padding: 10px 14px;
+        font-size: 13px;
+    }
+}
+
+@media (max-width: 480px) {
+    .channel-profile-card {
+        padding: 20px 12px;
+    }
+    
+    .verification-badge {
+        width: 56px;
+        height: 56px;
+    }
+    
+    .verification-badge .icon {
+        font-size: 24px;
+    }
+    
+    .channel-id {
+        font-size: 28px;
+    }
+    
+    .stat-block .stat-number {
+        font-size: 20px;
+    }
+}
+
 /* КАРТОЧКИ В СТИЛЕ INDEX.HTML */
 .stats-grid {
     display: grid;

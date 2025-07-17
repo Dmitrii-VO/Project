@@ -1,19 +1,15 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мои каналы - Telegram Mini App</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/variables.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/components.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/channels.css') }}">
-</head>
-<body>
+{% extends "base.html" %}
+
+{% block title %}Мои каналы - Telegram Mini App{% endblock %}
+
+{% block extra_css %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/channels-compact.css') }}">
+{% endblock %}
+
+{% block content %}
 <div class="container">
-        <!-- Hero Section как в index.html -->
-        <div class="hero-section">
+        <!-- Hero Section -->
+        <div class="hero-section animate-fade-in">
             <button class="back-btn" onclick="goBack()">← Назад</button>
             <div class="hero-content">
                 <span class="hero-icon">📺</span>
@@ -22,53 +18,27 @@
             </div>
         </div>
 
-        <!-- Навигация по табам в стиле index.html -->
-        <div class="tabs-container" style="margin-bottom: 32px;">
-            <div class="tab-nav" style="display: none;">
-                <!-- Скрытые табы для совместимости с JS -->
-                <button class="tab-btn active" data-tab="channels">Мои каналы</button>
-                <button class="tab-btn" data-tab="add-channel">Добавить канал</button>
-                <button class="tab-btn" data-tab="analytics">Аналитика</button>
-            </div>
-        </div>
-
-        <div class="navigation-grid">
-            <div class="nav-card active" data-tab="channels" onclick="switchTab('channels')">
-                <div class="nav-icon">📺</div>
-                <div class="nav-content">
-                    <h3>Мои каналы</h3>
-                    <p>Список ваших подключенных каналов</p>
-                </div>
-            </div>
-            <div class="nav-card" data-tab="add-channel" onclick="switchTab('add-channel')">
-                <div class="nav-icon">➕</div>
-                <div class="nav-content">
-                    <h3>Добавить канал</h3>
-                    <p>Подключить новый Telegram канал</p>
-                </div>
-            </div>
-
-            <div class="nav-card" data-tab="analytics" onclick="switchTab('analytics')">
-                <div class="nav-icon">📊</div>
-                <div class="nav-content">
-                    <h3>Аналитика</h3>
-                    <p>Статистика и доходы</p>
-                </div>
-            </div>
+        <!-- Современные табы -->
+        <div class="tabs">
+            <nav class="tabs-nav">
+                <li><a href="#" class="active" data-tab="channels">Мои каналы</a></li>
+                <li><a href="#" data-tab="add-channel">Добавить канал</a></li>
+                <li><a href="#" data-tab="analytics">Аналитика</a></li>
+            </nav>
         </div>
 
         <!-- Tab: Мои каналы -->
-        <div class="tab-content active" id="channels">
-            <!-- Action Bar для совместимости с JS -->
-            <div class="action-bar" style="display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
-                <div class="search-container" style="position: relative; flex: 1; min-width: 280px; max-width: 400px;">
-                    <div class="search-icon" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 16px;">🔍</div>
-                    <input type="text" class="search-input" placeholder="Поиск по каналам..." id="channelSearch">
+        <div class="tabs-content active" id="channels">
+            <!-- Action Bar -->
+            <div class="form-group">
+                <div class="form-input" style="position: relative; max-width: 400px;">
+                    <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">🔍</span>
+                    <input type="text" class="form-input" placeholder="Поиск по каналам..." id="channelSearch" style="padding-left: 48px;">
                 </div>
             </div>
 
-            <!-- Список каналов в виде карточек как в index.html -->
-            <div class="stats-grid" id="channelsGrid">
+            <!-- Список каналов в виде карточек -->
+            <div id="channelsGrid">
                 <!-- Пустое состояние -->
                 <div class="empty-state" style="grid-column: 1 / -1; display: none;" id="emptyState">
                     <div class="stat-icon">📺</div>
@@ -82,24 +52,24 @@
         </div>
 
         <!-- Tab: Добавить канал -->
-        <div class="tab-content" id="add-channel">
-            <div class="form-section">
-                <div class="form-header">
-                    <h3>➕ Добавить новый канал</h3>
-                    <p>Подключите ваш Telegram канал к платформе</p>
+        <div class="tabs-content" id="add-channel">
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">➕ Добавить новый канал</h3>
+                    <p class="card-subtitle">Подключите ваш Telegram канал к платформе</p>
                 </div>
 
-                <form class="form-body" id="addChannelForm">
-                    <div class="form-group">
-                        <label class="form-label" for="channelUrl">
-                            Ссылка на канал <span class="required">*</span>
+                <form class="card-body" id="addChannelForm">
+                    <div class="form-field">
+                        <label class="form-label form-label-required" for="channelUrl">
+                            Ссылка на канал
                         </label>
-                        <div class="input-group">
-                            <span class="input-prefix">@</span>
+                        <div class="form-group">
+                            <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">@</span>
                             <input type="text" id="channelUrl" class="form-input"
-                                   placeholder="username_канала или t.me/username" required>
+                                   placeholder="username_канала или t.me/username" required style="padding-left: 40px;">
                         </div>
-                        <div class="form-hint">
+                        <div class="form-help">
                             Введите username канала без символа @
                         </div>
                     </div>
@@ -111,11 +81,11 @@
 
                     <!-- Дополнительные поля -->
                     <div id="additionalFields" style="display: none;">
-                        <div class="form-group">
-                            <label class="form-label" for="channelCategory">
-                                Категория канала <span class="required">*</span>
+                        <div class="form-field">
+                            <label class="form-label form-label-required" for="channelCategory">
+                                Категория канала
                             </label>
-                            <select id="channelCategory" class="form-input form-select" required>
+                            <select id="channelCategory" class="form-select" required>
                                 <option value="">Выберите категорию</option>
                                 <option value="technology">Технологии и IT</option>
                                 <option value="business">Бизнес и предпринимательство</option>
@@ -128,33 +98,33 @@
                             </select>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-field">
                             <label class="form-label" for="channelDescription">
                                 Описание канала
                             </label>
-                            <textarea id="channelDescription" class="form-input form-textarea"
+                            <textarea id="channelDescription" class="form-textarea"
                                       placeholder="Краткое описание тематики и аудитории канала"></textarea>
                         </div>
                     </div>
 
                     <!-- Настройки цен -->
                     <div id="pricingFields" style="display: none;">
-                        <div class="form-group">
-                            <label class="form-label" for="pricePerPost">
-                                Цена за размещение (₽) <span class="required">*</span>
+                        <div class="form-field">
+                            <label class="form-label form-label-required" for="pricePerPost">
+                                Цена за размещение (₽)
                             </label>
                             <input type="number" id="pricePerPost" class="form-input"
                                    placeholder="Укажите стоимость размещения поста" min="100" required>
-                            <div class="form-hint">
+                            <div class="form-help">
                                 Минимальная цена: 100₽
                             </div>
                         </div>
 
-                        <div class="form-group">
+                        <div class="form-field">
                             <label class="form-label" for="paymentTerms">
                                 Условия оплаты
                             </label>
-                            <select id="paymentTerms" class="form-input form-select">
+                            <select id="paymentTerms" class="form-select">
                                 <option value="prepayment">Предоплата 100%</option>
                                 <option value="after_posting">После размещения</option>
                                 <option value="50_50">50% предоплата + 50% после</option>
@@ -162,7 +132,7 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
+                    <div class="form-field">
                         <button type="submit" class="btn btn-primary" id="submitBtn" disabled>
                             💾 Добавить канал
                         </button>
@@ -172,46 +142,53 @@
         </div>
 
         <!-- Tab: Аналитика -->
-        <div class="tab-content" id="analytics">
-            <div class="empty-state">
-                <div class="stat-icon">📊</div>
-                <h3>Аналитика каналов</h3>
-                <p>Здесь будет отображаться детальная аналитика по вашим каналам.</p>
-                <div style="background: var(--bg-secondary); padding: 16px; border-radius: var(--border-radius-sm); margin-top: 16px;">
-                    <strong>В разработке</strong><br>
-                    Скоро здесь появится подробная статистика по доходам, охватам и эффективности ваших каналов.
+        <div class="tabs-content" id="analytics">
+            <div class="card">
+                <div class="card-body" style="text-align: center;">
+                    <div class="stat-icon">📊</div>
+                    <h3>Аналитика каналов</h3>
+                    <p>Здесь будет отображаться детальная аналитика по вашим каналам.</p>
+                    <div class="notification notification-info">
+                        <div class="notification-content">
+                            <div class="notification-title">В разработке</div>
+                            <div class="notification-message">
+                                Скоро здесь появится подробная статистика по доходам, охватам и эффективности ваших каналов.
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Модальное окно подтверждения удаления -->
-    <div id="deleteChannelModal" class="modal" style="display: none;">
-        <div class="modal-overlay" onclick="closeDeleteModal()"></div>
-        <div class="modal-content">
+    <div id="deleteChannelModal" class="modal-backdrop" style="display: none;">
+        <div class="modal">
             <div class="modal-header">
-                <h3>🗑️ Удалить канал</h3>
+                <h3 class="modal-title">🗑️ Удалить канал</h3>
                 <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="confirmation-content">
-                    <div class="channel-info" id="deleteChannelInfo">
-                        <!-- Информация о канале для удаления -->
+                <div class="channel-info" id="deleteChannelInfo">
+                    <!-- Информация о канале для удаления -->
+                </div>
+                <div class="notification notification-warning">
+                    <div class="notification-content">
+                        <div class="notification-title">⚠️ Внимание!</div>
+                        <div class="notification-message">
+                            Это действие нельзя отменить. Канал будет удален из системы.
+                        </div>
                     </div>
-                    <div style="background: #fef3cd; border: 1px solid #f59e0b; border-radius: var(--border-radius-sm); padding: 16px; margin: 16px 0; color: #92400e;">
-                        <strong>⚠️ Внимание!</strong><br>
-                        Это действие нельзя отменить. Канал будет удален из системы.
-                    </div>
-                    <div style="text-align: center; font-weight: 600; color: var(--text-primary); margin: 16px 0;">
-                        Вы действительно хотите удалить этот канал?
-                    </div>
+                </div>
+                <div style="text-align: center; font-weight: 600; color: var(--text-primary); margin: 16px 0;">
+                    Вы действительно хотите удалить этот канал?
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeDeleteModal()">
                     Отмена
                 </button>
-                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmChannelDeletion()">
+                <button class="btn btn-error" id="confirmDeleteBtn" onclick="confirmChannelDeletion()">
                     🗑️ Удалить канал
                 </button>
             </div>
@@ -219,11 +196,10 @@
     </div>
 
     <!-- Модальное окно верификации -->
-    <div id="verificationModal" class="modal" style="display: none;">
-        <div class="modal-overlay" onclick="closeModal()"></div>
-        <div class="modal-content">
+    <div id="verificationModal" class="modal-backdrop" style="display: none;">
+        <div class="modal">
             <div class="modal-header">
-                <h3>🔐 Подтвердите владение каналом</h3>
+                <h3 class="modal-title">🔐 Подтвердите владение каналом</h3>
                 <button class="modal-close" onclick="closeModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -242,25 +218,50 @@
         </div>
     </div>
 
+{% endblock %}
 
+{% block extra_scripts %}
 <!-- Подключение JS модулей -->
- <script src="static/js/utils.js"></script>
-<script src="static/js/channels-analyzer.js"></script>
-<script src="static/js/channels-core.js"></script>
-<script src="static/js/channels-ui.js"></script>
-<script src="static/js/channels-modals.js"></script>
-<script src="static/js/channels-forms.js"></script>
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/channels-analyzer.js') }}"></script>
+<script src="{{ url_for('static', filename='js/channels-core.js') }}"></script>
+<script src="{{ url_for('static', filename='js/channels-ui.js') }}"></script>
+<script src="{{ url_for('static', filename='js/channels-modals.js') }}"></script>
+<script src="{{ url_for('static', filename='js/channels-forms.js') }}"></script>
 
 <script>
-// Инициализация Telegram WebApp
-if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
+// Функция переключения табов
+function switchTab(tabName) {
+    // Удаляем активный класс со всех табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Скрываем все содержимое табов
+    document.querySelectorAll('.tabs-content').forEach(content => {
+        content.classList.remove('active');
+    });
+    
+    // Активируем нужный таб
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeContent = document.getElementById(tabName);
+    
+    if (activeTab) activeTab.classList.add('active');
+    if (activeContent) activeContent.classList.add('active');
 }
 
-// Инициализация страницы
+// Обработчики кликов по табам
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📺 Страница каналов инициализирована');
+
+    // Настраиваем переключение табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.getAttribute('data-tab');
+            switchTab(tabName);
+        });
+    });
 
     // Загружаем каналы пользователя
     if (typeof loadUserChannels === 'function') {
@@ -269,5 +270,10 @@ document.addEventListener('DOMContentLoaded', function() {
         console.error('❌ Функция loadUserChannels не найдена');
     }
 });
+
+// Функция для кнопки "Назад"
+function goBack() {
+    window.history.back();
+}
 </script>
-</body>
+{% endblock %}

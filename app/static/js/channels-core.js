@@ -220,14 +220,14 @@ function debugChannelData() {
 function createChannelCard(channel) {
 
     const card = document.createElement('div');
-    card.className = 'stat-card';
+    card.className = 'channel-card';
     card.setAttribute('data-user-channel', 'true');
     card.setAttribute('data-channel-id', channel.id);
 
     // Определяем статус канала
     const status = (channel.is_verified || channel.status === 'verified')
-        ? { class: 'status-active', text: 'Верифицирован', emoji: '✅' }
-        : { class: 'status-pending', text: 'На модерации', emoji: '⏳' };
+        ? { class: 'verified', text: '✓ Верифицирован' }
+        : { class: 'pending', text: '⏳ На модерации' };
 
     // ИСПРАВЛЕНО: Безопасное получение данных
     const title = channel.title || channel.channel_name || `Канал @${channel.username || channel.channel_username}`;
@@ -240,70 +240,97 @@ function createChannelCard(channel) {
         0
     );
 
+    // Получаем количество просмотров (если есть)
+    const viewsCount = formatNumber(channel.views_count || Math.floor(subscribersCount * 0.05) || 0);
+
+    // Вычисляем ER (Engagement Rate)
+    const engagementRate = subscribersCount > 0 ? 
+        ((channel.avg_views || Math.floor(subscribersCount * 0.05)) / subscribersCount * 100).toFixed(1) : 
+        '0.0';
+
     // ИСПРАВЛЕНО: Реальная статистика офферов и постов
     const offersCount = formatNumber(channel.offers_count || 0);
     const postsCount = formatNumber(channel.posts_count || 0);
 
-    const description = channel.description || channel.channel_description || 'Описание не указано';
-    const createdAt = formatDate(channel.created_at);
+    // Получаем категорию канала
+    const category = getCategoryName(channel.category || 'general');
 
-    // HTML карточки с реальной статистикой
+    // Рассчитываем доход за месяц (условно)
+    const monthlyEarnings = channel.monthly_earnings || (channel.price_per_post || 0) * (offersCount || 0) * 2;
+
+    // HTML карточки с горизонтальным layout
     card.innerHTML = `
-        <!-- Заголовок канала -->
-        <div class="channel-header">
-            <div class="channel-info">
-                <div class="channel-title">${title}</div>
-            </div>
-            <div class="channel-status ${status.class}">
-                ${status.text}
-            </div>
-        </div>
-
-        <!-- ИСПРАВЛЕНО: Статистика с реальными данными -->
-        <div class="channel-stats">
-            <div class="stat-item">
-                <span class="stat-number">${subscribersCount}</span>
-                <div class="stat-label">Подписчиков</div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-number">${postsCount}</span>
-                <div class="stat-label">Постов</div>
-            </div>
-            <div class="stat-item">
-                <span class="stat-number">${offersCount}</span>
-                <div class="stat-label">Офферов</div>
+        <!-- Статус канала -->
+        <div class="channel-status-bar">
+            <div class="channel-status ${status.class}">${status.text}</div>
+            <div class="quick-actions">
+                <button class="quick-action" title="Настройки" onclick="showChannelSettings(${channel.id})">⚙️</button>
+                <button class="quick-action" title="Статистика" onclick="showChannelStats(${channel.id})">📊</button>
+                <button class="quick-action" title="Удалить" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">🗑️</button>
             </div>
         </div>
 
-        <!-- Блок цены (если есть) -->
-        ${channel.price_per_post ? `
-        <div class="channel-pricing">
-            <div class="pricing-title">Цена за пост</div>
-            <div class="pricing-value">${formatPrice(channel.price_per_post)} ₽</div>
-        </div>
-        ` : ''}
+        <!-- Основная информация -->
+        <div class="channel-main-info">
+            <!-- Заголовок с аватаром -->
+            <div class="channel-header">
+                <div class="channel-avatar">📺</div>
+                <div class="channel-info">
+                    <h3 class="channel-title">${title}</h3>
+                    <div class="channel-username">@${username}</div>
+                </div>
+            </div>
 
-        <!-- Кнопки действий -->
-        <div class="channel-actions">
-            ${(channel.is_verified || channel.status === 'verified') ? `
-                <button class="btn btn-secondary" onclick="showChannelStats(${channel.id})">
-                    📊 Статистика
-                </button>
-                <button class="btn btn-secondary" onclick="showChannelSettings(${channel.id})">
-                    ⚙️ Настройки
-                </button>
-            ` : `
-                <button class="btn btn-primary" onclick="startChannelVerification(${channel.id}, '${title?.replace(/'/g, "\\'")}', '${username || ""}')">
-                    🔐 Верифицировать
-                </button>
-            `}
-            <button class="btn btn-danger" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">
-                🗑️ Удалить
-            </button>
+            <!-- Категория -->
+            <div class="channel-category">${category}</div>
+
+            <!-- Ключевые метрики -->
+            <div class="channel-metrics">
+                <div class="metric-item">
+                    <div class="metric-value">${subscribersCount}</div>
+                    <div class="metric-label">Подписчики</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">${viewsCount}</div>
+                    <div class="metric-label">Просмотры</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-value">${engagementRate}%</div>
+                    <div class="metric-label">ER</div>
+                </div>
+            </div>
+
+            <!-- Дополнительная статистика -->
+            <div class="channel-stats">
+                <div class="stat-item">
+                    <div class="stat-value">${offersCount}</div>
+                    <div class="stat-label">Офферы</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${postsCount}</div>
+                    <div class="stat-label">Размещения</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Доходы и действия -->
+        <div class="channel-footer">
+            <div class="channel-earnings">
+                <div class="earnings-value">${formatPrice(monthlyEarnings)}₽</div>
+                <div class="earnings-label">Доход/месяц</div>
+            </div>
+            <div class="channel-actions">
+                ${(channel.is_verified || channel.status === 'verified') ? `
+                    <button class="btn btn-primary" onclick="showChannelSettings(${channel.id})">Редактировать</button>
+                    <button class="btn btn-secondary" onclick="showChannelStats(${channel.id})">Аналитика</button>
+                ` : `
+                    <button class="btn btn-primary" onclick="startChannelVerification(${channel.id}, '${title?.replace(/'/g, "\\'")}', '${username || ""}')">Верифицировать</button>
+                `}
+            </div>
         </div>
     `;
 
-    console.log('✅ Карточка канала создана успешно');
+    console.log('✅ Практичная карточка канала создана успешно');
     return card;
 }
 // ДОПОЛНИТЕЛЬНО: Функция обновления статистики в реальном времени
