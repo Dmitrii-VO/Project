@@ -1,25 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python:*)",
-      "Bash(grep:*)",
-      "Bash(pip install:*)",
-      "Bash(pip3 install:*)",
-      "Bash(apt-get:*)",
-      "Bash(apt-get install:*)",
-      "Bash(sudo apt-get:*)",
-      "Bash(sudo apt-get install:*)",
-      "Bash(git push:*)",
-      "Bash(git remote set-url:*)",
-      "Bash(ls:*)",
-      "Bash(rm:*)",
-      "Bash(find:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(sqlite3:*)",
-      "Bash(curl:*)",
-      "Bash(pkill:*)",
-      "Bash(true)"
+      "Bash(sqlite3:*)"
     ],
     "deny": []
   },

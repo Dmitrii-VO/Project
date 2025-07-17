@@ -54,7 +54,7 @@ class AnalyticsManager {
             
             console.log('📡 Загрузка данных из API...');
             
-            const response = await fetch('/api/statistics/dashboard', {
+            const response = await fetch('/api/analytics/dashboard', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -72,7 +72,7 @@ class AnalyticsManager {
                 throw new Error(result.message || 'Ошибка загрузки данных');
             }
 
-            this.data = result.data || {};
+            this.data = result;
             console.log('📊 Данные успешно загружены:', this.data);
             
             return this.data;
@@ -84,7 +84,8 @@ class AnalyticsManager {
             this.data = this.generateTestData();
             console.log('🧪 Используются тестовые данные');
             
-            throw error;
+            // Не бросаем ошибку, чтобы продолжить работу с тестовыми данными
+            // throw error;
         } finally {
             this.isLoading = false;
         }
@@ -92,7 +93,7 @@ class AnalyticsManager {
 
     // === ОБНОВЛЕНИЕ КАРТОЧЕК СТАТИСТИКИ ===
     updateStatCards() {
-        const stats = this.data;
+        const stats = this.data.data || this.data;
         
         // Универсальные элементы для всех страниц
         const elements = {

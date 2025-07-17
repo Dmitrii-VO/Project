@@ -38,7 +38,7 @@ class PlacementCompletionService:
                    u_adv.telegram_id as advertiser_telegram_id,
                    u_owner.telegram_id as channel_owner_telegram_id
             FROM offer_placements p
-            JOIN offer_responses r ON p.response_id = r.id
+            JOIN offer_responses r ON p.proposal_id = r.id
             JOIN offers o ON r.offer_id = o.id
             JOIN users u_adv ON o.created_by = u_adv.id
             JOIN users u_owner ON r.user_id = u_owner.id
@@ -419,7 +419,7 @@ class PlacementCompletionService:
                     FROM offer_responses r 
                     WHERE r.id = ?
                 )
-            """, (payout_details['net_payout'], placement['response_id']))
+            """, (payout_details['net_payout'], placement['proposal_id']))
             
             logger.info(f"✅ Размещение {placement['id']} помечено как завершенное")
             

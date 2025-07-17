@@ -14,6 +14,7 @@ from app.config.telegram_config import AppConfig
 from app.api.offers import offers_bp
 from app.routers.main_router import main_bp
 from app.api.channels import channels_bp
+from app.api.analytics import analytics_bp
 import requests
 from flask import Flask, jsonify, request, render_template
 from app.api.channel_analyzer import analyzer_bp
@@ -85,6 +86,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(offers_bp, url_prefix='/api/offers')
     app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
+    app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
     app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
     app.register_blueprint(offers_management_bp,
                            url_prefix='/api/offers_management')
@@ -859,6 +861,15 @@ def main():
     except Exception as e:
         logger.error(f"❌ Ошибка установки webhook: {e}")
 
+    # === Запуск планировщика мониторинга ===
+    try:
+        if not AppConfig.DEBUG:  # Только в продакшене
+            from app.tasks.monitoring_scheduler import start_monitoring
+            start_monitoring()
+            logger.info("✅ Планировщик мониторинга запущен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска планировщика: {e}")
+
     try:
         app.run(
             host=host,
@@ -869,6 +880,15 @@ def main():
         )
     except KeyboardInterrupt:
         logger.info("🛑 Приложение остановлено пользователем")
+        
+        # Останавливаем планировщик
+        try:
+            from app.tasks.monitoring_scheduler import stop_monitoring
+            stop_monitoring()
+            logger.info("🛑 Планировщик мониторинга остановлен")
+        except:
+            pass
+            
     except Exception as e:
         logger.error(f"❌ Критическая ошибка: {e}")
         sys.exit(1)
