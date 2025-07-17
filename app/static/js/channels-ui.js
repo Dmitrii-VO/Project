@@ -291,41 +291,14 @@ function updateChannelsCounter(count) {
 function showNotification(type, message) {
     // Создаем элемент уведомления
     const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.style.cssText = `
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background: ${type === 'success' ? '#10b981' : '#ef4444'};
-        color: white;
-        padding: 12px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        z-index: 1001;
-        font-weight: 500;
-        max-width: 300px;
-        word-wrap: break-word;
-        opacity: 0;
-        transform: translateX(100%);
-        transition: all 0.3s ease;
-    `;
+    notification.className = `notification-popup ${type}`;
     notification.textContent = message;
 
     document.body.appendChild(notification);
 
-    // Анимация появления
-    setTimeout(() => {
-        notification.style.opacity = '1';
-        notification.style.transform = 'translateX(0)';
-    }, 100);
-
     // Автоматическое скрытие через 5 секунд
     setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translateX(100%)';
-        setTimeout(() => {
-            notification.remove();
-        }, 300);
+        notification.remove();
     }, 5000);
 }
 function showSuccessNotification(message) {

@@ -58,145 +58,7 @@ class NotificationSystem {
      * Добавляет CSS стили для уведомлений
      */
     addNotificationStyles() {
-        const style = document.createElement('style');
-        style.textContent = `
-            .notification-container {
-                position: relative;
-                display: inline-block;
-                margin-left: 20px;
-            }
-
-            .notification-bell {
-                position: relative;
-                cursor: pointer;
-                padding: 8px;
-                border-radius: 50%;
-                transition: background-color 0.3s;
-            }
-
-            .notification-bell:hover {
-                background-color: rgba(0, 0, 0, 0.1);
-            }
-
-            .bell-icon {
-                font-size: 20px;
-                display: inline-block;
-            }
-
-            .notification-badge {
-                position: absolute;
-                top: 0;
-                right: 0;
-                background-color: #ff4444;
-                color: white;
-                border-radius: 50%;
-                width: 20px;
-                height: 20px;
-                font-size: 12px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: bold;
-                min-width: 20px;
-                padding: 0 4px;
-                box-sizing: border-box;
-            }
-
-            .notification-dropdown {
-                position: absolute;
-                top: 100%;
-                right: 0;
-                background: white;
-                border: 1px solid #ddd;
-                border-radius: 8px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                width: 320px;
-                max-height: 400px;
-                overflow-y: auto;
-                z-index: 1000;
-                margin-top: 8px;
-            }
-
-            .notification-header {
-                padding: 15px 20px;
-                border-bottom: 1px solid #eee;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-
-            .notification-header h4 {
-                margin: 0;
-                font-size: 16px;
-                color: #333;
-            }
-
-            .mark-all-read {
-                background: none;
-                border: none;
-                color: #007bff;
-                cursor: pointer;
-                font-size: 12px;
-                text-decoration: underline;
-            }
-
-            .notification-list {
-                max-height: 300px;
-                overflow-y: auto;
-            }
-
-            .notification-item {
-                padding: 15px 20px;
-                border-bottom: 1px solid #f0f0f0;
-                cursor: pointer;
-                transition: background-color 0.2s;
-            }
-
-            .notification-item:hover {
-                background-color: #f8f9fa;
-            }
-
-            .notification-item.unread {
-                background-color: #e3f2fd;
-            }
-
-            .notification-item.unread::before {
-                content: '';
-                position: absolute;
-                left: 8px;
-                top: 50%;
-                transform: translateY(-50%);
-                width: 8px;
-                height: 8px;
-                background-color: #007bff;
-                border-radius: 50%;
-            }
-
-            .notification-text {
-                font-size: 14px;
-                color: #333;
-                margin-bottom: 5px;
-            }
-
-            .notification-time {
-                font-size: 12px;
-                color: #666;
-            }
-
-            .no-notifications {
-                padding: 20px;
-                text-align: center;
-                color: #666;
-                font-size: 14px;
-            }
-
-            .notification-highlight {
-                background-color: #fff3cd;
-                border-left: 4px solid #ffc107;
-                padding-left: 16px;
-            }
-        `;
-        document.head.appendChild(style);
+        // Стили перенесены в /css/components.css
     }
 
     /**
@@ -443,20 +305,8 @@ class NotificationSystem {
      */
     showToast(message) {
         const toast = document.createElement('div');
-        toast.className = 'toast-notification';
+        toast.className = 'toast-notification success';
         toast.textContent = message;
-        toast.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #28a745;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 6px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-            z-index: 10000;
-            animation: slideIn 0.3s ease-out;
-        `;
 
         document.body.appendChild(toast);
         
@@ -478,21 +328,7 @@ class NotificationSystem {
     }
 }
 
-// Добавляем CSS анимацию
-const animationStyle = document.createElement('style');
-animationStyle.textContent = `
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.1); }
-        100% { transform: scale(1); }
-    }
-    
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-`;
-document.head.appendChild(animationStyle);
+// CSS анимации перенесены в /css/components.css
 
 // Инициализируем систему уведомлений когда DOM готов
 document.addEventListener('DOMContentLoaded', () => {

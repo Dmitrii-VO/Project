@@ -280,11 +280,7 @@ async function startVerification() {
         if (verificationCode) {
             // Создаем модальное окно с инструкциями (такое же как при добавлении)
             const modal = document.createElement('div');
-            modal.style.cssText = `
-                position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                background: rgba(0,0,0,0.8); z-index: 10000;
-                display: flex; align-items: center; justify-content: center;
-            `;
+            modal.className = 'loading-overlay';
 
             modal.innerHTML = `
                 <div style="
@@ -598,20 +594,8 @@ function showVerificationError(data) {
         }
 function createModal() {
             const modal = document.createElement('div');
-            modal.className = 'modal-overlay';
-            modal.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.8);
-                z-index: 10000;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 20px;
-            `;
+            modal.className = 'loading-overlay';
+            modal.style.padding = '20px';
             return modal;
         }
 
@@ -641,17 +625,7 @@ function copyToClipboard(text) {
             navigator.clipboard.writeText(text).then(() => {
                 // Показываем уведомление
                 const notification = document.createElement('div');
-                notification.style.cssText = `
-                    position: fixed;
-                    top: 20px;
-                    right: 20px;
-                    background: #28a745;
-                    color: white;
-                    padding: 12px 20px;
-                    border-radius: 5px;
-                    z-index: 10001;
-                    font-weight: bold;
-                `;
+                notification.className = 'toast-notification success';
                 notification.textContent = 'Код скопирован!';
                 document.body.appendChild(notification);
 

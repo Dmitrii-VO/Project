@@ -348,7 +348,7 @@ class AnalyticsManager {
     showErrorState(message) {
         document.querySelectorAll('.loading').forEach(element => {
             element.textContent = 'Ошибка';
-            element.style.color = '#EF4444';
+            element.classList.add('error-color');
         });
         
         console.error('❌ Ошибка аналитики:', message);

@@ -431,15 +431,7 @@ class ChannelAnalyzer {
     }
 }
 
-// 🔧 CSS для анимации загрузки
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-`;
-document.head.appendChild(style);
+// 🔧 CSS для анимации загрузки уже добавлен в components.css
 
 // ✅ ГЛАВНОЕ ИСПРАВЛЕНИЕ: Делаем объект глобально доступным
 window.channelAnalyzer = new ChannelAnalyzer();

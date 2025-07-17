@@ -1228,7 +1228,7 @@ const ResponseManager = {
         const modal = document.createElement('div');
         modal.id = 'rejectModal';
         modal.className = 'modal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+        modal.className = 'modal-backdrop';
         modal.innerHTML = modalContent;
         
         document.body.appendChild(modal);
@@ -1897,7 +1897,7 @@ function formatSubs(count) {
 function showLoadingOverlay(text) {
     const div = document.createElement('div');
     div.id = 'loading';
-    div.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:10001;display:flex;align-items:center;justify-content:center;color:white;';
+    div.className = 'loading-overlay';
     div.innerHTML = `<div>${text}<div style="margin-top:10px;border:3px solid #fff;border-top:3px solid transparent;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite;"></div></div>`;
     document.body.appendChild(div);
 }
