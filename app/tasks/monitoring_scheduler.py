@@ -65,6 +65,9 @@ class MonitoringScheduler:
         # НОВОЕ: Мониторинг удаления постов каждые 2 часа
         schedule.every(2).hours.do(self._run_deletion_monitoring)
         
+        # НОВОЕ: Завершение размещений каждый час
+        schedule.every().hour.do(self._run_placement_completion)
+        
         # Планирование выплат каждый день в 9:00
         schedule.every().day.at("09:00").do(self._run_payment_planning)
         
@@ -232,6 +235,30 @@ class MonitoringScheduler:
         
         if total_count > 0:
             logger.info(f"📈 eREIT статистика: {success_count}/{total_count} размещений обработано")
+        
+        return results
+    
+    def _run_placement_completion(self):
+        """Запускает завершение размещений"""
+        try:
+            logger.info("🏁 Запуск завершения размещений...")
+            
+            asyncio.run(self._async_placement_completion())
+            
+        except Exception as e:
+            logger.error(f"❌ Ошибка завершения размещений: {e}")
+    
+    async def _async_placement_completion(self):
+        """Асинхронное завершение размещений"""
+        from app.services.placement_completion import complete_placements
+        
+        results = await complete_placements()
+        
+        completed_count = len([r for r in results if r['status'] == 'completed_successfully'])
+        total_count = len(results)
+        
+        if total_count > 0:
+            logger.info(f"🏁 Завершение размещений: {completed_count}/{total_count} успешно")
         
         return results
     
