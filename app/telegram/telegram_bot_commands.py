@@ -540,20 +540,25 @@ class TelegramBotExtension:
             # Ищем активные размещения пользователя со статусом pending_placement
             placements = execute_db_query("""
                 SELECT p.*, 
+                       r.offer_id,
                        o.title as offer_title,
                        o.description as offer_description,
-                       o.price as offer_price,
+                       COALESCE(o.budget_total, o.price) as offer_price,
                        u.telegram_id as advertiser_telegram_id,
                        u.first_name as advertiser_first_name,
                        u.last_name as advertiser_last_name,
-                       r.channel_username
+                       c.username as channel_username,
+                       c.title as channel_title,
+                       r.id as response_id
                 FROM offer_placements p
                 JOIN offer_responses r ON p.response_id = r.id
+                JOIN channels c ON r.channel_id = c.id
                 JOIN users ch_owner ON r.user_id = ch_owner.id
                 JOIN offers o ON r.offer_id = o.id
                 JOIN users u ON o.created_by = u.id
                 WHERE ch_owner.telegram_id = ? 
                 AND p.status = 'pending_placement'
+                AND r.status = 'accepted'
                 ORDER BY p.created_at DESC
                 LIMIT 1
             """, (telegram_id,), fetch_one=True)
@@ -590,7 +595,7 @@ class TelegramBotExtension:
 📢 <b>Канал:</b> @{placements.get('channel_username', 'неизвестно')}
 📋 <b>Оффер:</b> {placements['offer_title']}
 💰 <b>Сумма:</b> {placements['offer_price']} руб.
-🔗 <b>eREIT токен:</b> {placements['ereit_token']}
+🆔 <b>ID размещения:</b> {placements['id']}
 
 ✅ Владелец канала подтвердил размещение рекламного поста.
 📊 Отслеживание эффективности начато."""
@@ -609,7 +614,7 @@ class TelegramBotExtension:
 
 📢 <b>Оффер:</b> {placements['offer_title']}
 💰 <b>Сумма:</b> {placements['offer_price']} руб.
-🔗 <b>eREIT токен:</b> {placements['ereit_token']}
+🆔 <b>ID размещения:</b> {placements['id']}
 
 🎉 Рекламодатель уведомлен о размещении.
 📊 Отслеживание результатов активировано.
@@ -672,21 +677,25 @@ https://t.me/channel_name/message_id
             # Ищем активные размещения пользователя со статусом pending_placement
             placements = execute_db_query("""
                 SELECT p.*, 
+                       r.offer_id,
                        o.title as offer_title,
                        o.description as offer_description,
-                       o.price as offer_price,
+                       COALESCE(o.budget_total, o.price) as offer_price,
                        u.telegram_id as advertiser_telegram_id,
                        u.first_name as advertiser_first_name,
                        u.last_name as advertiser_last_name,
-                       r.channel_username,
-                       r.channel_title
+                       c.username as channel_username,
+                       c.title as channel_title,
+                       r.id as response_id
                 FROM offer_placements p
                 JOIN offer_responses r ON p.response_id = r.id
+                JOIN channels c ON r.channel_id = c.id
                 JOIN users ch_owner ON r.user_id = ch_owner.id
                 JOIN offers o ON r.offer_id = o.id
                 JOIN users u ON o.created_by = u.id
                 WHERE ch_owner.telegram_id = ? 
                 AND p.status = 'pending_placement'
+                AND r.status = 'accepted'
                 ORDER BY p.created_at DESC
                 LIMIT 1
             """, (telegram_id,), fetch_one=True)
@@ -735,7 +744,7 @@ https://t.me/channel_name/message_id
 
 📋 <b>Оффер:</b> {placements['offer_title']}
 💰 <b>Сумма:</b> {placements['offer_price']} руб.
-🔗 <b>eREIT токен:</b> {placements['ereit_token']}
+🆔 <b>ID размещения:</b> {placements['id']}
 
 📊 <b>Отслеживание начато</b>
 Статистика будет доступна через час"""
@@ -756,7 +765,7 @@ https://t.me/channel_name/message_id
 🔗 <b>Ссылка:</b> {post_url}
 📋 <b>Оффер:</b> {placements['offer_title']}
 💰 <b>Сумма:</b> {placements['offer_price']} руб.
-🔗 <b>eREIT токен:</b> {placements['ereit_token']}
+🆔 <b>ID размещения:</b> {placements['id']}
 
 🎉 Рекламодатель уведомлен о размещении.
 📊 Отслеживание результатов активировано.

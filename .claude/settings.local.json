@@ -1,7 +1,7 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep:*)"
+      "Bash(python test_post_published_command.py:*)"
     ],
     "deny": []
   },
