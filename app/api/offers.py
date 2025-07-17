@@ -241,6 +241,65 @@ def create_offer():
             WHERE o.id = ?
         ''', (offer_id,), fetch_one=True)
 
+        # Отправляем уведомления владельцам подходящих каналов
+        try:
+            from app.telegram.telegram_notifications import TelegramNotificationService
+            
+            # Найдем подходящие каналы для этого оффера
+            min_subscribers = int(data.get('min_subscribers', 0))
+            max_subscribers = int(data.get('max_subscribers', 0)) or 999999999
+            category = data.get('category', 'general')
+            
+            # Запрос для поиска подходящих каналов
+            suitable_channels = execute_db_query('''
+                SELECT DISTINCT c.id, c.title, c.username, c.subscriber_count, u.telegram_id as owner_telegram_id
+                FROM channels c
+                JOIN users u ON c.owner_id = u.id
+                WHERE c.is_verified = 1 
+                AND c.status = 'active'
+                AND c.subscriber_count >= ? 
+                AND c.subscriber_count <= ?
+                AND c.owner_id != ?
+                ORDER BY c.subscriber_count DESC
+                LIMIT 50
+            ''', (min_subscribers, max_subscribers, user_db_id))
+            
+            if suitable_channels:
+                logger.info(f"Найдено {len(suitable_channels)} подходящих каналов для оффера {offer_id}")
+                
+                # Отправляем уведомления владельцам каналов
+                for channel in suitable_channels:
+                    try:
+                        notification_message = f"""
+🎯 Новый оффер для вашего канала!
+
+📢 Канал: {channel['title']} (@{channel['username'] or 'unknown'})
+💰 Бюджет: {data.get('budget_total', data['price'])} ₽
+📊 Подписчики: {channel['subscriber_count']}
+
+📝 Название: {data['title']}
+📋 Описание: {data['description'][:200]}...
+
+💡 Откройте приложение для подробностей и отклика на предложение!
+"""
+                        
+                        TelegramNotificationService.send_telegram_notification(
+                            user_id=channel['owner_telegram_id'],
+                            message=notification_message,
+                            notification_type='new_offer'
+                        )
+                        
+                        logger.info(f"✅ Уведомление отправлено владельцу канала {channel['title']} (telegram_id: {channel['owner_telegram_id']})")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Не удалось отправить уведомление владельцу канала {channel['title']}: {e}")
+                        
+            else:
+                logger.info(f"Не найдено подходящих каналов для оффера {offer_id}")
+                
+        except Exception as e:
+            logger.error(f"❌ Ошибка отправки уведомлений об оффере {offer_id}: {e}")
+
         return jsonify({
             'success': True,
             'offer_id': offer_id,

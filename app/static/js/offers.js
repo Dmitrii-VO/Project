@@ -193,26 +193,44 @@ const ApiClient = {
 
 // ===== ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК =====
 function switchTab(tabName) {
-
+    console.log(`🔄 Переключение на вкладку: ${tabName}`);
+    
     // Обновляем навигацию
-    document.querySelectorAll('.nav-card').forEach(card => card.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+    document.querySelectorAll('.tabs-nav a').forEach(tab => tab.classList.remove('active'));
+    document.querySelectorAll('.tabs-content').forEach(content => content.classList.remove('active'));
 
-    const activeCard = document.querySelector(`[data-tab="${tabName}"]`);
+    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
     const activeContent = document.getElementById(tabName);
 
-    if (activeCard) activeCard.classList.add('active');
-    if (activeContent) activeContent.classList.add('active');
+    if (activeTab) {
+        activeTab.classList.add('active');
+        console.log(`✅ Активировали таб: ${tabName}`);
+    } else {
+        console.warn(`⚠️ Не найден таб: ${tabName}`);
+    }
+    
+    if (activeContent) {
+        activeContent.classList.add('active');
+        console.log(`✅ Активировали контент: ${tabName}`);
+    } else {
+        console.warn(`⚠️ Не найден контент: ${tabName}`);
+    }
 
     // Загружаем данные для активной вкладки
     const tabActions = {
         'my-offers': loadMyOffers,
-        'create-offer': initializeOffersManager,
+        'create-offer': () => {
+            console.log('🎯 Инициализация создания оффера');
+            initializeOffersManager();
+        },
         'find-offer': () => setTimeout(() => loadAvailableOffers({}), 100),
     };
 
     if (tabActions[tabName]) {
+        console.log(`🚀 Выполняем действие для вкладки: ${tabName}`);
         tabActions[tabName]();
+    } else {
+        console.warn(`⚠️ Нет действия для вкладки: ${tabName}`);
     }
 }
 
@@ -568,15 +586,19 @@ class OffersManager {
 
     init() {
         if (this.isInitialized) {
+            console.log('⚠️ OffersManager уже инициализирован');
             return;
         }
 
+        console.log('🚀 Инициализация OffersManager');
         this.setupEventListeners();
         this.updateStep(this.currentStep);
         this.isInitialized = true;
+        console.log('✅ OffersManager успешно инициализирован');
     }
 
     setupEventListeners() {
+        console.log('🔧 Настройка событий для кнопок');
         const controls = {
             nextBtn: () => this.nextStep(),
             prevBtn: () => this.prevStep(),
@@ -586,10 +608,14 @@ class OffersManager {
         Object.keys(controls).forEach(id => {
             const element = document.getElementById(id);
             if (element) {
+                console.log(`✅ Найдена кнопка ${id}, добавляем обработчик`);
                 element.addEventListener('click', (e) => {
                     e.preventDefault();
+                    console.log(`🔄 Кнопка ${id} нажата`);
                     controls[id]();
                 });
+            } else {
+                console.warn(`⚠️ Кнопка ${id} не найдена`);
             }
         });
 
@@ -681,8 +707,52 @@ class OffersManager {
     }
 
     nextStep() {
+        console.log(`🔄 Переход к следующему шагу (текущий: ${this.currentStep})`);
+        
         if (this.currentStep < this.totalSteps) {
-            this.updateStep(this.currentStep + 1);
+            // Валидируем текущий шаг перед переходом
+            if (this.validateStep(this.currentStep)) {
+                this.updateStep(this.currentStep + 1);
+            } else {
+                console.warn('❌ Валидация шага не прошла');
+            }
+        }
+    }
+
+    validateStep(step) {
+        console.log(`🔍 Валидация шага ${step}`);
+        
+        switch (step) {
+            case 1:
+                const title = document.querySelector('input[name="title"]')?.value?.trim();
+                const description = document.querySelector('textarea[name="description"]')?.value?.trim();
+                
+                if (!title) {
+                    alert('Укажите название оффера');
+                    return false;
+                }
+                if (!description) {
+                    alert('Укажите описание оффера');
+                    return false;
+                }
+                return true;
+                
+            case 2:
+                // Валидация не обязательна для шага 2
+                return true;
+                
+            case 3:
+                const budget = parseFloat(document.querySelector('input[name="budget"]')?.value || 0);
+                const maxPrice = parseFloat(document.querySelector('input[name="max_price"]')?.value || 0);
+                
+                if (budget <= 0 && maxPrice <= 0) {
+                    alert('Укажите общий бюджет или максимальную цену за размещение');
+                    return false;
+                }
+                return true;
+                
+            default:
+                return true;
         }
     }
 
@@ -782,6 +852,8 @@ class OffersManager {
             return field?.value?.trim() || defaultValue;
         };
 
+        console.log('📋 Собираем данные формы');
+
         const data = {
             title: getFieldValue('title'),
             description: getFieldValue('description'),
@@ -790,9 +862,19 @@ class OffersManager {
             category: getFieldValue('category', 'general')
         };
 
+        // Валидация обязательных полей
+        if (!data.title) {
+            throw new Error('Укажите название оффера');
+        }
+        if (!data.description) {
+            throw new Error('Укажите описание оффера');
+        }
+
         // Обработка цены с fallback логикой
         const maxPrice = parseFloat(getFieldValue('max_price')) || 0;
         const budget = parseFloat(getFieldValue('budget')) || 0;
+
+        console.log(`💰 Бюджет: ${budget}, Макс. цена: ${maxPrice}`);
 
         if (maxPrice > 0) {
             data.price = maxPrice;
@@ -811,15 +893,28 @@ class OffersManager {
             if (value) data[field] = field === 'min_subscribers' ? parseInt(value) : value;
         });
 
-        // Собираем выбранные чипы
-        const selectedChips = Array.from(document.querySelectorAll('.chip.selected'))
-            .map(chip => chip.textContent.trim());
+        // Собираем выбранные чипы для целевой аудитории
+        const selectedAgeChips = Array.from(document.querySelectorAll('.chip[data-value*="-"]:not([data-value*="tech"]):not([data-value*="business"]).selected'))
+            .map(chip => chip.getAttribute('data-value'));
 
-        if (selectedChips.length > 0) {
-            data.topics = selectedChips.join(', ');
-            data.target_audience = selectedChips.join(', ');
+        // Собираем выбранные чипы для тематик
+        const selectedTopicChips = Array.from(document.querySelectorAll('.chip[data-value="tech"].selected, .chip[data-value="business"].selected, .chip[data-value="education"].selected, .chip[data-value="lifestyle"].selected, .chip[data-value="finance"].selected, .chip[data-value="health"].selected, .chip[data-value="travel"].selected, .chip[data-value="food"].selected, .chip[data-value="entertainment"].selected, .chip[data-value="sport"].selected'))
+            .map(chip => chip.getAttribute('data-value'));
+
+        // Устанавливаем target_audience - если есть возрастные группы, иначе используем тематики
+        if (selectedAgeChips.length > 0) {
+            data.target_audience = selectedAgeChips.join(', ');
+        } else if (selectedTopicChips.length > 0) {
+            data.target_audience = selectedTopicChips.join(', ');
+        } else {
+            data.target_audience = 'general';
         }
 
+        if (selectedTopicChips.length > 0) {
+            data.topics = selectedTopicChips.join(', ');
+        }
+
+        console.log('📊 Собранные данные:', data);
         return data;
     }
 
@@ -1457,10 +1552,17 @@ const OfferStatusManager = {
 
 // ===== ГЛОБАЛЬНЫЕ ФУНКЦИИ ДЛЯ СОВМЕСТИМОСТИ =====
 function initializeOffersManager() {
+    console.log('🔄 initializeOffersManager вызвана');
     if (!offersManager) {
+        console.log('🏗️ Создаем новый OffersManager');
         offersManager = new OffersManager();
+    } else {
+        console.log('♻️ Используем существующий OffersManager');
     }
-    setTimeout(() => offersManager.init(), 100);
+    setTimeout(() => {
+        console.log('⏰ Инициализируем OffersManager через 100ms');
+        offersManager.init();
+    }, 100);
 }
 
 // Статусы офферов
@@ -1624,16 +1726,40 @@ async function showChannelSelectionModal(offerId, offerTitle) {
 function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
     const modal = document.createElement('div');
     modal.id = 'channelModal';
-    modal.className = 'modal';
-    modal.style.display = 'flex';
+    modal.className = 'modal-backdrop active';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 1;
+        pointer-events: all;
+    `;
     
     const buttonText = isDraft ? 'Завершить создание' : 'Отправить';
     const onClickFunction = isDraft ? `completeDraftAndSendProposals(${offerId})` : `sendProposals(${offerId})`;
     const skipButton = isDraft ? '' : `<button class="btn btn-secondary" onclick="saveOfferAsDraft(${offerId}); closeChannelModal()">Пропустить</button>`;
     
     modal.innerHTML = `
-        <div class="modal-overlay" onclick="closeChannelModal()"></div>
-        <div class="modal-content large-modal">
+        <div class="modal-content large-modal" style="
+            background: var(--bg-elevated);
+            border-radius: var(--radius-xl);
+            padding: var(--space-6);
+            max-width: 600px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow-2xl);
+            transform: scale(1);
+            position: relative;
+        ">
             <div class="modal-header">
                 <h2>${isDraft ? '📝 Завершить создание оффера' : '🎯 Выберите каналы'}</h2>
                 <button class="modal-close" onclick="closeChannelModal()">&times;</button>
@@ -1665,6 +1791,13 @@ function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
             </div>
         </div>
     `;
+    
+    // Добавляем обработчик для закрытия модального окна при клике на backdrop
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeChannelModal();
+        }
+    });
     
     document.body.appendChild(modal);
 }
@@ -2321,12 +2454,25 @@ window.updateCount = updateCount;
 window.ResponseManager = ResponseManager;
 window.manageResponses = (offerId) => ResponseManager.manageResponses(offerId);
 window.acceptOffer = (offerId) => ResponseManager.acceptOffer(offerId);
+window.switchTab = switchTab;
+window.initializeOffersManager = initializeOffersManager;
+window.offersManager = null;
 
 // ===== ИНИЦИАЛИЗАЦИЯ =====
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 offers.js загружен и инициализирован');
     loadMyOffers();
     setupOffersSearch();
     startTimerUpdates(); // Запускаем обновление таймеров
+    
+    // Инициализируем форму создания оффера, если мы на соответствующей вкладке
+    if (document.querySelector('.tabs-content#create-offer')) {
+        setTimeout(() => {
+            if (document.querySelector('.tabs-content#create-offer.active')) {
+                initializeOffersManager();
+            }
+        }, 100);
+    }
 });
 
 // Функция для обновления таймеров

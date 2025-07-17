@@ -347,47 +347,10 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/offers.js') }}"></script>
 <script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/offers.js') }}"></script>
 
 <script>
-// Функция переключения табов
-function switchTab(tabName) {
-    // Удаляем активный класс со всех табов
-    document.querySelectorAll('.tabs-nav a').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Скрываем все содержимое табов
-    document.querySelectorAll('.tabs-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    
-    // Активируем нужный таб
-    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
-    const activeContent = document.getElementById(tabName);
-    
-    if (activeTab) activeTab.classList.add('active');
-    if (activeContent) activeContent.classList.add('active');
-}
-
-// Обработчики кликов по табам
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎯 Страница офферов инициализирована');
-
-    // Настраиваем переключение табов
-    document.querySelectorAll('.tabs-nav a').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            const tabName = this.getAttribute('data-tab');
-            switchTab(tabName);
-        });
-    });
-
-    // Инициализация функциональности офферов
-    // Здесь должна быть инициализация offers.js
-});
-
 // Функция для кнопки "Назад"
 function goBack() {
     window.history.back();
@@ -406,5 +369,21 @@ function clearFindFilters() {
     document.getElementById('findMinSubscribers').value = '';
     console.log('Фильтры очищены');
 }
+
+// Обработчики кликов по табам
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🎯 Страница офферов инициализирована');
+
+    // Настраиваем переключение табов
+    document.querySelectorAll('.tabs-nav a').forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            const tabName = this.getAttribute('data-tab');
+            if (typeof switchTab === 'function') {
+                switchTab(tabName);
+            }
+        });
+    });
+});
 </script>
 {% endblock %}
