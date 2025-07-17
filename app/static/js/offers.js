@@ -1093,7 +1093,7 @@ const ResponseManager = {
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                         ${status === 'pending' ? `
                             <button onclick="ResponseManager.respondToResponse('${response.id}', 'accepted')" style="padding: 6px 12px; background: #48bb78; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">✅ Принять</button>
-                            <button onclick="ResponseManager.respondToResponse('${response.id}', 'rejected')" style="padding: 6px 12px; background: #f56565; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">❌ Отклонить</button>
+                            <button onclick="ResponseManager.showRejectModal('${response.id}')" style="padding: 6px 12px; background: #f56565; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">❌ Отклонить</button>
                         ` : ''}
                         ${status === 'accepted' && placement && placement.status === 'pending_placement' ? `
                             <button onclick="ResponseManager.cancelPlacement('${placement.id}')" style="padding: 6px 12px; background: #ed8936; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">🚫 Отменить размещение</button>
@@ -1171,6 +1171,107 @@ const ResponseManager = {
         }
     },
 
+    showRejectModal(responseId) {
+        const reasons = [
+            'Не подходит аудитория канала',
+            'Слишком высокая цена',
+            'Канал не соответствует требованиям',
+            'Другая причина'
+        ];
+
+        const reasonOptions = reasons.map(reason => 
+            `<label style="display: block; margin: 8px 0; cursor: pointer;">
+                <input type="radio" name="rejectReason" value="${reason}" style="margin-right: 8px;">
+                ${reason}
+            </label>`
+        ).join('');
+
+        const modalContent = `
+            <div style="background: white; border-radius: 12px; padding: 24px; max-width: 500px; width: 100%; position: relative;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; color: #2d3748; font-size: 18px;">❌ Отклонение предложения</h3>
+                    <button onclick="closeModal('rejectModal')" class="modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #718096;">&times;</button>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <p style="color: #4a5568; margin-bottom: 16px;">Укажите причину отклонения предложения:</p>
+                    
+                    <form id="rejectForm">
+                        <div style="margin-bottom: 16px;">
+                            ${reasonOptions}
+                        </div>
+                        
+                        <div id="customReasonBlock" style="display: none; margin-top: 12px;">
+                            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2d3748;">
+                                Опишите причину:
+                            </label>
+                            <textarea 
+                                id="customReasonText" 
+                                placeholder="Введите причину отклонения..."
+                                style="width: 100%; min-height: 80px; padding: 8px; border: 1px solid #e2e8f0; border-radius: 4px; resize: vertical;"
+                            ></textarea>
+                        </div>
+                        
+                        <div style="display: flex; gap: 12px; margin-top: 20px;">
+                            <button type="button" onclick="closeModal('rejectModal')" style="flex: 1; padding: 10px; background: #e2e8f0; color: #4a5568; border: none; border-radius: 6px; cursor: pointer;">
+                                Отмена
+                            </button>
+                            <button type="submit" style="flex: 1; padding: 10px; background: #f56565; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                Отклонить
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+
+        const modal = document.createElement('div');
+        modal.id = 'rejectModal';
+        modal.className = 'modal';
+        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000;';
+        modal.innerHTML = modalContent;
+        
+        document.body.appendChild(modal);
+
+        // Обработчик изменения радио-кнопок
+        const radioInputs = modal.querySelectorAll('input[name="rejectReason"]');
+        const customReasonBlock = modal.querySelector('#customReasonBlock');
+        
+        radioInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                if (this.value === 'Другая причина') {
+                    customReasonBlock.style.display = 'block';
+                } else {
+                    customReasonBlock.style.display = 'none';
+                }
+            });
+        });
+
+        // Обработчик отправки формы
+        modal.querySelector('#rejectForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const selectedReason = modal.querySelector('input[name="rejectReason"]:checked');
+            if (!selectedReason) {
+                alert('Выберите причину отклонения');
+                return;
+            }
+
+            let reason = selectedReason.value;
+            if (reason === 'Другая причина') {
+                const customText = modal.querySelector('#customReasonText').value.trim();
+                if (!customText) {
+                    alert('Введите причину отклонения');
+                    return;
+                }
+                reason = customText;
+            }
+
+            await ResponseManager.respondToResponse(responseId, 'rejected', reason);
+            closeModal('rejectModal');
+        });
+    },
+
     renderEmptyResponses() {
         return `
             <div style="text-align: center; padding: 40px 20px;">
@@ -1205,11 +1306,11 @@ const ResponseManager = {
         return colors[status] || '#e2e8f0';
     },
 
-    async respondToResponse(responseId, action) {
+    async respondToResponse(responseId, action, reason = '') {
 
         try {
-            let message = '';
-            if (action === 'rejected') {
+            let message = reason || '';
+            if (action === 'rejected' && !message) {
                 message = prompt('Причина отклонения (необязательно):') || '';
             }
 

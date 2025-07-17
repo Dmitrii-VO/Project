@@ -484,10 +484,14 @@ def register_system_routes(app: Flask) -> None:
     def handle_command(telegram_id: int, text: str) -> dict:
         """Новый роутер команд"""
         try:
-            # Извлекаем команду (убираем / и возможные параметры)
-            command = text.strip().split()[0][1:]  # Убираем первый символ "/"
+            # Извлекаем команду и параметры
+            parts = text.strip().split()
+            command = parts[0][1:]  # Убираем первый символ "/"
+            args = parts[1:] if len(parts) > 1 else []
             
             logger.info(f"🎯 Обрабатываем команду: /{command} от пользователя {telegram_id}")
+            if args:
+                logger.info(f"📝 Параметры команды: {args}")
             
             # Проверяем, что telegram_bot инициализирован
             if not hasattr(app, 'telegram_bot'):
@@ -495,7 +499,12 @@ def register_system_routes(app: Flask) -> None:
                 return jsonify({'ok': True})
             
             # Обрабатываем команду через TelegramBotExtension
-            response_data = app.telegram_bot.process_command(command, telegram_id)
+            if command == 'post_published' and args:
+                # Для команды post_published передаем ссылку на пост
+                response_data = app.telegram_bot.process_command_with_args(command, telegram_id, args)
+            else:
+                # Стандартная обработка команд
+                response_data = app.telegram_bot.process_command(command, telegram_id)
             
             # Отправляем ответ пользователю
             success = app.telegram_bot.send_telegram_message(telegram_id, response_data)

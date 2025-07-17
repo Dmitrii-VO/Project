@@ -1050,7 +1050,54 @@ def update_response_status_route(response_id):
             WHERE id = ?
         ''', (new_status, datetime.now().isoformat(), message, response_id))
 
-        if new_status == 'accepted':
+        if new_status == 'rejected':
+            # === АВТОМАТИЧЕСКИЕ ДЕЙСТВИЯ ПРИ ОТКЛОНЕНИИ ===
+            
+            # 1. Записываем статистику отклонения
+            try:
+                execute_db_query('''
+                    INSERT OR IGNORE INTO rejection_statistics 
+                    (offer_id, response_id, channel_id, reason, created_at)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ''', (response_data['offer_id'], response_id, response_data['channel_id'], message))
+            except Exception as e:
+                logger.warning(f"Не удалось записать статистику отклонения: {e}")
+            
+            # 2. Отправляем уведомление владельцу канала
+            try:
+                from app.telegram.telegram_notifications import TelegramNotificationService
+                notification_service = TelegramNotificationService()
+                
+                channel_owner_message = f"""❌ <b>Ваше предложение отклонено</b>
+
+🎯 <b>Оффер:</b> {response_data['offer_title']}
+📝 <b>Причина:</b> {message or 'Не указана'}
+
+💡 <b>Вы можете:</b>
+• Подать новое предложение с другой ценой
+• Посмотреть другие офферы в приложении
+• Связаться с рекламодателем для уточнений
+
+📊 Анализируйте причины отклонений для улучшения предложений."""
+                
+                notification_service.send_notification(
+                    user_id=response_data['channel_owner_telegram_id'],
+                    message=channel_owner_message,
+                    notification_type='offer_rejected'
+                )
+                
+                logger.info(f"✅ Уведомление об отклонении отправлено владельцу канала {response_data['channel_owner_telegram_id']}")
+                
+            except Exception as e:
+                logger.error(f"❌ Не удалось отправить уведомление владельцу канала {response_data.get('channel_owner_telegram_id')}: {e}")
+            
+            return jsonify({
+                'success': True,
+                'message': 'Предложение отклонено. Владелец канала уведомлен.',
+                'rejection_reason': message
+            })
+
+        elif new_status == 'accepted':
             # === АВТОМАТИЧЕСКИЕ ДЕЙСТВИЯ ПРИ ПРИНЯТИИ ===
             
             # 1. Отклоняем остальные отклики
