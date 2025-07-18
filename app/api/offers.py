@@ -676,7 +676,7 @@ def delete_offer(offer_id):
 
         # Удаляем связанные данные и оффер в транзакции
         import sqlite3
-        conn = sqlite3.connect(DATABASE_PATH)
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
         conn.execute('BEGIN TRANSACTION')
 
         try:
