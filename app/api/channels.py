@@ -197,7 +197,7 @@ def get_channel(channel_id):
         cursor = conn.cursor()
 
         cursor.execute("""
-            SELECT c.*, u.username as owner_username, u.first_name as owner_name
+            SELECT c.*, u.username as owner_username, u.first_name as user_first_name
             FROM channels c
             JOIN users u ON c.owner_id = u.id
             WHERE c.id = ?
@@ -214,19 +214,23 @@ def get_channel(channel_id):
             'id': channel['id'],
             'channel_id': channel['telegram_id'],
             'channel_name': channel['title'],
+            'title': channel['title'],
             'channel_username': channel['username'],
             'subscriber_count': channel['subscriber_count'] or 0,
             'category': channel['category'],
-            'description': channel.get('description', ''),
-            'language': channel.get('language', 'ru'),
-            'price_per_post': 0.0,  # Заглушка
+            'description': channel['description'] or '',
+            'language': channel['language'] or 'ru',
+            'price_per_post': channel['price_per_post'] or 0.0,
+            'owner_name': channel['owner_name'] or '',
+            'contact_name': channel['owner_name'] or '',
             'is_verified': bool(channel['is_verified']),
             'is_active': bool(channel['is_active']),
+            'status': channel['status'] or 'pending',
             'created_at': channel['created_at'],
-            'verified_at': channel.get('verified_at'),
+            'verified_at': channel['verified_at'],
             'owner': {
                 'username': channel['owner_username'],
-                'first_name': channel['owner_name']
+                'first_name': channel['user_first_name']
             }
         }
 
@@ -303,6 +307,82 @@ def delete_channel(channel_id):
         return jsonify({
             'error': 'Internal server error'
         }), 500
+
+@channels_bp.route('/<int:channel_id>', methods=['PUT'])
+def update_channel(channel_id):
+    """Обновление данных канала"""
+    try:
+        # Получаем telegram_id из заголовков
+        telegram_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_id:
+            return jsonify({'error': 'User not authenticated'}), 401
+
+        # Получаем данные из запроса
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем user_id по telegram_id
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = cursor.fetchone()
+        if not user:
+            conn.close()
+            return jsonify({'error': 'User not found'}), 404
+
+        user_id = user['id']
+
+        # Проверяем что канал принадлежит пользователю
+        cursor.execute("SELECT * FROM channels WHERE id = ? AND owner_id = ?", (channel_id, user_id))
+        channel = cursor.fetchone()
+        if not channel:
+            conn.close()
+            return jsonify({'error': 'Channel not found or access denied'}), 404
+
+        # Подготавливаем обновления
+        updates = []
+        params = []
+
+        # Обновляем имя владельца канала (контактное лицо)
+        if 'owner_name' in data:
+            updates.append('owner_name = ?')
+            params.append(data['owner_name'])
+
+        # Обновляем стоимость размещения
+        if 'price_per_post' in data:
+            price = float(data['price_per_post']) if data['price_per_post'] else 0
+            updates.append('price_per_post = ?')
+            params.append(price)
+
+        if not updates:
+            conn.close()
+            return jsonify({'error': 'No valid fields to update'}), 400
+
+        # Добавляем канал ID в параметры
+        params.append(channel_id)
+
+        # Выполняем обновление
+        update_query = f"UPDATE channels SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
+        cursor.execute(update_query, params)
+
+        conn.commit()
+        conn.close()
+
+        logger.info(f"Channel {channel_id} updated by user {telegram_id}")
+
+        return jsonify({
+            'success': True,
+            'message': 'Channel updated successfully'
+        })
+
+    except ValueError as e:
+        return jsonify({'error': f'Invalid data format: {str(e)}'}), 400
+    except Exception as e:
+        logger.error(f"Error updating channel {channel_id}: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @channels_bp.route('/<int:channel_id>/responses', methods=['GET'])
 def get_channel_responses(channel_id):

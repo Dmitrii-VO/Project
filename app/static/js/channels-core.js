@@ -218,120 +218,384 @@ function debugChannelData() {
     });
 }
 function createChannelCard(channel) {
-
     const card = document.createElement('div');
-    card.className = 'channel-card';
+    card.className = 'channel-card simple-card';
     card.setAttribute('data-user-channel', 'true');
     card.setAttribute('data-channel-id', channel.id);
 
     // Определяем статус канала
-    const status = (channel.is_verified || channel.status === 'verified')
-        ? { class: 'verified', text: '✓ Верифицирован' }
-        : { class: 'pending', text: '⏳ На модерации' };
+    const isVerified = (channel.is_verified || channel.status === 'verified');
+    const statusText = isVerified ? 'Верифицирован' : 'На модерации';
+    const statusClass = isVerified ? 'verified' : 'pending';
 
-    // ИСПРАВЛЕНО: Безопасное получение данных
-    const title = channel.title || channel.channel_name || `Канал @${channel.username || channel.channel_username}`;
-    const username = (channel.username || channel.channel_username || 'unknown').replace('@', '');
+    // Получаем основные данные
+    const channelName = channel.title || channel.channel_name || `Канал @${channel.username || channel.channel_username}`;
+    const ownerName = channel.owner_name || channel.contact_name || 'Не указано';
+    const price = channel.price_per_post || channel.placement_price || 0;
 
-    // ИСПРАВЛЕНО: Правильное получение количества подписчиков
-    const subscribersCount = formatNumber(
-        channel.subscriber_count ||     // ✅ Правильное поле из БД
-        channel.subscribers_count ||    // ✅ Для совместимости
-        0
-    );
-
-    // Получаем количество просмотров (если есть)
-    const viewsCount = formatNumber(channel.views_count || Math.floor(subscribersCount * 0.05) || 0);
-
-    // Вычисляем ER (Engagement Rate)
-    const engagementRate = subscribersCount > 0 ? 
-        ((channel.avg_views || Math.floor(subscribersCount * 0.05)) / subscribersCount * 100).toFixed(1) : 
-        '0.0';
-
-    // ИСПРАВЛЕНО: Реальная статистика офферов и постов
-    const offersCount = formatNumber(channel.offers_count || 0);
-    const postsCount = formatNumber(channel.posts_count || 0);
-
-    // Получаем категорию канала
-    const category = getCategoryName(channel.category || 'general');
-
-    // Рассчитываем доход за месяц (условно)
-    const monthlyEarnings = channel.monthly_earnings || (channel.price_per_post || 0) * (offersCount || 0) * 2;
-
-    // HTML карточки с горизонтальным layout
+    // Простая HTML карточка согласно макету
     card.innerHTML = `
-        <!-- Статус канала -->
-        <div class="channel-status-bar">
-            <div class="channel-status ${status.class}">${status.text}</div>
-            <div class="quick-actions">
-                <button class="quick-action" title="Настройки" onclick="showChannelSettings(${channel.id})">⚙️</button>
-                <button class="quick-action" title="Статистика" onclick="showChannelStats(${channel.id})">📊</button>
-                <button class="quick-action" title="Удалить" onclick="showDeleteConfirmation(${channel.id}, '${title.replace(/'/g, '&apos;')}', '@${username}')">🗑️</button>
-            </div>
-        </div>
-
-        <!-- Основная информация -->
-        <div class="channel-main-info">
-            <!-- Заголовок с аватаром -->
-            <div class="channel-header">
-                <div class="channel-avatar">📺</div>
-                <div class="channel-info">
-                    <h3 class="channel-title">${title}</h3>
-                    <div class="channel-username">@${username}</div>
+        <div class="simple-channel-card">
+            <!-- Название канала -->
+            <div class="channel-name">${channelName}</div>
+            
+            <!-- Информация в одну строку -->
+            <div class="channel-row-info">
+                <!-- Имя владельца -->
+                <div class="owner-info">
+                    <span class="owner-name">${ownerName}</span>
                 </div>
-            </div>
-
-            <!-- Категория -->
-            <div class="channel-category">${category}</div>
-
-            <!-- Ключевые метрики -->
-            <div class="channel-metrics">
-                <div class="metric-item">
-                    <div class="metric-value">${subscribersCount}</div>
-                    <div class="metric-label">Подписчики</div>
+                
+                <!-- Стоимость -->
+                <div class="price-info">
+                    <span class="price-value">${price}₽</span>
                 </div>
-                <div class="metric-item">
-                    <div class="metric-value">${viewsCount}</div>
-                    <div class="metric-label">Просмотры</div>
+                
+                <!-- Статус -->
+                <div class="status-info">
+                    <span class="status-badge ${statusClass}">${statusText}</span>
                 </div>
-                <div class="metric-item">
-                    <div class="metric-value">${engagementRate}%</div>
-                    <div class="metric-label">ER</div>
+                
+                <!-- Кнопка редактировать -->
+                <div class="edit-action">
+                    <button class="edit-btn" onclick="showChannelEditModal(${channel.id})" title="Редактировать">⚙️</button>
                 </div>
-            </div>
-
-            <!-- Дополнительная статистика -->
-            <div class="channel-stats">
-                <div class="stat-item">
-                    <div class="stat-value">${offersCount}</div>
-                    <div class="stat-label">Офферы</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value">${postsCount}</div>
-                    <div class="stat-label">Размещения</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Доходы и действия -->
-        <div class="channel-footer">
-            <div class="channel-earnings">
-                <div class="earnings-value">${formatPrice(monthlyEarnings)}₽</div>
-                <div class="earnings-label">Доход/месяц</div>
-            </div>
-            <div class="channel-actions">
-                ${(channel.is_verified || channel.status === 'verified') ? `
-                    <button class="btn btn-primary" onclick="showChannelSettings(${channel.id})">Редактировать</button>
-                    <button class="btn btn-secondary" onclick="showChannelStats(${channel.id})">Аналитика</button>
-                ` : `
-                    <button class="btn btn-primary" onclick="startChannelVerification(${channel.id}, '${title?.replace(/'/g, "\\'")}', '${username || ""}')">Верифицировать</button>
-                `}
             </div>
         </div>
     `;
 
-    console.log('✅ Практичная карточка канала создана успешно');
+    console.log('✅ Упрощенная карточка канала создана');
     return card;
+}
+
+// Функция для отображения модального окна редактирования канала
+function showChannelEditModal(channelId) {
+    console.log(`📝 Открытие редактирования канала ${channelId}`);
+    
+    // Получаем данные канала
+    const channelCard = document.querySelector(`[data-channel-id="${channelId}"]`);
+    if (!channelCard) {
+        console.error('Канал не найден');
+        return;
+    }
+    
+    // Создаем модальное окно
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay channel-edit-modal';
+    modal.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9999 !important;
+        overflow: hidden !important;
+    `;
+    modal.innerHTML = `
+        <div class="modal-content" style="
+            background: white !important;
+            border-radius: 12px !important;
+            max-width: 500px !important;
+            width: 90% !important;
+            max-height: 80vh !important;
+            overflow-y: auto !important;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12) !important;
+            position: relative !important;
+            margin: auto !important;
+        ">
+            <div class="modal-header">
+                <h2>Редактировать канал</h2>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editChannelForm">
+                    <div class="form-group">
+                        <label for="editOwnerName">Имя владельца канала (контактное лицо)</label>
+                        <input type="text" id="editOwnerName" class="form-input" placeholder="Введите имя владельца">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="editPrice">Стоимость размещения (₽)</label>
+                        <input type="number" id="editPrice" class="form-input" placeholder="0" min="0">
+                    </div>
+                    
+                    <div class="form-group danger-zone">
+                        <label>Опасная зона</label>
+                        <button type="button" class="btn btn-danger" id="deleteChannelBtn" data-channel-id="${channelId}">
+                            🗑️ Удалить канал
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                <button class="btn btn-primary" onclick="saveChannelChanges(${channelId})">Сохранить</button>
+            </div>
+        </div>
+    `;
+    
+    // Отключаем скролл на body
+    document.body.style.overflow = 'hidden';
+    
+    document.body.appendChild(modal);
+    
+    // Добавляем event listener для кнопки удаления
+    const deleteBtn = modal.querySelector('#deleteChannelBtn');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const channelId = this.getAttribute('data-channel-id');
+            console.log(`🗑️ Клик по кнопке удаления канала ${channelId}`);
+            
+            // Используем подход из channels-modals.js
+            if (window.showDeleteConfirmation) {
+                // Получаем данные о канале из карточки
+                const channelCard = document.querySelector(`[data-channel-id="${channelId}"]`);
+                let channelName = 'Канал';
+                let channelUsername = 'channel';
+                
+                if (channelCard) {
+                    const nameElement = channelCard.querySelector('.channel-name');
+                    if (nameElement) {
+                        channelName = nameElement.textContent.trim();
+                    }
+                }
+                
+                console.log(`📋 Данные канала для удаления: ID=${channelId}, Name=${channelName}, Username=${channelUsername}`);
+                
+                // Закрываем текущий модал редактирования
+                closeEditModal();
+                // Показываем модал подтверждения удаления
+                window.showDeleteConfirmation(parseInt(channelId), channelName, channelUsername);
+            } else {
+                // Fallback: используем стандартный confirm
+                confirmChannelDeletion(parseInt(channelId));
+            }
+        });
+        console.log('✅ Event listener добавлен для кнопки удаления');
+    } else {
+        console.error('❌ Кнопка удаления не найдена в модальном окне');
+    }
+    
+    // Принудительно применяем стили после добавления в DOM
+    setTimeout(() => {
+        const modalElement = document.querySelector('.channel-edit-modal');
+        if (modalElement) {
+            modalElement.style.cssText = `
+                position: fixed !important;
+                top: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                bottom: 0 !important;
+                width: 100vw !important;
+                height: 100vh !important;
+                background: rgba(0, 0, 0, 0.5) !important;
+                display: flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                z-index: 9999 !important;
+                overflow: hidden !important;
+            `;
+        }
+    }, 0);
+    
+    // Загружаем текущие данные канала
+    loadChannelDataForEdit(channelId);
+}
+
+// Функция для загрузки данных канала в форму редактирования
+async function loadChannelDataForEdit(channelId) {
+    try {
+        const telegramUser = getTelegramUser();
+        const response = await fetch(`/api/channels/${channelId}`, {
+            headers: {
+                'X-Telegram-User-Id': telegramUser.id.toString(),
+                'X-Telegram-User-Data': JSON.stringify(telegramUser)
+            }
+        });
+        
+        if (response.ok) {
+            const channel = await response.json();
+            
+            // Заполняем форму
+            document.getElementById('editOwnerName').value = channel.owner_name || channel.contact_name || '';
+            document.getElementById('editPrice').value = channel.price_per_post || channel.placement_price || 0;
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки данных канала:', error);
+    }
+}
+
+// Функция для сохранения изменений канала
+async function saveChannelChanges(channelId) {
+    const ownerName = document.getElementById('editOwnerName').value;
+    const price = document.getElementById('editPrice').value;
+    
+    if (!ownerName.trim()) {
+        alert('Пожалуйста, укажите имя владельца канала');
+        return;
+    }
+    
+    try {
+        const telegramUser = getTelegramUser();
+        const response = await fetch(`/api/channels/${channelId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': telegramUser.id.toString(),
+                'X-Telegram-User-Data': JSON.stringify(telegramUser)
+            },
+            body: JSON.stringify({
+                owner_name: ownerName,
+                price_per_post: parseFloat(price) || 0
+            })
+        });
+        
+        if (response.ok) {
+            console.log('✅ Канал обновлен успешно');
+            closeEditModal();
+            loadUserChannels(); // Перезагружаем список каналов
+        } else {
+            const error = await response.json();
+            alert(`Ошибка сохранения: ${error.message || 'Неизвестная ошибка'}`);
+        }
+    } catch (error) {
+        console.error('Ошибка сохранения изменений:', error);
+        alert('Ошибка сохранения изменений');
+    }
+}
+
+// Функция для закрытия модального окна редактирования
+function closeEditModal() {
+    const modal = document.querySelector('.modal-overlay');
+    if (modal) {
+        modal.remove();
+    }
+    // Восстанавливаем скролл на body
+    document.body.style.overflow = '';
+}
+
+// Функция для подтверждения удаления канала
+function confirmChannelDeletion(channelId) {
+    console.log(`🗑️ Вызван confirmChannelDeletion для канала ${channelId}`);
+    console.log(`🔍 Тип channelId: ${typeof channelId}, значение: ${channelId}`);
+    
+    if (confirm('Вы уверены, что хотите удалить этот канал? Это действие нельзя отменить.')) {
+        console.log(`✅ Пользователь подтвердил удаление канала ${channelId}`);
+        deleteChannel(channelId);
+    } else {
+        console.log(`❌ Пользователь отменил удаление канала ${channelId}`);
+    }
+}
+
+// Функция для удаления канала
+async function deleteChannel(channelId) {
+    console.log(`🗑️ Начинаем удаление канала ${channelId}`);
+    
+    try {
+        const telegramUser = getTelegramUser();
+        console.log('👤 Telegram User:', telegramUser);
+        
+        if (!telegramUser || !telegramUser.id) {
+            alert('Ошибка авторизации. Пожалуйста, перезагрузите страницу.');
+            return;
+        }
+        
+        console.log(`📤 Отправляем DELETE запрос на /api/channels/${channelId}`);
+        
+        const response = await fetch(`/api/channels/${channelId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-Telegram-User-Id': telegramUser.id.toString(),
+                'X-Telegram-User-Data': JSON.stringify(telegramUser)
+            }
+        });
+        
+        console.log(`📊 Статус ответа: ${response.status}`);
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Канал удален успешно:', result);
+            alert('Канал успешно удален');
+            closeEditModal();
+            loadUserChannels(); // Перезагружаем список каналов
+        } else {
+            const error = await response.json();
+            console.error('❌ Ошибка от сервера:', error);
+            alert(`Ошибка удаления: ${error.message || 'Неизвестная ошибка'}`);
+        }
+    } catch (error) {
+        console.error('❌ Исключение при удалении канала:', error);
+        alert('Ошибка удаления канала: ' + error.message);
+    }
+}
+
+// Тестовая функция для прямого вызова API удаления канала
+async function testDeleteChannel(channelId) {
+    console.log(`🧪 Тестируем удаление канала ${channelId} напрямую через API`);
+    
+    try {
+        const telegramUser = getTelegramUser();
+        console.log('👤 Тестовый Telegram User:', telegramUser);
+        
+        if (!telegramUser || !telegramUser.id) {
+            console.error('❌ Тестовая ошибка: telegramUser не определен');
+            return;
+        }
+        
+        console.log(`📤 Тестовый DELETE запрос на /api/channels/${channelId}`);
+        
+        const response = await fetch(`/api/channels/${channelId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-Telegram-User-Id': telegramUser.id.toString(),
+                'X-Telegram-User-Data': JSON.stringify(telegramUser)
+            }
+        });
+        
+        console.log(`📊 Тестовый статус ответа: ${response.status}`);
+        
+        if (response.ok) {
+            const result = await response.json();
+            console.log('✅ Тестовое удаление успешно:', result);
+        } else {
+            const error = await response.json();
+            console.error('❌ Тестовая ошибка удаления:', error);
+        }
+    } catch (error) {
+        console.error('❌ Тестовое исключение:', error);
+    }
+}
+
+// Функция для тестирования клика по кнопке удаления
+function testDeleteButtonClick() {
+    console.log('🧪 Тестируем клик по кнопке удаления');
+    
+    const deleteBtn = document.querySelector('#deleteChannelBtn');
+    if (deleteBtn) {
+        console.log('✅ Кнопка удаления найдена');
+        const channelId = deleteBtn.getAttribute('data-channel-id');
+        console.log(`🔍 Channel ID из кнопки: ${channelId}`);
+        
+        // Проверяем доступность функции showDeleteConfirmation
+        if (window.showDeleteConfirmation) {
+            console.log('✅ Функция showDeleteConfirmation доступна');
+        } else {
+            console.log('❌ Функция showDeleteConfirmation не доступна');
+        }
+        
+        // Имитируем клик
+        deleteBtn.click();
+    } else {
+        console.error('❌ Кнопка удаления не найдена');
+    }
 }
 // ДОПОЛНИТЕЛЬНО: Функция обновления статистики в реальном времени
 async function refreshChannelStatistics(channelId) {
@@ -873,6 +1137,12 @@ window.loadUserChannels = loadUserChannels;
 window.showChannelStats = showChannelStats;
 window.showChannelSettings = showChannelSettings;
 window.editChannel = editChannel;
+window.testDeleteChannel = testDeleteChannel;
+window.testDeleteButtonClick = testDeleteButtonClick;
+window.confirmChannelDeletion = confirmChannelDeletion;
+window.deleteChannel = deleteChannel;
+window.closeEditModal = closeEditModal;
+window.saveChannelChanges = saveChannelChanges;
 window.refreshChannelStatistics = refreshChannelStatistics;
 window.updateChannelCard = updateChannelCard;
 window.debugChannelData = debugChannelData;

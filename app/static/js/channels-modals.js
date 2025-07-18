@@ -19,11 +19,25 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
     const modal = document.createElement('div');
     modal.id = 'deleteChannelModal';
     modal.className = 'modal';
-    modal.style.display = 'flex';
+    modal.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 9998 !important;
+        pointer-events: auto !important;
+    `;
 
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeDeleteModal()"></div>
-        <div class="modal-content">
+        <div class="modal-content" style="pointer-events: auto; z-index: 9999; position: relative; background: white; border-radius: 12px; padding: 24px; max-width: 400px; width: 90%;">
             <div class="modal-header">
                 <h3>🗑️ Удалить канал</h3>
                 <button class="modal-close" onclick="closeDeleteModal()">&times;</button>
@@ -54,7 +68,7 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
                 <button class="btn btn-secondary" onclick="closeDeleteModal()">
                     Отмена
                 </button>
-                <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmChannelDeletion()">
+                <button class="btn btn-danger" id="confirmDeleteBtn" style="pointer-events: auto; z-index: 9999; position: relative;">
                     🗑️ Удалить канал
                 </button>
             </div>
@@ -63,6 +77,39 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
 
     // Добавляем в body
     document.body.appendChild(modal);
+
+    // Добавляем event listener для кнопки подтверждения удаления
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    if (confirmBtn) {
+        // Убираем любые существующие обработчики
+        confirmBtn.onclick = null;
+        
+        // Добавляем обработчик клика
+        confirmBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🔄 Клик по кнопке подтверждения удаления');
+            confirmChannelDeletionModal();
+        }, { capture: true });
+        
+        // Добавляем обработчик для touch событий (для мобильных устройств)
+        confirmBtn.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🔄 Touch по кнопке подтверждения удаления');
+            confirmChannelDeletionModal();
+        }, { capture: true });
+        
+        // Добавляем обработчик для mousedown (более низкий уровень)
+        confirmBtn.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('🔄 Mousedown по кнопке подтверждения удаления');
+            confirmChannelDeletionModal();
+        }, { capture: true });
+        
+        console.log('✅ Event listener добавлен для кнопки подтверждения удаления');
+    }
 
     // Блокируем прокрутку страницы
     document.body.style.overflow = 'hidden';
@@ -89,14 +136,25 @@ document.addEventListener('click', function(e) {
         closeModal();
     }
 });
-async function confirmChannelDeletion() {
+async function confirmChannelDeletionModal() {
+    console.log('🔄 Начинаем confirmChannelDeletionModal');
+    console.log(`🔍 channelToDelete: ${channelToDelete}`);
+    
     if (!channelToDelete) {
         console.error('❌ Нет канала для удаления');
         return;
     }
 
     const confirmBtn = document.getElementById('confirmDeleteBtn');
+    console.log(`🔍 confirmBtn найден: ${!!confirmBtn}`);
+    
+    if (!confirmBtn) {
+        console.error('❌ Кнопка confirmDeleteBtn не найдена');
+        return;
+    }
+    
     const originalText = confirmBtn.textContent;
+    console.log(`🔍 originalText: ${originalText}`);
 
     try {
         // Отключаем кнопку и показываем загрузку
@@ -127,12 +185,19 @@ async function confirmChannelDeletion() {
        // }
 
         // Отправляем DELETE запрос
+        console.log(`📤 Отправляем DELETE запрос на /api/channels/${channelToDelete}`);
+        console.log(`🔑 Заголовки:`, headers);
+        
         const response = await fetch(`/api/channels/${channelToDelete}`, {
             method: 'DELETE',
             headers: headers
         });
 
+        console.log(`📊 Статус ответа: ${response.status}`);
+        console.log(`📊 Response OK: ${response.ok}`);
+        
         const data = await response.json();
+        console.log(`📄 Данные ответа:`, data);
 
         if (response.ok && data.success) {
             console.log('✅ Канал удален:', data.message);
@@ -164,8 +229,13 @@ async function confirmChannelDeletion() {
 
         } else {
             // Обработка ошибок
+            console.error('❌ Ошибка удаления канала');
+            console.error('📊 response.ok:', response.ok);
+            console.error('📊 data.success:', data.success);
+            console.error('📄 Полные данные:', data);
+            
             const errorMessage = data.message || data.error || 'Неизвестная ошибка';
-            console.error('❌ Ошибка удаления канала:', errorMessage);
+            console.error('❌ Сообщение об ошибке:', errorMessage);
 
             showNotification('error', `❌ Ошибка: ${errorMessage}`);
         }
@@ -178,6 +248,47 @@ async function confirmChannelDeletion() {
         confirmBtn.disabled = false;
         confirmBtn.textContent = originalText;
     }
+}
+
+// Тестовая функция для проверки удаления канала
+async function testDeleteChannelModal(channelId) {
+    console.log(`🧪 Тестируем удаление канала ${channelId} через модал`);
+    
+    // Устанавливаем channelToDelete
+    channelToDelete = channelId;
+    console.log(`🔍 Установлен channelToDelete: ${channelToDelete}`);
+    
+    // Вызываем функцию удаления
+    await confirmChannelDeletionModal();
+}
+
+// Функция для тестирования всего процесса удаления канала
+function testFullDeleteProcess(channelId) {
+    console.log(`🧪 Тестируем полный процесс удаления канала ${channelId}`);
+    
+    // Сначала показываем модал подтверждения
+    showDeleteConfirmation(channelId, 'Тестовый канал', 'test_channel');
+    
+    // Даем время на отображение модала
+    setTimeout(() => {
+        console.log('🔍 Проверяем наличие модального окна и кнопки');
+        
+        const modal = document.getElementById('deleteChannelModal');
+        const confirmBtn = document.getElementById('confirmDeleteBtn');
+        
+        console.log(`🔍 Модал найден: ${!!modal}`);
+        console.log(`🔍 Кнопка найдена: ${!!confirmBtn}`);
+        console.log(`🔍 channelToDelete: ${channelToDelete}`);
+        
+        if (modal && confirmBtn) {
+            console.log('✅ Все элементы найдены, можно тестировать удаление');
+            
+            // Можно сразу вызвать функцию удаления
+            // confirmChannelDeletionModal();
+        } else {
+            console.error('❌ Не все элементы найдены');
+        }
+    }, 500);
 }
 
 // Функции модального окна верификации:
@@ -906,7 +1017,9 @@ function closeVerificationModalAndRefresh(element) {
 window.closeVerificationModalAndRefresh = closeVerificationModalAndRefresh;
 // Делаем функции глобально доступными для onclick
 window.closeDeleteModal = closeDeleteModal;
-window.confirmChannelDeletion = confirmChannelDeletion;
+window.confirmChannelDeletionModal = confirmChannelDeletionModal;
+window.testDeleteChannelModal = testDeleteChannelModal;
+window.testFullDeleteProcess = testFullDeleteProcess;
 window.startVerification = startVerification;
 window.showDeleteConfirmation = showDeleteConfirmation;
 window.startChannelVerification = startChannelVerification;
