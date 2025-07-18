@@ -259,9 +259,12 @@ const DOM = {
  * Универсальная функция закрытия модальных окон
  */
 function closeModal() {
-    const modals = document.querySelectorAll('.modal, [data-modal="true"]');
+    const modals = document.querySelectorAll('.modal, [data-modal="true"], #verificationModal, #deleteChannelModal');
     
     modals.forEach(modal => {
+        // Убираем класс show для скрытия
+        modal.classList.remove('show');
+        
         // Анимация исчезновения (если нужна)
         modal.style.opacity = '0';
         

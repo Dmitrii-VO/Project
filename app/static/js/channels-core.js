@@ -188,6 +188,46 @@ function formatDate(dateString) {
 
 // ✅ Глобальный доступ
 window.loadUserChannels = loadUserChannels;
+window.startChannelVerification = startChannelVerification;
+window.updateChannelStatusInUI = updateChannelStatusInUI;
+
+// Проверяем доступность зависимостей
+console.log('✅ Channels-core dependencies check:', {
+    getTelegramUser: typeof getTelegramUser,
+    showVerificationModal: typeof showVerificationModal,
+    startChannelVerification: typeof window.startChannelVerification
+});
+
+// Демонстрационная функция для создания тестового канала
+function createTestUnverifiedChannel() {
+    console.log('🧪 Создаем тестовый неверифицированный канал...');
+    
+    // Создаем демо канал
+    const testChannel = {
+        id: 999,
+        title: 'Тестовый канал для верификации',
+        username: 'test_verification_channel',
+        is_verified: false,
+        status: 'pending',
+        owner_name: '@test_user',
+        price_per_post: 500
+    };
+    
+    // Создаем карточку канала
+    const channelCard = createChannelCard(testChannel);
+    
+    // Добавляем в начало списка каналов
+    const channelsGrid = document.getElementById('channelsGrid');
+    if (channelsGrid) {
+        channelsGrid.insertBefore(channelCard, channelsGrid.firstChild);
+        console.log('✅ Тестовый канал добавлен в список');
+    }
+    
+    return testChannel;
+}
+
+// Делаем демо функцию доступной глобально
+window.createTestUnverifiedChannel = createTestUnverifiedChannel;
 function debugChannelData() {
     console.log('🔧 Запуск отладки каналов...');
 
@@ -256,8 +296,14 @@ function createChannelCard(channel) {
                     <span class="status-badge ${statusClass}">${statusText}</span>
                 </div>
                 
-                <!-- Кнопка редактировать -->
-                <div class="edit-action">
+                <!-- Кнопки действий -->
+                <div class="actions-group">
+                    <!-- Кнопка верификации для неверифицированных каналов -->
+                    ${!isVerified ? `
+                        <button class="verify-btn" onclick="startChannelVerification(${channel.id}, '${channelName}', '${channel.username || channel.channel_username || 'unknown'}')" title="Верифицировать канал">🔐 Верифицировать</button>
+                    ` : ''}
+                    
+                    <!-- Кнопка редактировать -->
                     <button class="edit-btn" onclick="showChannelEditModal(${channel.id})" title="Редактировать">⚙️</button>
                 </div>
             </div>
@@ -266,6 +312,107 @@ function createChannelCard(channel) {
 
     console.log('✅ Упрощенная карточка канала создана');
     return card;
+}
+
+// Функция для запуска верификации канала из карточки
+function startChannelVerification(channelId, channelName, channelUsername) {
+    console.log(`🔐 Запуск верификации канала ${channelId}: ${channelName} (@${channelUsername})`);
+
+    try {
+        // Получаем данные пользователя Telegram
+        const telegramUser = getTelegramUser();
+        if (!telegramUser) {
+            console.error('❌ Данные пользователя Telegram недоступны');
+            alert('Ошибка: данные пользователя Telegram недоступны');
+            return;
+        }
+
+        // Показываем индикатор загрузки
+        const verifyButtons = document.querySelectorAll(`[onclick*="startChannelVerification(${channelId}"]`);
+        verifyButtons.forEach(btn => {
+            btn.disabled = true;
+            btn.textContent = '⏳ Загрузка...';
+        });
+
+        // Отправляем запрос на получение нового кода верификации
+        fetch('/api/channels', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': telegramUser.id.toString()
+            },
+            body: JSON.stringify({
+                username: channelUsername.replace('@', ''),
+                title: channelName,
+                description: `Повторная верификация канала ${channelName}`,
+                category: 'other',
+                price_per_post: 0,
+                owner_name: telegramUser.username || 'user',
+                subscriber_count: 0,
+                action: 'reverify', // Флаг для определения повторной верификации
+                channel_id: channelId
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.verification_code) {
+                console.log('✅ Получен новый код верификации:', data.verification_code);
+                
+                // Показываем модальное окно верификации
+                showVerificationModal(channelId, channelName, channelUsername, data.verification_code);
+                
+                // Обновляем статус канала в UI (визуально)
+                updateChannelStatusInUI(channelId, 'pending');
+                
+            } else {
+                console.error('❌ Ошибка получения кода верификации:', data.error);
+                alert('Ошибка получения кода верификации: ' + (data.error || 'Неизвестная ошибка'));
+            }
+        })
+        .catch(error => {
+            console.error('❌ Сетевая ошибка:', error);
+            alert('Сетевая ошибка при получении кода верификации');
+        })
+        .finally(() => {
+            // Восстанавливаем кнопки
+            verifyButtons.forEach(btn => {
+                btn.disabled = false;
+                btn.textContent = '🔐 Верифицировать';
+            });
+        });
+
+    } catch (error) {
+        console.error('❌ Ошибка верификации:', error);
+        alert('Ошибка верификации: ' + error.message);
+    }
+}
+
+// Функция для обновления статуса канала в UI
+function updateChannelStatusInUI(channelId, status) {
+    console.log(`🔄 Обновляем статус канала ${channelId} на ${status}`);
+    
+    const channelCard = document.querySelector(`[data-channel-id="${channelId}"]`);
+    if (channelCard) {
+        const statusBadge = channelCard.querySelector('.status-badge');
+        if (statusBadge) {
+            // Обновляем текст и класс статуса
+            if (status === 'verified') {
+                statusBadge.textContent = 'Верифицирован';
+                statusBadge.className = 'status-badge verified';
+                
+                // Удаляем кнопку верификации
+                const verifyBtn = channelCard.querySelector('.verify-btn');
+                if (verifyBtn) {
+                    verifyBtn.remove();
+                }
+            } else if (status === 'pending') {
+                statusBadge.textContent = 'На модерации';
+                statusBadge.className = 'status-badge pending';
+            }
+            
+            console.log(`✅ Статус канала ${channelId} обновлен в UI`);
+        }
+    }
 }
 
 // Функция для отображения модального окна редактирования канала
@@ -812,7 +959,7 @@ async function startChannelVerification(channelId, channelName, channelUsername)
                                 Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
                             </li>
                             <li style="margin-bottom: 10px;">
-                                Переслать это сообщение нашему боту <strong>@YOUR_BOT_USERNAME</strong>
+                                Переслать это сообщение нашему боту <strong>@xxxzzzaaa_bot</strong>
                             </li>
                             <li style="margin-bottom: 10px;">
                                 Получите уведомление об успешной верификации в боте
@@ -840,7 +987,7 @@ async function startChannelVerification(channelId, channelName, channelUsername)
                     ">Понятно, перейти к каналам</button>
 
                     <div style="margin-top: 15px;">
-                        <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" style="
+                        <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
                             color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
                         ">🤖 Открыть бота для верификации</a>
                     </div>

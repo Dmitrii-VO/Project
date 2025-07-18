@@ -23,7 +23,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 // Обработка формы добавления канала
-document.getElementById('addChannelForm').addEventListener('submit', async function(e) {
+document.addEventListener('DOMContentLoaded', function() {
+    const addChannelForm = document.getElementById('addChannelForm');
+    if (addChannelForm) {
+        addChannelForm.addEventListener('submit', async function(e) {
     e.preventDefault();
 
     const submitBtn = document.getElementById('submitBtn');
@@ -97,8 +100,7 @@ document.getElementById('addChannelForm').addEventListener('submit', async funct
         if (verificationCode) {
             // Создаем модальное окно с инструкциями
             const modal = document.createElement('div');
-            modal.className = 'modal';
-            modal.style.background = 'rgba(0,0,0,0.8)';
+            modal.className = 'modal-backdrop';
 
 modal.innerHTML = `
     <div style="
@@ -149,7 +151,7 @@ modal.innerHTML = `
             Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
         </li>
         <li style="margin-bottom: 10px;">
-            Переслать это сообщение нашему боту <strong>@YOUR_BOT_USERNAME</strong>
+            Переслать это сообщение нашему боту <strong>@xxxzzzaaa_bot</strong>
         </li>
         <li style="margin-bottom: 10px;">
             Получите уведомление об успешной верификации в боте
@@ -177,7 +179,7 @@ modal.innerHTML = `
 ">Понятно, перейти к каналам</button>
 
 <div style="margin-top: 15px;">
-    <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" style="
+    <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
         color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
     ">🤖 Открыть бота для верификации</a>
 </div>
@@ -185,6 +187,9 @@ modal.innerHTML = `
 `;
 
                     document.body.appendChild(modal);
+
+                    // Показываем модальное окно с классом show
+                    modal.classList.add('show');
 
                     } else {
                     // Fallback для случаев без кода верификации
@@ -207,6 +212,8 @@ modal.innerHTML = `
                             submitBtn.textContent = originalText;
                         }
                     });
+    }
+});
 
 // Поиск по каналам
 const searchInput = document.querySelector('#channelSearch');

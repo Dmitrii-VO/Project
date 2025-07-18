@@ -18,22 +18,7 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
     // Создаем новое модальное окно
     const modal = document.createElement('div');
     modal.id = 'deleteChannelModal';
-    modal.className = 'modal';
-    modal.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        background: rgba(0, 0, 0, 0.5) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        z-index: 9998 !important;
-        pointer-events: auto !important;
-    `;
+    modal.className = 'modal-backdrop';
 
     modal.innerHTML = `
         <div class="modal-overlay" onclick="closeDeleteModal()"></div>
@@ -77,6 +62,9 @@ function showDeleteConfirmation(channelId, channelName, channelUsername) {
 
     // Добавляем в body
     document.body.appendChild(modal);
+
+    // Показываем модальное окно с классом show
+    modal.classList.add('show');
 
     // Добавляем event listener для кнопки подтверждения удаления
     const confirmBtn = document.getElementById('confirmDeleteBtn');
@@ -296,6 +284,16 @@ function showVerificationModal(channelId, channelName, channelUsername, verifica
             console.log(`🔐 Показываем верификацию для канала ${channelId}`);
             console.log(`🔐 Код верификации: ${verificationCode}`);
             
+            // Проверяем, что вызов функции корректный (с правильными параметрами)
+            if (!channelId || !channelName || !verificationCode) {
+                console.error('❌ Некорректные параметры для showVerificationModal:', { channelId, channelName, channelUsername, verificationCode });
+                return;
+            }
+            
+            // Проверяем, что функция вызвана пользователем, а не автоматически
+            const stack = new Error().stack;
+            console.log('📍 Call stack:', stack);
+            
             try {
                 // Используем программное создание модального окна как основной метод
                 // так как это более надежно и не зависит от HTML структуры
@@ -327,37 +325,28 @@ function showSimpleAlert(channelName, channelUsername, verificationCode) {
 // Функция для создания модального окна программно
 function createVerificationModalProgrammatically(channelId, channelName, channelUsername, verificationCode) {
     console.log('🔧 Создаем модальное окно верификации программно...');
+    console.log('🔍 Параметры:', { channelId, channelName, channelUsername, verificationCode });
     
-    // Удаляем существующее модальное окно если есть
-    const existingModal = document.getElementById('verificationModal');
-    if (existingModal) {
-        existingModal.remove();
+    // Удаляем все существующие модальные окна верификации
+    const existingModals = document.querySelectorAll('#verificationModal');
+    existingModals.forEach(modal => {
+        console.log('🗑️ Удаляем существующее модальное окно:', modal);
+        modal.remove();
+    });
+    
+    // Проверяем, что модальное окно действительно нужно показать
+    if (!channelId || !channelName || !verificationCode) {
+        console.error('❌ Недостаточно данных для создания модального окна верификации');
+        return;
     }
     
     // Создаем новое модальное окно
     const modal = document.createElement('div');
     modal.id = 'verificationModal';
     modal.className = 'modal-backdrop';
-    modal.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        right: 0 !important;
-        bottom: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        background: rgba(0, 0, 0, 0.7) !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-        z-index: 99999 !important;
-        visibility: visible !important;
-        opacity: 1 !important;
-        pointer-events: auto !important;
-    `;
     
     modal.innerHTML = `
-        <div class="modal" style="background: white !important; border-radius: 8px !important; padding: 24px !important; max-width: 500px !important; width: 90% !important; max-height: 80vh !important; overflow-y: auto !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; position: relative !important; z-index: 100000 !important;">
+        <div class="modal" style="background: white !important; border-radius: 8px !important; padding: 24px !important; max-width: 500px !important; width: 90% !important; max-height: 80vh !important; overflow-y: auto !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; position: relative !important; z-index: 100000 !important; margin: 0 auto !important; flex-shrink: 0 !important; align-self: center !important; justify-self: center !important;">
             <div class="modal-header">
                 <h3 class="modal-title">🔐 Подтвердите владение каналом</h3>
                 <button class="modal-close" onclick="closeModal()" style="float: right; background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
@@ -409,6 +398,14 @@ function createVerificationModalProgrammatically(channelId, channelName, channel
     document.body.appendChild(modal);
     console.log('🔍 Модальное окно добавлено в DOM:', modal);
     
+    // Показываем модальное окно с классом show
+    modal.classList.add('show');
+    
+    // Принудительно сбрасываем все возможные conflicting стили
+    document.body.style.position = 'relative';
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    
     // Показываем модальное окно
     document.body.style.overflow = 'hidden';
     console.log('🔍 Стили применены - overflow: hidden');
@@ -444,6 +441,24 @@ function createVerificationModalProgrammatically(channelId, channelName, channel
                 left: modalInDom.offsetLeft
             });
             
+            // Принудительное центрирование если модальное окно не по центру
+            const innerModal = modalInDom.querySelector('.modal');
+            if (innerModal) {
+                console.log('🔄 Принудительное центрирование модального окна...');
+                
+                // Убеждаемся что модальное окно по центру
+                modalInDom.style.display = 'flex';
+                modalInDom.style.alignItems = 'center';
+                modalInDom.style.justifyContent = 'center';
+                
+                // Принудительно центрируем внутренний контейнер
+                innerModal.style.margin = '0 auto';
+                innerModal.style.alignSelf = 'center';
+                innerModal.style.justifySelf = 'center';
+                
+                console.log('✅ Принудительное центрирование выполнено');
+            }
+            
             // Если модальное окно не видно, попробуем альтернативный метод
             if (modalInDom.offsetWidth === 0 || modalInDom.offsetHeight === 0) {
                 console.log('❌ Модальное окно не видно, создаем простое alert');
@@ -467,21 +482,10 @@ function createSimpleVerificationAlert(channelName, channelUsername, verificatio
     // Создаем очень простое модальное окно
     const simpleModal = document.createElement('div');
     simpleModal.id = 'verificationModal';
-    simpleModal.style.cssText = `
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 100vw !important;
-        height: 100vh !important;
-        background: rgba(0, 0, 0, 0.8) !important;
-        z-index: 999999 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    `;
+    simpleModal.className = 'modal-backdrop';
     
     simpleModal.innerHTML = `
-        <div style="background: white !important; padding: 30px !important; border-radius: 10px !important; max-width: 400px !important; width: 90% !important; text-align: center !important; box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;">
+        <div style="background: white !important; padding: 30px !important; border-radius: 10px !important; max-width: 400px !important; width: 90% !important; text-align: center !important; box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important; margin: 0 auto !important; position: relative !important; max-height: 80vh !important; overflow-y: auto !important;">
             <h2 style="color: #333 !important; margin-bottom: 20px !important;">🔐 Код верификации</h2>
             <p style="color: #666 !important; margin-bottom: 15px !important;">Канал: <strong>${channelName}</strong></p>
             <p style="color: #666 !important; margin-bottom: 15px !important;">Username: <strong>@${channelUsername}</strong></p>
@@ -497,6 +501,9 @@ function createSimpleVerificationAlert(channelName, channelUsername, verificatio
     
     document.body.appendChild(simpleModal);
     document.body.style.overflow = 'hidden';
+    
+    // Показываем модальное окно с классом show
+    simpleModal.classList.add('show');
     
     // Обработчик для закрытия по клику на backdrop
     simpleModal.addEventListener('click', function(e) {
@@ -714,7 +721,7 @@ async function startVerification() {
                                 Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
                             </li>
                             <li style="margin-bottom: 10px;">
-                                Переслать это сообщение нашему боту <strong>@YOUR_BOT_USERNAME</strong>
+                                Переслать это сообщение нашему боту <strong>@xxxzzzaaa_bot</strong>
                             </li>
                             <li style="margin-bottom: 10px;">
                                 Получите уведомление об успешной верификации в боте
@@ -742,7 +749,7 @@ async function startVerification() {
                     ">Понятно, перейти к каналам</button>
 
                     <div style="margin-top: 15px;">
-                        <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" style="
+                        <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
                             color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
                         ">🤖 Открыть бота для верификации</a>
                     </div>
@@ -1107,8 +1114,7 @@ async function startChannelVerification(channelId, channelName, channelUsername)
 function showVerificationInstructions(verificationCode, channelUsername) {
     // Создаем модальное окно
     const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.style.background = 'rgba(0,0,0,0.8)';
+    modal.className = 'modal-backdrop';
 
     modal.innerHTML = `
         <div style="
@@ -1240,7 +1246,7 @@ function showVerificationInstructions(verificationCode, channelUsername) {
 
             <!-- Ссылка на бота -->
             <div style="margin-top: 15px;">
-                <a href="https://t.me/YOUR_BOT_USERNAME" target="_blank" style="
+                <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
                     color: #2196f3; 
                     text-decoration: none; 
                     font-size: 14px; 
@@ -1262,6 +1268,9 @@ function showVerificationInstructions(verificationCode, channelUsername) {
     }, 10000);
     // Добавляем модальное окно в DOM
     document.body.appendChild(modal);
+
+    // Показываем модальное окно с классом show
+    modal.classList.add('show');
 
     // Закрытие по клику на фон
     modal.addEventListener('click', function(e) {

@@ -58,7 +58,7 @@
                     <h3 class="card-title">Добавление канала</h3>
                 </div>
 
-                <form class="card-body" id="addChannelForm" onsubmit="submitChannelForm(event)">
+                <form class="card-body" id="addChannelForm">
                     <!-- Требования к каналам -->
                     <div class="requirements-block">
                         <div class="requirement-item">
@@ -175,27 +175,9 @@
         </div>
     </div>
 
-    <!-- Модальное окно верификации -->
+    <!-- Модальное окно верификации (создается программно) -->
     <div id="verificationModal" class="modal-backdrop" style="display: none;">
-        <div class="modal">
-            <div class="modal-header">
-                <h3 class="modal-title">🔐 Подтвердите владение каналом</h3>
-                <button class="modal-close" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div id="verificationContent">
-                    <!-- Содержимое будет заполнено JavaScript -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal()">
-                    Отмена
-                </button>
-                <button class="btn btn-primary" id="startVerificationBtn" onclick="startVerification()">
-                    🚀 Начать верификацию
-                </button>
-            </div>
-        </div>
+        <!-- Содержимое будет заполнено JavaScript -->
     </div>
 
 {% endblock %}
