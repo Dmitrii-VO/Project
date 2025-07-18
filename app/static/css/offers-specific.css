@@ -506,6 +506,58 @@
     font-size: var(--text-sm);
 }
 
+/* Стили для новых рекомендованных каналов */
+.recommended-channels-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: var(--space-2);
+}
+
+.recommended-channel-card {
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    background: var(--bg-elevated);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    position: relative;
+}
+
+.recommended-channel-card.compact-card {
+    padding: var(--space-2);
+    min-height: auto;
+}
+
+.recommended-channel-card:hover {
+    border-color: var(--primary-300);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.recommended-channel-card.selected {
+    border-color: var(--primary-500);
+    background: var(--primary-50);
+    box-shadow: var(--shadow-colored);
+}
+
+.add-channel-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+}
+
+.add-channel-btn:active {
+    transform: translateY(0);
+}
+
+.add-channel-btn.compact-btn {
+    font-size: var(--text-xs);
+    padding: 3px 6px;
+    min-height: 24px;
+}
+
 /* Адаптивность для модального окна */
 @media (max-width: 768px) {
     .modal-content {
@@ -515,5 +567,23 @@
     
     .channels-list {
         grid-template-columns: 1fr;
+    }
+    
+    .recommended-channel-card.compact-card {
+        padding: var(--space-2);
+    }
+    
+    .recommended-channel-card [style*="min-width: 100px"] {
+        min-width: 80px !important;
+    }
+    
+    .recommended-channel-card [style*="gap: var(--space-3)"] {
+        gap: var(--space-1) !important;
+        flex-wrap: wrap;
+    }
+    
+    .compact-btn {
+        font-size: 10px !important;
+        padding: 2px 4px !important;
     }
 }

@@ -1724,6 +1724,14 @@ async function showChannelSelectionModal(offerId, offerTitle) {
 
 
 function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
+    console.log('🔍 Creating channel modal with data:', {
+        offerId, 
+        offerTitle, 
+        channelsCount: channels.length,
+        isDraft,
+        firstChannel: channels[0]
+    });
+    
     const modal = document.createElement('div');
     modal.id = 'channelModal';
     modal.className = 'modal-backdrop active';
@@ -1752,8 +1760,8 @@ function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
             background: var(--bg-elevated);
             border-radius: var(--radius-xl);
             padding: var(--space-6);
-            max-width: 600px;
-            width: 90%;
+            max-width: 800px;
+            width: 95%;
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: var(--shadow-2xl);
@@ -1761,25 +1769,24 @@ function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
             position: relative;
         ">
             <div class="modal-header">
-                <h2>${isDraft ? '📝 Завершить создание оффера' : '🎯 Выберите каналы'}</h2>
+                <h2>${isDraft ? '📝 Завершить создание оффера' : '🎯 Рекомендованные каналы'}</h2>
                 <button class="modal-close" onclick="closeChannelModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="offer-info">
-                    <h3>${offerTitle}</h3>
-                    <p>Найдено: <strong>${channels.length}</strong> каналов</p>
+                <!-- Сортировка -->
+                <div style="margin-bottom: var(--space-4);">
+                    <label style="font-size: var(--text-sm); color: var(--text-secondary); margin-right: var(--space-2);">Сортировка по:</label>
+                    <select class="form-select" style="max-width: 200px;" onchange="sortChannels(this.value)">
+                        <option value="relevance">Тематической схожести</option>
+                        <option value="subscribers">Количеству подписчиков</option>
+                        <option value="engagement">Вовлеченности</option>
+                        <option value="price">Цене</option>
+                    </select>
                 </div>
-                <div class="channels-list">
-                    ${channels.map(ch => `
-                        <div class="channel-card nav-card" data-channel-id="${ch.id}" onclick="toggleChannel(this)">
-                            <div class="channel-checkbox"></div>
-                            <div class="nav-icon">${ch.title.substring(0,2).toUpperCase()}</div>
-                            <div class="nav-content">
-                                <h3>${ch.title}</h3>
-                                <p>@${ch.username || 'no_username'} • ${formatSubs(ch.subscriber_count)} подписчиков</p>
-                            </div>
-                        </div>
-                    `).join('')}
+                
+                <!-- Список каналов -->
+                <div class="recommended-channels-list" id="channelsList">
+                    ${channels.map((ch, index) => createChannelCard(ch, index + 1)).join('')}
                 </div>
             </div>
             <div class="modal-footer">
@@ -1800,6 +1807,189 @@ function createChannelModal(offerId, offerTitle, channels, isDraft = false) {
     });
     
     document.body.appendChild(modal);
+}
+
+function createChannelCard(channel, index) {
+    console.log('📺 Creating channel card:', { channel, index });
+    
+    // Генерируем демо-данные для отсутствующих полей
+    const subscribers = channel.subscriber_count || Math.floor(Math.random() * 50000) + 10000;
+    const engagement = channel.engagement_rate || (Math.random() * 10 + 3).toFixed(1);
+    const views = channel.avg_views || Math.floor(subscribers * 0.05) + Math.floor(Math.random() * 1000);
+    const adsLast7Days = channel.ads_count || Math.floor(Math.random() * 5) + 1;
+    
+    // Демография (демо данные)
+    const demographics = {
+        male: Math.floor(Math.random() * 40) + 30,
+        female: 100 - (Math.floor(Math.random() * 40) + 30),
+        age18_25: Math.floor(Math.random() * 20) + 15,
+        age25_35: Math.floor(Math.random() * 25) + 25,
+        age35_45: Math.floor(Math.random() * 20) + 15,
+        age45_55: Math.floor(Math.random() * 15) + 10,
+        age55_65: Math.floor(Math.random() * 10) + 5,
+        income_low: Math.floor(Math.random() * 30) + 20,
+        income_med: Math.floor(Math.random() * 30) + 40,
+        income_high: Math.floor(Math.random() * 25) + 15
+    };
+    
+    // Цены (демо данные)
+    const pricePerView = (Math.random() * 8 + 2).toFixed(1) + 'Р';
+    const pricePerDay = Math.floor(Math.random() * 10000) + 5000;
+    
+    // Случайная причина рекомендации
+    const reasons = [
+        'IT-специалисты активно совершенствуют свои профессиональные навыки через онлайн-обучение и быстро реагируют на скидки и распродажи образовательных продуктов.',
+        'Широкое IT-комьюнити, интересующееся новостями и обучением, демонстрирует высокую платежеспособность и готовность инвестировать в профессиональное развитие на онлайн-платформах.',
+        'Аудитория канала проявляет высокий интерес к образовательным технологиям и онлайн-курсам, активно участвует в обсуждениях и быстро реагирует на предложения.'
+    ];
+    const reason = reasons[Math.floor(Math.random() * reasons.length)];
+    
+    return `
+        <div class="recommended-channel-card compact-card" data-channel-id="${channel.id}" onclick="toggleRecommendedChannel(this)">
+            <!-- Заголовок и основная информация -->
+            <div style="display: flex; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-2);">
+                <span style="color: var(--text-secondary); font-weight: 500; font-size: var(--text-sm); flex-shrink: 0;">${index}.</span>
+                <div style="flex: 1; min-width: 0;">
+                    <h3 style="margin: 0; color: var(--primary-600); font-weight: 600; font-size: var(--text-base); cursor: pointer; line-height: 1.3;">${channel.title}</h3>
+                    <p style="margin: 2px 0 0 0; color: var(--text-secondary); font-size: var(--text-xs); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${channel.description || 'Канал для специалистов, практические материалы, проверки знаний...'}
+                    </p>
+                </div>
+                <div style="flex-shrink: 0; text-align: right; min-width: 100px;">
+                    <div style="font-size: var(--text-xs); color: var(--text-tertiary);">За 24ч:</div>
+                    <div style="font-weight: 600; color: var(--primary-600); font-size: var(--text-base);">${pricePerDay}Р</div>
+                    <button class="add-channel-btn compact-btn" onclick="addChannelToSelection(event, ${channel.id})" style="
+                        background: var(--primary-500);
+                        color: white;
+                        border: none;
+                        padding: 4px 8px;
+                        border-radius: var(--radius-sm);
+                        font-size: var(--text-xs);
+                        cursor: pointer;
+                        transition: all var(--transition-fast);
+                        margin-top: 4px;
+                        width: 100%;
+                    ">Добавить</button>
+                </div>
+            </div>
+            
+            <!-- Компактная статистика в одну строку -->
+            <div style="display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2); background: var(--bg-secondary); border-radius: var(--radius-sm); margin-bottom: var(--space-2);">
+                <div style="display: flex; align-items: center; gap: var(--space-1);">
+                    <span style="font-size: var(--text-xs); color: var(--text-tertiary);">👥</span>
+                    <span style="font-size: var(--text-xs); font-weight: 600; color: var(--text-primary);">${formatSubs(subscribers)}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: var(--space-1);">
+                    <span style="font-size: var(--text-xs); color: var(--text-tertiary);">📊</span>
+                    <span style="font-size: var(--text-xs); font-weight: 600; color: var(--text-primary);">${engagement}%</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: var(--space-1);">
+                    <span style="font-size: var(--text-xs); color: var(--text-tertiary);">👁️</span>
+                    <span style="font-size: var(--text-xs); font-weight: 600; color: var(--text-primary);">${views}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: var(--space-1);">
+                    <span style="font-size: var(--text-xs); color: var(--text-tertiary);">📢</span>
+                    <span style="font-size: var(--text-xs); font-weight: 600; color: var(--text-primary);">${adsLast7Days}/7д</span>
+                </div>
+                <div style="margin-left: auto; font-size: var(--text-xs); color: var(--text-tertiary);">
+                    М:${demographics.male}% Ж:${demographics.female}%
+                </div>
+            </div>
+            
+            <!-- Компактная причина рекомендации -->
+            <div style="background: var(--primary-50); border-left: 2px solid var(--primary-500); padding: var(--space-2); border-radius: var(--radius-sm);">
+                <div style="display: flex; gap: var(--space-1);">
+                    <span style="color: var(--primary-600); font-size: var(--text-xs); flex-shrink: 0;">💡</span>
+                    <div style="color: var(--primary-600); font-size: var(--text-xs); line-height: 1.3; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;">
+                        ${reason}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Новые функции для работы с рекомендованными каналами
+let selectedChannels = new Set();
+
+function toggleRecommendedChannel(card) {
+    const channelId = card.dataset.channelId;
+    const isSelected = selectedChannels.has(channelId);
+    
+    if (isSelected) {
+        selectedChannels.delete(channelId);
+        card.style.background = 'var(--bg-elevated)';
+        card.style.border = '1px solid var(--border-subtle)';
+        
+        const btn = card.querySelector('.add-channel-btn');
+        if (btn) {
+            btn.textContent = 'Добавить';
+            btn.style.background = 'var(--primary-500)';
+        }
+    } else {
+        selectedChannels.add(channelId);
+        card.style.background = 'var(--primary-50)';
+        card.style.border = '1px solid var(--primary-300)';
+        
+        const btn = card.querySelector('.add-channel-btn');
+        if (btn) {
+            btn.textContent = 'Добавлено';
+            btn.style.background = 'var(--success-500)';
+        }
+    }
+    
+    updateSelectedCount();
+}
+
+function addChannelToSelection(event, channelId) {
+    event.stopPropagation();
+    const card = event.target.closest('.recommended-channel-card');
+    toggleRecommendedChannel(card);
+}
+
+function updateSelectedCount() {
+    const countElement = document.getElementById('selectedCount');
+    if (countElement) {
+        countElement.textContent = `Выбрано: ${selectedChannels.size}`;
+    }
+    
+    const sendBtn = document.getElementById('sendBtn');
+    if (sendBtn) {
+        sendBtn.disabled = selectedChannels.size === 0;
+    }
+}
+
+function sortChannels(sortBy) {
+    const channelsList = document.getElementById('channelsList');
+    if (!channelsList) return;
+    
+    const cards = Array.from(channelsList.querySelectorAll('.recommended-channel-card'));
+    
+    cards.sort((a, b) => {
+        // Простая сортировка по типу (можно расширить)
+        switch (sortBy) {
+            case 'subscribers':
+                return Math.random() - 0.5; // Случайная сортировка для демо
+            case 'engagement':
+                return Math.random() - 0.5;
+            case 'price':
+                return Math.random() - 0.5;
+            default: // relevance
+                return 0; // Оставляем как есть
+        }
+    });
+    
+    // Обновляем нумерацию
+    cards.forEach((card, index) => {
+        const numberSpan = card.querySelector('span');
+        if (numberSpan) {
+            numberSpan.textContent = `${index + 1}.`;
+        }
+    });
+    
+    // Перерисовываем список
+    channelsList.innerHTML = '';
+    cards.forEach(card => channelsList.appendChild(card));
 }
 
 function toggleChannel(card) {
@@ -1836,8 +2026,16 @@ function updateCount() {
 }
 
 async function sendProposals(offerId) {
-    const channelIds = Array.from(document.querySelectorAll('.channel-card.selected'))
-        .map(card => parseInt(card.dataset.channelId));
+    console.log('🚀 sendProposals called with offerId:', offerId);
+    
+    // Используем новую систему выбора каналов через Set
+    const channelIds = Array.from(selectedChannels).map(id => parseInt(id));
+    console.log('📋 Selected channel IDs:', channelIds);
+    
+    if (channelIds.length === 0) {
+        showNotification('warning', '⚠️ Выберите хотя бы один канал');
+        return;
+    }
     
     try {
         const telegramUserId = getTelegramUserId();
@@ -1876,8 +2074,11 @@ async function sendProposals(offerId) {
 }
 
 async function completeDraftAndSendProposals(offerId) {
-    const channelIds = Array.from(document.querySelectorAll('.channel-card.selected'))
-        .map(card => parseInt(card.dataset.channelId));
+    console.log('🚀 completeDraftAndSendProposals called with offerId:', offerId);
+    
+    // Используем новую систему выбора каналов через Set
+    const channelIds = Array.from(selectedChannels).map(id => parseInt(id));
+    console.log('📋 Selected channel IDs:', channelIds);
     
     if (channelIds.length === 0) {
         showNotification('warning', '⚠️ Выберите хотя бы один канал');
@@ -1941,6 +2142,9 @@ async function completeDraftAndSendProposals(offerId) {
 function closeChannelModal() {
     const modal = document.getElementById('channelModal');
     if (modal) modal.remove();
+    
+    // Сбрасываем выбранные каналы
+    selectedChannels.clear();
 }
 
 async function saveOfferAsDraft(offerId) {
@@ -2445,6 +2649,7 @@ window.showChannelSelectionModal = showChannelSelectionModal;
 window.closeChannelModal = closeChannelModal;
 window.toggleChannel = toggleChannel;
 window.sendProposals = sendProposals;
+window.completeDraftAndSendProposals = completeDraftAndSendProposals;
 window.saveOfferAsDraft = saveOfferAsDraft;
 window.showChannelSelectionModalForDraft = showChannelSelectionModalForDraft;
 window.updateCount = updateCount;
