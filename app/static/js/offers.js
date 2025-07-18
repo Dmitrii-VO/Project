@@ -1941,19 +1941,7 @@ function createChannelCard(channel, index) {
                 </div>
                 
                 <!-- Кнопки -->
-                <div style="display: flex; gap: var(--space-1);">
-                    <button onclick="toggleChannelDetails(event, ${channel.id})" style="
-                        background: var(--bg-secondary);
-                        color: var(--text-primary);
-                        border: 1px solid var(--border-default);
-                        padding: 4px 6px;
-                        border-radius: var(--radius-sm);
-                        font-size: var(--text-xs);
-                        cursor: pointer;
-                        transition: all var(--transition-fast);
-                        white-space: nowrap;
-                    ">Подробнее</button>
-                    
+                <div style="display: flex; flex-direction: column; gap: var(--space-1);">
                     <button class="add-channel-btn compact-btn" onclick="addChannelToSelection(event, ${channel.id})" style="
                         background: var(--primary-500);
                         color: white;
@@ -1966,6 +1954,18 @@ function createChannelCard(channel, index) {
                         font-weight: 500;
                         white-space: nowrap;
                     ">Добавить</button>
+                    
+                    <button onclick="toggleChannelDetails(event, ${channel.id})" style="
+                        background: var(--bg-secondary);
+                        color: var(--text-primary);
+                        border: 1px solid var(--border-default);
+                        padding: 4px 6px;
+                        border-radius: var(--radius-sm);
+                        font-size: var(--text-xs);
+                        cursor: pointer;
+                        transition: all var(--transition-fast);
+                        white-space: nowrap;
+                    ">Подробнее</button>
                 </div>
             </div>
         </div>

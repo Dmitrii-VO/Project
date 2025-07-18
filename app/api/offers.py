@@ -284,9 +284,9 @@ def create_offer():
 """
                         
                         TelegramNotificationService.send_telegram_notification(
-                            user_id=channel['owner_telegram_id'],
+                            telegram_id=channel['owner_telegram_id'],
                             message=notification_message,
-                            notification_type='new_offer'
+                            metadata={'type': 'new_offer', 'offer_id': offer_id, 'channel_id': channel['id']}
                         )
                         
                         logger.info(f"✅ Уведомление отправлено владельцу канала {channel['title']} (telegram_id: {channel['owner_telegram_id']})")
