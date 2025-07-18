@@ -209,7 +209,9 @@ modal.innerHTML = `
                     });
 
 // Поиск по каналам
-document.querySelector('.search-input').addEventListener('input', function() {
+const searchInput = document.querySelector('#channelSearch');
+if (searchInput) {
+    searchInput.addEventListener('input', function() {
     const searchTerm = this.value.toLowerCase();
     const channelCards = document.querySelectorAll('.channel-card');
 
@@ -223,7 +225,8 @@ document.querySelector('.search-input').addEventListener('input', function() {
             card.style.display = 'none';
         }
     });
-                            });
+    });
+}
 
 // Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', function() {

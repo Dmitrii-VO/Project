@@ -292,13 +292,77 @@ function testFullDeleteProcess(channelId) {
 }
 
 // Функции модального окна верификации:
-function showVerificationModal(channelId, channelName, channelUsername) {        
+function showVerificationModal(channelId, channelName, channelUsername, verificationCode) {        
             console.log(`🔐 Показываем верификацию для канала ${channelId}`);
+            console.log(`🔐 Код верификации: ${verificationCode}`);
             
-            verificationChannelData = { id: channelId, name: channelName, username: channelUsername };
+            try {
+                // Используем программное создание модального окна как основной метод
+                // так как это более надежно и не зависит от HTML структуры
+                createVerificationModalProgrammatically(channelId, channelName, channelUsername, verificationCode);
+            } catch (error) {
+                console.error('❌ Ошибка создания модального окна:', error);
+                // Fallback к простому alert
+                showSimpleAlert(channelName, channelUsername, verificationCode);
+            }
+        }
 
-            const content = document.getElementById('verificationContent');
-            content.innerHTML = `
+// Последний резервный метод - простой alert
+function showSimpleAlert(channelName, channelUsername, verificationCode) {
+    const message = `🔐 Код верификации для канала "${channelName}" (@${channelUsername}):\n\n${verificationCode}\n\nСкопируйте этот код и опубликуйте в вашем канале, затем переслать нашему боту.`;
+    
+    alert(message);
+    
+    // Попытка скопировать код в буфер обмена
+    try {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(verificationCode);
+            console.log('✅ Код скопирован в буфер обмена');
+        }
+    } catch (error) {
+        console.error('❌ Не удалось скопировать код:', error);
+    }
+}
+
+// Функция для создания модального окна программно
+function createVerificationModalProgrammatically(channelId, channelName, channelUsername, verificationCode) {
+    console.log('🔧 Создаем модальное окно верификации программно...');
+    
+    // Удаляем существующее модальное окно если есть
+    const existingModal = document.getElementById('verificationModal');
+    if (existingModal) {
+        existingModal.remove();
+    }
+    
+    // Создаем новое модальное окно
+    const modal = document.createElement('div');
+    modal.id = 'verificationModal';
+    modal.className = 'modal-backdrop';
+    modal.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0, 0, 0, 0.7) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 99999 !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+    `;
+    
+    modal.innerHTML = `
+        <div class="modal" style="background: white !important; border-radius: 8px !important; padding: 24px !important; max-width: 500px !important; width: 90% !important; max-height: 80vh !important; overflow-y: auto !important; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important; position: relative !important; z-index: 100000 !important;">
+            <div class="modal-header">
+                <h3 class="modal-title">🔐 Подтвердите владение каналом</h3>
+                <button class="modal-close" onclick="closeModal()" style="float: right; background: none; border: none; font-size: 24px; cursor: pointer;">&times;</button>
+            </div>
+            <div class="modal-body">
                 <div class="verification-info">
                     <div class="channel-info" style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
                         <div class="channel-avatar" style="width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; background: #e5e7eb; border-radius: 50%; font-weight: bold; font-size: 1.2rem;">
@@ -306,16 +370,21 @@ function showVerificationModal(channelId, channelName, channelUsername) {
                         </div>
                         <div>
                             <div style="font-weight: 600; color: #111827; font-size: 1.1rem;">${channelName}</div>
-                            <div style="color: #6b7280;">${channelUsername || 'Без username'}</div>
+                            <div style="color: #6b7280;">@${channelUsername || 'Без username'}</div>
                         </div>
                     </div>
 
+                    <div class="verification-code-block" style="background: #f0fdf4; border: 2px solid #10b981; border-radius: 8px; padding: 16px; margin-bottom: 16px; text-align: center;">
+                        <h4 style="color: #047857; margin-bottom: 8px;">🔐 Ваш код верификации:</h4>
+                        <div style="font-family: monospace; font-size: 18px; font-weight: bold; color: #047857; background: white; padding: 8px; border-radius: 4px; border: 1px solid #10b981; cursor: pointer; user-select: all;" onclick="copyToClipboard('${verificationCode}');" title="Нажмите для копирования">${verificationCode}</div>
+                        <small style="color: #047857; margin-top: 8px; display: block;">Нажмите на код для копирования</small>
+                    </div>
+                    
                     <div class="instruction-block" style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
                         <h4 style="color: #0369a1; margin-bottom: 12px;">📋 Инструкция по верификации:</h4>
                         <ol style="margin: 0; padding-left: 20px; color: #374151;">
-                            <li style="margin-bottom: 8px;">Нажмите кнопку "Начать верификацию"</li>
-                            <li style="margin-bottom: 8px;">Получите уникальный код верификации</li>
-                            <li style="margin-bottom: 8px;">Опубликуйте код в вашем канале <strong>${channelUsername}</strong></li>
+                            <li style="margin-bottom: 8px;">Скопируйте код верификации выше</li>
+                            <li style="margin-bottom: 8px;">Опубликуйте код в вашем канале <strong>@${channelUsername}</strong></li>
                             <li style="margin-bottom: 8px;">Переслать сообщение с кодом нашему боту</li>
                             <li style="margin-bottom: 8px;">Дождитесь подтверждения верификации</li>
                         </ol>
@@ -328,11 +397,214 @@ function showVerificationModal(channelId, channelName, channelUsername) {
                         </small>
                     </div>
                 </div>
-            `;
-
-            document.getElementById('verificationModal').style.display = 'flex';
-            document.body.style.overflow = 'hidden';
+            </div>
+            <div class="modal-footer" style="text-align: center; margin-top: 16px;">
+                <button class="btn btn-secondary" onclick="closeModal()" style="margin-right: 8px;">Отмена</button>
+                <button class="btn btn-primary" onclick="closeModal()">Понятно</button>
+            </div>
+        </div>
+    `;
+    
+    // Добавляем модальное окно в DOM
+    document.body.appendChild(modal);
+    console.log('🔍 Модальное окно добавлено в DOM:', modal);
+    
+    // Показываем модальное окно
+    document.body.style.overflow = 'hidden';
+    console.log('🔍 Стили применены - overflow: hidden');
+    
+    // Проверяем что модальное окно видно
+    const computedStyle = window.getComputedStyle(modal);
+    console.log('🔍 Computed styles:', {
+        display: computedStyle.display,
+        position: computedStyle.position,
+        zIndex: computedStyle.zIndex,
+        visibility: computedStyle.visibility,
+        opacity: computedStyle.opacity
+    });
+    
+    // Добавляем обработчик для закрытия по клику на backdrop
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            closeModal();
         }
+    });
+    
+    console.log('✅ Модальное окно верификации создано программно');
+    
+    // Дополнительная проверка через небольшую задержку
+    setTimeout(() => {
+        const modalInDom = document.getElementById('verificationModal');
+        console.log('🔍 Модальное окно в DOM через 100ms:', modalInDom);
+        if (modalInDom) {
+            console.log('🔍 Размеры модального окна:', {
+                width: modalInDom.offsetWidth,
+                height: modalInDom.offsetHeight,
+                top: modalInDom.offsetTop,
+                left: modalInDom.offsetLeft
+            });
+            
+            // Если модальное окно не видно, попробуем альтернативный метод
+            if (modalInDom.offsetWidth === 0 || modalInDom.offsetHeight === 0) {
+                console.log('❌ Модальное окно не видно, создаем простое alert');
+                createSimpleVerificationAlert(channelName, channelUsername, verificationCode);
+            }
+        } else {
+            console.log('❌ Модальное окно не найдено, создаем простое alert');
+            createSimpleVerificationAlert(channelName, channelUsername, verificationCode);
+        }
+    }, 100);
+}
+
+// Простой альтернативный метод показа кода верификации
+function createSimpleVerificationAlert(channelName, channelUsername, verificationCode) {
+    console.log('🚨 Создаем простое alert для верификации');
+    
+    // Удаляем все существующие модальные окна
+    const existingModals = document.querySelectorAll('#verificationModal');
+    existingModals.forEach(modal => modal.remove());
+    
+    // Создаем очень простое модальное окно
+    const simpleModal = document.createElement('div');
+    simpleModal.id = 'verificationModal';
+    simpleModal.style.cssText = `
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background: rgba(0, 0, 0, 0.8) !important;
+        z-index: 999999 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    `;
+    
+    simpleModal.innerHTML = `
+        <div style="background: white !important; padding: 30px !important; border-radius: 10px !important; max-width: 400px !important; width: 90% !important; text-align: center !important; box-shadow: 0 10px 30px rgba(0,0,0,0.3) !important;">
+            <h2 style="color: #333 !important; margin-bottom: 20px !important;">🔐 Код верификации</h2>
+            <p style="color: #666 !important; margin-bottom: 15px !important;">Канал: <strong>${channelName}</strong></p>
+            <p style="color: #666 !important; margin-bottom: 15px !important;">Username: <strong>@${channelUsername}</strong></p>
+            <div style="background: #f0f9ff !important; border: 2px solid #0ea5e9 !important; border-radius: 8px !important; padding: 15px !important; margin: 20px 0 !important;">
+                <p style="color: #0369a1 !important; margin-bottom: 10px !important; font-weight: bold !important;">Ваш код верификации:</p>
+                <div style="font-family: monospace !important; font-size: 20px !important; font-weight: bold !important; color: #0369a1 !important; background: white !important; padding: 10px !important; border-radius: 5px !important; border: 1px solid #0ea5e9 !important; user-select: all !important;">${verificationCode}</div>
+            </div>
+            <p style="color: #666 !important; font-size: 14px !important; margin-bottom: 20px !important;">Скопируйте код и опубликуйте в вашем канале</p>
+            <button onclick="copyToClipboard('${verificationCode}'); showNotification('Код скопирован!', 'success');" style="background: #0ea5e9 !important; color: white !important; border: none !important; padding: 10px 20px !important; border-radius: 5px !important; cursor: pointer !important; margin-right: 10px !important;">Скопировать код</button>
+            <button onclick="closeModal()" style="background: #6b7280 !important; color: white !important; border: none !important; padding: 10px 20px !important; border-radius: 5px !important; cursor: pointer !important;">Закрыть</button>
+        </div>
+    `;
+    
+    document.body.appendChild(simpleModal);
+    document.body.style.overflow = 'hidden';
+    
+    // Обработчик для закрытия по клику на backdrop
+    simpleModal.addEventListener('click', function(e) {
+        if (e.target === simpleModal) {
+            closeModal();
+        }
+    });
+    
+    console.log('✅ Простое модальное окно создано');
+}
+
+// Функция для копирования в буфер обмена
+function copyToClipboard(text) {
+    try {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(text).then(() => {
+                console.log('✅ Код скопирован в буфер обмена');
+                showNotification('Код скопирован в буфер обмена!', 'success');
+            }).catch(err => {
+                console.error('❌ Ошибка копирования:', err);
+                fallbackCopyTextToClipboard(text);
+            });
+        } else {
+            fallbackCopyTextToClipboard(text);
+        }
+    } catch (error) {
+        console.error('❌ Ошибка копирования:', error);
+        fallbackCopyTextToClipboard(text);
+    }
+}
+
+// Fallback метод копирования для старых браузеров
+function fallbackCopyTextToClipboard(text) {
+    const textArea = document.createElement('textarea');
+    textArea.value = text;
+    textArea.style.position = 'fixed';
+    textArea.style.left = '-999999px';
+    textArea.style.top = '-999999px';
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+            console.log('✅ Код скопирован в буфер обмена (fallback)');
+            showNotification('Код скопирован в буфер обмена!', 'success');
+        } else {
+            console.error('❌ Не удалось скопировать код');
+            showNotification('Не удалось скопировать код', 'error');
+        }
+    } catch (err) {
+        console.error('❌ Ошибка копирования:', err);
+        showNotification('Ошибка копирования', 'error');
+    }
+    
+    document.body.removeChild(textArea);
+}
+
+// Простая функция для показа уведомлений
+function showNotification(message, type = 'info') {
+    const notification = document.createElement('div');
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 16px;
+        border-radius: 8px;
+        color: white;
+        font-weight: 500;
+        z-index: 10000;
+        animation: slideIn 0.3s ease-out;
+    `;
+    
+    if (type === 'success') {
+        notification.style.background = '#10b981';
+    } else if (type === 'error') {
+        notification.style.background = '#ef4444';
+    } else {
+        notification.style.background = '#6366f1';
+    }
+    
+    notification.textContent = message;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        notification.style.animation = 'slideOut 0.3s ease-out';
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Делаем функции глобально доступными
+window.showVerificationModal = showVerificationModal;
+window.showDeleteConfirmation = showDeleteConfirmation;
+window.createVerificationModalProgrammatically = createVerificationModalProgrammatically;
+window.createSimpleVerificationAlert = createSimpleVerificationAlert;
+window.showSimpleAlert = showSimpleAlert;
+window.copyToClipboard = copyToClipboard;
+window.showNotification = showNotification;
+
+console.log('✅ Modal functions loaded:', {
+    showVerificationModal: typeof window.showVerificationModal,
+    showDeleteConfirmation: typeof window.showDeleteConfirmation
+});
 
 async function startVerification() {
     if (!verificationChannelData) {
@@ -495,6 +767,11 @@ async function startVerification() {
     }
 
 }
+
+// Делаем startVerification глобально доступной
+window.startVerification = startVerification;
+console.log('✅ startVerification function loaded:', typeof window.startVerification);
+
 function showVerificationCode(data) {
             const content = document.getElementById('verificationContent');
             content.innerHTML = `

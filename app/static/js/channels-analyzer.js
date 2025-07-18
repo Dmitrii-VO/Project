@@ -451,44 +451,113 @@ window.suggestCategory = function(title) {
 
 console.log('✅ ChannelAnalyzer загружен и доступен глобально как window.channelAnalyzer');
 
-function submitChannelForm() {
+function submitChannelForm(event) {
+    console.log('📤 submitChannelForm called with event:', event);
+    
+    if (event) {
+        event.preventDefault();
+    }
+    
+    // Проверяем что DOM загружен
+    if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
+        console.warn('⚠️ DOM еще не загружен, ждем...');
+        setTimeout(() => submitChannelForm(event), 100);
+        return false;
+    }
+    
     try {
+        // Отладка: проверяем состояние DOM
+        console.log('🔍 DOM readyState:', document.readyState);
+        console.log('🔍 Поиск элементов формы...');
+        
+        // Получаем элементы формы с проверкой
+        const channelUrlElement = document.getElementById('channelUrl');
+        const channelPriceElement = document.getElementById('channelPrice');
+        const channelContactElement = document.getElementById('channelContact');
+        
+        console.log('🔍 channelUrlElement:', channelUrlElement);
+        console.log('🔍 channelPriceElement:', channelPriceElement);
+        console.log('🔍 channelContactElement:', channelContactElement);
+        
+        // Проверяем что элементы существуют
+        if (!channelUrlElement) {
+            console.error('❌ Элемент channelUrl не найден');
+            alert('Ошибка: поле "Ссылка на канал" не найдено');
+            return false;
+        }
+        
+        if (!channelPriceElement) {
+            console.error('❌ Элемент channelPrice не найден');
+            alert('Ошибка: поле "Стоимость" не найдено');
+            return false;
+        }
+        
+        if (!channelContactElement) {
+            console.error('❌ Элемент channelContact не найден');
+            alert('Ошибка: поле "Контакт" не найдено');
+            return false;
+        }
+        
         // Получаем данные формы
-        const formData = new FormData(document.getElementById('addChannelForm'));
+        const channelUrl = channelUrlElement.value.trim();
+        const channelPrice = channelPriceElement.value;
+        const channelContact = channelContactElement.value.trim();
 
-        // Получаем данные канала от анализатора
-        const channelData = channelAnalyzer.currentChannelData;
-
-        if (!channelData) {
-            alert('Сначала проанализируйте канал');
-            return;
+        // Валидация
+        if (!channelUrl) {
+            alert('Пожалуйста, укажите ссылку на канал');
+            return false;
         }
 
+        if (!channelPrice || channelPrice < 500) {
+            alert('Пожалуйста, укажите стоимость не менее 500₽');
+            return false;
+        }
+
+        if (!channelContact) {
+            alert('Пожалуйста, укажите контакт для связи');
+            return false;
+        }
+
+        // Извлекаем username из URL
+        const username = extractUsernameFromUrl(channelUrl);
+        
         // Подготавливаем данные для отправки
         const submitData = {
-            username: formData.get('channel_url') || channelData.username,
-            title: channelData.title,
-            description: formData.get('description') || channelData.description,
-            category: formData.get('category') || channelData.category,
-
-            // ✅ ГЛАВНОЕ: Передаем количество подписчиков
-            subscribers_count: channelData.raw_subscriber_count || 0,
-            raw_subscriber_count: channelData.raw_subscriber_count || 0,
-
-            // Передаем полные данные канала для резерва
-            channel_data: {
-                data: channelData
-            }
+            username: username,
+            title: `Канал @${username}`,
+            description: `Telegram канал @${username}`,
+            category: 'other',
+            price_per_post: parseFloat(channelPrice),
+            owner_name: channelContact,
+            subscriber_count: 0 // Будет обновлено после анализа
         };
 
         console.log('📤 Отправляем данные канала:', submitData);
 
+        // Показываем индикатор загрузки
+        const submitBtn = document.getElementById('submitBtn');
+        const originalText = submitBtn.textContent;
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Обработка...';
+
+        // Получаем User ID с проверкой
+        let userId;
+        try {
+            userId = getTelegramUserId();
+        } catch (error) {
+            console.error('❌ Ошибка получения User ID:', error);
+            userId = '373086959'; // Fallback ID для тестирования
+        }
+        
+        console.log('👤 User ID для отправки:', userId);
+        
         // Отправляем на сервер
         fetch('/api/channels', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-Telegram-User-Id': getTelegramUserId() // Ваша функция получения ID
+                'X-Telegram-User-Id': userId
             },
             body: JSON.stringify(submitData)
         })
@@ -496,9 +565,16 @@ function submitChannelForm() {
         .then(data => {
             if (data.success) {
                 console.log('✅ Канал добавлен:', data);
-                alert('Канал успешно добавлен!');
-                // Перенаправление или обновление списка
-                window.location.href = '/channels/verify/' + data.channel.id;
+                
+                // Показываем модальное окно верификации
+                if (data.verification_code) {
+                    showVerificationModal(data.channel.id, data.channel.title, data.channel.username, data.verification_code);
+                } else {
+                    alert('Канал успешно добавлен!');
+                    // Переходим к списку каналов
+                    switchTab('channels');
+                    loadUserChannels();
+                }
             } else {
                 console.error('❌ Ошибка:', data.error);
                 alert('Ошибка: ' + data.error);
@@ -507,12 +583,47 @@ function submitChannelForm() {
         .catch(error => {
             console.error('❌ Сетевая ошибка:', error);
             alert('Ошибка сети');
+        })
+        .finally(() => {
+            // Восстанавливаем кнопку
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
         });
 
     } catch (error) {
         console.error('❌ Ошибка отправки формы:', error);
         alert('Ошибка отправки формы');
     }
+    
+    return false;
+}
+
+// Делаем функцию глобально доступной
+window.submitChannelForm = submitChannelForm;
+console.log('✅ submitChannelForm добавлена в window:', typeof window.submitChannelForm);
+
+// Функция для извлечения username из URL
+function extractUsernameFromUrl(url) {
+    // Убираем пробелы
+    url = url.trim();
+    
+    // Паттерны для извлечения username
+    const patterns = [
+        /https?:\/\/t\.me\/([a-zA-Z0-9_]+)/,  // https://t.me/username
+        /https?:\/\/telegram\.me\/([a-zA-Z0-9_]+)/,  // https://telegram.me/username
+        /@([a-zA-Z0-9_]+)/,  // @username
+        /^([a-zA-Z0-9_]+)$/  // просто username
+    ];
+    
+    for (const pattern of patterns) {
+        const match = url.match(pattern);
+        if (match) {
+            return match[1];
+        }
+    }
+    
+    // Если ничего не найдено, возвращаем как есть
+    return url.replace('@', '');
 }
 
 // 🔍 ОТЛАДОЧНЫЙ КОД ДЛЯ ДИАГНОСТИКИ ПРОБЛЕМЫ С ПОДПИСЧИКАМИ
