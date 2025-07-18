@@ -215,31 +215,14 @@ function switchTab(tabName) {
 document.addEventListener('DOMContentLoaded', function() {
     console.log('📺 Страница каналов инициализирована');
     
-    // Проверяем доступность функции отправки формы
-    console.log('🔍 Проверка submitChannelForm:', typeof window.submitChannelForm);
+    // Обработка формы происходит в channels-ui.js
     
     // Проверяем наличие элементов формы при загрузке
     console.log('🔍 channelUrl элемент:', document.getElementById('channelUrl'));
     console.log('🔍 channelPrice элемент:', document.getElementById('channelPrice'));
     console.log('🔍 channelContact элемент:', document.getElementById('channelContact'));
     
-    // Дополнительная привязка обработчика формы
-    const form = document.getElementById('addChannelForm');
-    if (form) {
-        console.log('📋 Форма найдена, добавляем обработчик');
-        form.addEventListener('submit', function(e) {
-            console.log('📤 Form submit event triggered');
-            e.preventDefault();
-            if (typeof window.submitChannelForm === 'function') {
-                return window.submitChannelForm(e);
-            } else {
-                console.error('❌ submitChannelForm не найдена');
-                alert('Ошибка: функция отправки формы не найдена');
-            }
-        });
-    } else {
-        console.error('❌ Форма addChannelForm не найдена');
-    }
+    // Дублирующий обработчик формы удален - обработка происходит в channels-ui.js
 
     // Настраиваем переключение табов
     document.querySelectorAll('.tabs-nav a').forEach(tab => {

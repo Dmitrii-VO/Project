@@ -4,8 +4,14 @@ function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-    document.getElementById(tabName).classList.add('active');
+    const tabBtn = document.querySelector(`[data-tab="${tabName}"]`);
+    if (tabBtn) {
+        tabBtn.classList.add('active');
+    }
+    const tabContent = document.getElementById(tabName);
+    if (tabContent) {
+        tabContent.classList.add('active');
+    }
 }
 
 // Инициализация Telegram WebApp
@@ -29,6 +35,13 @@ document.addEventListener('DOMContentLoaded', function() {
         addChannelForm.addEventListener('submit', async function(e) {
     e.preventDefault();
 
+    // Защита от повторных отправок
+    if (window.channelSubmitting) {
+        console.log('⚠️ Форма уже отправляется, пропускаем...');
+        return;
+    }
+    window.channelSubmitting = true;
+
     const submitBtn = document.getElementById('submitBtn');
     const originalText = submitBtn.textContent;
 
@@ -37,16 +50,23 @@ document.addEventListener('DOMContentLoaded', function() {
         submitBtn.textContent = '💾 Сохранение...';
 
         // Собираем данные формы
+        console.log('🔍 DEBUG: channelAnalyzer.currentChannelData =', channelAnalyzer.currentChannelData);
+        
+        // Проверяем наличие основного поля
+        const channelUrlElement = document.getElementById('channelUrl');
+        if (!channelUrlElement) {
+            throw new Error('Поле URL канала не найдено');
+        }
+        
+        const channelUrl = document.getElementById('channelUrl')?.value?.trim() || '';
+        const channelPrice = document.getElementById('channelPrice')?.value || '';
+        const channelContact = document.getElementById('channelContact')?.value || '';
+        
         const formData = {
-    username: document.getElementById('channelUrl').value.trim(),
-    title: document.getElementById('channelTitle')?.value ||
-           channelAnalyzer.currentChannelData?.title ||
-           `Канал @${document.getElementById('channelUrl').value.trim()}`,
-
-    description: document.getElementById('channelDescription').value ||
-                channelAnalyzer.currentChannelData?.description || '',
-
-    category: document.getElementById('channelCategory').value || 'general',
+    username: channelUrl,
+    title: channelAnalyzer.currentChannelData?.title || `Канал @${channelUrl}`,
+    description: channelAnalyzer.currentChannelData?.description || '',
+    category: 'general',
 
     // ✅ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: Передаем данные подписчиков из ВСЕХ источников
     subscriber_count: channelAnalyzer.currentChannelData?.raw_subscriber_count ||
@@ -65,10 +85,25 @@ document.addEventListener('DOMContentLoaded', function() {
     telegram_id: channelAnalyzer.currentChannelData?.telegram_id ||
                 channelAnalyzer.currentChannelData?.channel_id,
 
-    // Остальные поля
-    price_per_post: parseFloat(document.getElementById('pricePerPost')?.value || 0),
-    payment_terms: document.getElementById('paymentTerms')?.value || 'prepaid'
+    // Остальные поля из формы
+    price_per_post: parseFloat(channelPrice || '0'),
+    contact_info: channelContact,
+    payment_terms: 'prepaid'
 };
+        
+        console.log('🔍 DEBUG: formData =', formData);
+        
+        // Проверяем обязательные поля
+        if (!channelUrl) {
+            throw new Error('Укажите ссылку на канал');
+        }
+        if (!channelPrice) {
+            throw new Error('Укажите стоимость размещения');
+        }
+        if (!channelContact) {
+            throw new Error('Укажите контакт для связи');
+        }
+        
         // Проверяем что данные не пустые
         if (formData.subscriber_count === 0 && channelAnalyzer.currentChannelData?.raw_subscriber_count) {
             console.warn('⚠️ ВНИМАНИЕ: subscriber_count = 0, но raw_subscriber_count =',
@@ -98,109 +133,37 @@ document.addEventListener('DOMContentLoaded', function() {
         const channelUsername = result.channel?.username || formData.channelUrl;
 
         if (verificationCode) {
-            // Создаем модальное окно с инструкциями
-            const modal = document.createElement('div');
-            modal.className = 'modal-backdrop';
-
-modal.innerHTML = `
-    <div style="
-        background: white; padding: 20px; border-radius: 15px;
-        max-width: min(500px, 95vw); margin: 10px; text-align: center;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-        max-height: 95vh; overflow-y: auto;
-    ">
-<div style="font-size: 48px; margin-bottom: 20px;">📝</div>
-<h3 style="color: #333; margin-bottom: 20px;">Подтвердите владение каналом</h3>
-
-<div style="
-    background: #e3f2fd; padding: 20px; border-radius: 10px;
-    margin: 20px 0; border-left: 4px solid #2196f3;
-">
-    <h4 style="color: #1976d2; margin-bottom: 15px;">🔐 Код верификации:</h4>
-
-    <div style="
-        background: #333; color: #00ff00; padding: 15px;
-        border-radius: 8px; font-family: 'Courier New', monospace;
-        font-size: 20px; font-weight: bold; letter-spacing: 2px;
-        margin: 15px 0; cursor: pointer; user-select: all;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    " onclick="
-        navigator.clipboard.writeText('${verificationCode}');
-        this.style.background='#1b5e20';
-        this.innerHTML='${verificationCode} ✅';
-        setTimeout(() => {
-            this.style.background='#333';
-            this.innerHTML='${verificationCode}';
-        }, 2000);
-    ">${verificationCode}</div>
-
-    <small style="color: #666;">Нажмите на код, чтобы скопировать</small>
-</div>
-
-<div style="
-    background: #f5f5f5; padding: 20px; border-radius: 10px;
-    margin: 20px 0; text-align: left;
-">
-    <h4 style="color: #333; margin-bottom: 15px;">📋 Инструкция:</h4>
-
-    <ol style="margin: 0; padding-left: 20px; color: #555;">
-        <li style="margin-bottom: 10px;">
-            Откройте ваш канал <strong>@${channelUsername}</strong>
-        </li>
-        <li style="margin-bottom: 10px;">
-            Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
-        </li>
-        <li style="margin-bottom: 10px;">
-            Переслать это сообщение нашему боту <strong>@xxxzzzaaa_bot</strong>
-        </li>
-        <li style="margin-bottom: 10px;">
-            Получите уведомление об успешной верификации в боте
-        </li>
-    </ol>
-</div>
-
-<div style="
-    background: #fff3cd; padding: 15px; border-radius: 8px;
-    margin: 15px 0; border-left: 4px solid #ffc107;
-">
-    <small style="color: #856404;">
-        💡 <strong>Совет:</strong> После публикации кода вы можете сразу удалить сообщение из канала.
-        Главное успеть переслать его боту!
-    </small>
-</div>
-
-<button onclick="
-    document.body.removeChild(this.closest('div').parentElement);
-    switchTab('channels');
-" style="
-    background: #2196f3; color: white; border: none;
-    padding: 12px 30px; border-radius: 8px; font-size: 16px;
-    cursor: pointer; margin-top: 15px; font-weight: 600;
-">Понятно, перейти к каналам</button>
-
-<div style="margin-top: 15px;">
-    <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
-        color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
-    ">🤖 Открыть бота для верификации</a>
-</div>
-</div>
-`;
-
-                    document.body.appendChild(modal);
-
-                    // Показываем модальное окно с классом show
-                    modal.classList.add('show');
-
-                    } else {
-                    // Fallback для случаев без кода верификации
-                    alert('✅ Канал успешно добавлен и находится на модерации.');
-                    }
+            // Используем единое модальное окно из channels-modals.js
+            if (typeof createVerificationModalProgrammatically === 'function') {
+                createVerificationModalProgrammatically(
+                    result.channel?.id || 'temp',
+                    result.channel?.title || formData.title,
+                    channelUsername,
+                    verificationCode
+                );
+            } else {
+                // Fallback если функция не доступна
+                alert(`✅ Канал успешно добавлен! Код верификации: ${verificationCode}`);
+            }
+        } else {
+            // Fallback для случаев без кода верификации
+            alert('✅ Канал успешно добавлен и находится на модерации.');
+        }
 
                     // Очищаем форму
                     this.reset();
-                    document.getElementById('channelPreview').classList.remove('active');
-                    document.getElementById('additionalFields').style.display = 'none';
-                    document.getElementById('pricingFields').style.display = 'none';
+                    const channelPreview = document.getElementById('channelPreview');
+                    if (channelPreview) {
+                        channelPreview.classList.remove('active');
+                    }
+                    const additionalFields = document.getElementById('additionalFields');
+                    if (additionalFields) {
+                        additionalFields.style.display = 'none';
+                    }
+                    const pricingFields = document.getElementById('pricingFields');
+                    if (pricingFields) {
+                        pricingFields.style.display = 'none';
+                    }
 
                             // Переключаемся на вкладку с каналами
                             switchTab('channels');
@@ -210,6 +173,7 @@ modal.innerHTML = `
                         } finally {
                             submitBtn.disabled = false;
                             submitBtn.textContent = originalText;
+                            window.channelSubmitting = false; // Сбрасываем флаг
                         }
                     });
     }

@@ -668,96 +668,13 @@ async function startVerification() {
         const channelUsername = result.channel?.username || verificationChannelData.username;
 
         if (verificationCode) {
-            // Создаем модальное окно с инструкциями (такое же как при добавлении)
-            const modal = document.createElement('div');
-            modal.className = 'loading-overlay';
-
-            modal.innerHTML = `
-                <div style="
-                    background: white; padding: 20px; border-radius: 15px;
-                    max-width: min(500px, 95vw); margin: 10px; text-align: center;
-                    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-                    max-height: 95vh; overflow-y: auto;
-                ">
-                    <div style="font-size: 48px; margin-bottom: 20px;">📝</div>
-                    <h3 style="color: #333; margin-bottom: 20px;">Подтвердите владение каналом</h3>
-
-                    <div style="
-                        background: #e3f2fd; padding: 20px; border-radius: 10px;
-                        margin: 20px 0; border-left: 4px solid #2196f3;
-                    ">
-                        <h4 style="color: #1976d2; margin-bottom: 15px;">🔐 Код верификации:</h4>
-
-                        <div style="
-                            background: #333; color: #00ff00; padding: 15px;
-                            border-radius: 8px; font-family: 'Courier New', monospace;
-                            font-size: 20px; font-weight: bold; letter-spacing: 2px;
-                            margin: 15px 0; cursor: pointer; user-select: all;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                        " onclick="
-                            navigator.clipboard.writeText('${verificationCode}');
-                            this.style.background='#1b5e20';
-                            this.innerHTML='${verificationCode} ✅';
-                            setTimeout(() => {
-                                this.style.background='#333';
-                                this.innerHTML='${verificationCode}';
-                            }, 2000);
-                        ">${verificationCode}</div>
-
-                        <small style="color: #666;">Нажмите на код, чтобы скопировать</small>
-                    </div>
-
-                    <div style="
-                        background: #f5f5f5; padding: 20px; border-radius: 10px;
-                        margin: 20px 0; text-align: left;
-                    ">
-                        <h4 style="color: #333; margin-bottom: 15px;">📋 Инструкция:</h4>
-
-                        <ol style="margin: 0; padding-left: 20px; color: #555;">
-                            <li style="margin-bottom: 10px;">
-                                Откройте ваш канал <strong>${channelUsername}</strong>
-                            </li>
-                            <li style="margin-bottom: 10px;">
-                                Опубликуйте сообщение с кодом: <strong>${verificationCode}</strong>
-                            </li>
-                            <li style="margin-bottom: 10px;">
-                                Переслать это сообщение нашему боту <strong>@xxxzzzaaa_bot</strong>
-                            </li>
-                            <li style="margin-bottom: 10px;">
-                                Получите уведомление об успешной верификации в боте
-                            </li>
-                        </ol>
-                    </div>
-
-                    <div style="
-                        background: #fff3cd; padding: 15px; border-radius: 8px;
-                        margin: 15px 0; border-left: 4px solid #ffc107;
-                    ">
-                        <small style="color: #856404;">
-                            💡 <strong>Совет:</strong> После публикации кода вы можете сразу удалить сообщение из канала.
-                            Главное успеть переслать его боту!
-                        </small>
-                    </div>
-
-                    <button onclick="
-                        document.body.removeChild(this.closest('div').parentElement);
-                        loadUserChannels();
-                    " style="
-                        background: #2196f3; color: white; border: none;
-                        padding: 12px 30px; border-radius: 8px; font-size: 16px;
-                        cursor: pointer; margin-top: 15px; font-weight: 600;
-                    ">Понятно, перейти к каналам</button>
-
-                    <div style="margin-top: 15px;">
-                        <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
-                            color: #2196f3; text-decoration: none; font-size: 14px; font-weight: 600;
-                        ">🤖 Открыть бота для верификации</a>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(modal);
-
+            // Используем единое модальное окно
+            createVerificationModalProgrammatically(
+                verificationChannelData.id,
+                verificationChannelData.title || verificationChannelData.name,
+                channelUsername,
+                verificationCode
+            );
         } else {
             // Fallback для случаев без кода верификации
             showSuccessNotification('✅ Верификация запущена!');
@@ -1112,173 +1029,15 @@ async function startChannelVerification(channelId, channelName, channelUsername)
     }
 }
 function showVerificationInstructions(verificationCode, channelUsername) {
-    // Создаем модальное окно
-    const modal = document.createElement('div');
-    modal.className = 'modal-backdrop';
-
-    modal.innerHTML = `
-        <div style="
-            background: white; 
-            padding: 30px; 
-            border-radius: 15px;
-            max-width: min(500px, 95vw); 
-            width: 100%;
-            text-align: center;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            max-height: 95vh; 
-            overflow-y: auto;
-        ">
-            <!-- Заголовок -->
-            <div style="font-size: 48px; margin-bottom: 20px;">📝</div>
-            <h3 style="color: #333; margin-bottom: 20px; font-size: 1.5rem;">
-                Подтвердите владение каналом
-            </h3>
-
-            <!-- Блок с кодом верификации -->
-            <div style="
-                background: #e3f2fd; 
-                padding: 20px; 
-                border-radius: 10px;
-                margin: 20px 0; 
-                border-left: 4px solid #2196f3;
-            ">
-                <h4 style="color: #1976d2; margin-bottom: 15px; font-size: 1.1rem;">
-                    🔐 Код верификации:
-                </h4>
-
-                <div id="verificationCodeBlock" style="
-                    background: #333; 
-                    color: #00ff00; 
-                    padding: 15px;
-                    border-radius: 8px; 
-                    font-family: 'Courier New', monospace;
-                    font-size: 20px; 
-                    font-weight: bold; 
-                    letter-spacing: 2px;
-                    margin: 15px 0; 
-                    cursor: pointer; 
-                    user-select: all;
-                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                    transition: all 0.2s ease;
-                " onclick="copyVerificationCode('${verificationCode}', this)">
-                    ${verificationCode}
-                </div>
-
-                <small style="color: #666; font-size: 0.85rem;">
-                    💡 Нажмите на код, чтобы скопировать
-                </small>
-            </div>
-
-            <!-- Пошаговая инструкция -->
-            <div style="
-                background: #f5f5f5; 
-                padding: 20px; 
-                border-radius: 10px;
-                margin: 20px 0; 
-                text-align: left;
-            ">
-                <h4 style="color: #333; margin-bottom: 15px; text-align: center; font-size: 1.1rem;">
-                    📋 Пошаговая инструкция:
-                </h4>
-
-                <ol style="margin: 0; padding-left: 20px; color: #555; line-height: 1.6;">
-                    <li style="margin-bottom: 10px;">
-                        <strong>Скопируйте код выше</strong> (нажмите на него)
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        Откройте ваш канал <strong>@${channelUsername}</strong>
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        <strong>Опубликуйте сообщение</strong> с кодом: <code style="background: #eee; padding: 2px 4px; border-radius: 3px;">${verificationCode}</code>
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        <strong>Переслать это сообщение</strong> нашему боту
-                    </li>
-                    <li style="margin-bottom: 10px;">
-                        Дождитесь <strong>уведомления об успешной верификации</strong>
-                    </li>
-                </ol>
-            </div>
-
-            <!-- Полезный совет -->
-            <div style="
-                background: #fff3cd; 
-                padding: 15px; 
-                border-radius: 8px;
-                margin: 15px 0; 
-                border-left: 4px solid #ffc107;
-            ">
-                <small style="color: #856404; font-size: 0.9rem;">
-                    💡 <strong>Совет:</strong> После публикации кода вы можете сразу удалить сообщение из канала.
-                    Главное — успеть переслать его боту!
-                </small>
-            </div>
-
-            <!-- Кнопки действий -->
-            <div style="margin-top: 25px;">
-                <button onclick="closeVerificationModalAndRefresh(this)" style="
-                    background: #2196f3; 
-                    color: white; 
-                    border: none;
-                    padding: 12px 30px; 
-                    border-radius: 8px; 
-                    font-size: 16px;
-                    cursor: pointer; 
-                    font-weight: 600;
-                    margin-right: 10px;
-                ">
-                    Понятно, приступаю!
-                </button>
-
-                <button onclick="copyVerificationCode('${verificationCode}')" style="
-                    background: #28a745; 
-                    color: white; 
-                    border: none;
-                    padding: 12px 20px; 
-                    border-radius: 8px; 
-                    font-size: 14px;
-                    cursor: pointer; 
-                    font-weight: 600;
-                ">
-                    📋 Копировать код
-                </button>
-            </div>
-
-            <!-- Ссылка на бота -->
-            <div style="margin-top: 15px;">
-                <a href="https://t.me/xxxzzzaaa_bot" target="_blank" style="
-                    color: #2196f3; 
-                    text-decoration: none; 
-                    font-size: 14px; 
-                    font-weight: 600;
-                ">
-                    🤖 Открыть бота для верификации
-                </a>
-            </div>
-        </div>
-    `;
-    // Автоматическое закрытие через 30 секунд
-    setTimeout(() => {
-        if (document.body.contains(modal)) {
-            closeModal(modal);
-            if (typeof showNotification === 'function') {
-                showNotification('info', '⏰ Окно автоматически закрыто. Не забудьте опубликовать код в канале!');
-            }
-        }
-    }, 10000);
-    // Добавляем модальное окно в DOM
-    document.body.appendChild(modal);
-
-    // Показываем модальное окно с классом show
-    modal.classList.add('show');
-
-    // Закрытие по клику на фон
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            closeModal(modal);
-        }
-    });
+    // Используем единое модальное окно
+    createVerificationModalProgrammatically(
+        'temp',
+        'Канал @' + channelUsername,
+        channelUsername,
+        verificationCode
+    );
 }
+
 /**
  * Закрыть модальное окно верификации и обновить список каналов
  */
@@ -1305,7 +1064,3 @@ window.closeVerificationModalAndRefresh = closeVerificationModalAndRefresh;
 window.closeDeleteModal = closeDeleteModal;
 window.confirmChannelDeletionModal = confirmChannelDeletionModal;
 window.testDeleteChannelModal = testDeleteChannelModal;
-window.testFullDeleteProcess = testFullDeleteProcess;
-window.startVerification = startVerification;
-window.showDeleteConfirmation = showDeleteConfirmation;
-window.startChannelVerification = startChannelVerification;

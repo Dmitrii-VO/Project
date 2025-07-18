@@ -58,30 +58,40 @@
     transform: translateY(0);
 }
 
-/* Компактная сетка для каналов - теперь вертикальный список */
+/* Компактная сетка для каналов */
 #channelsGrid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin: var(--space-4) 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-3) 0;
 }
 
-/* Практичные карточки каналов - горизонтальный layout */
+/* Компактные карточки каналов */
 .channel-card {
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
-  padding: var(--space-3);
+  padding: var(--space-2);
   border: 1px solid var(--border-subtle);
   box-shadow: var(--shadow-sm);
   transition: all var(--transition-normal);
   position: relative;
   overflow: hidden;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 70px;
+  flex-direction: column;
+  min-height: 200px;
   width: 100%;
+}
+
+/* Добавляем градиентный фон для визуального интереса */
+.channel-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--primary-500), var(--primary-300), var(--success-500));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .channel-card:hover {
@@ -90,34 +100,29 @@
   border-color: var(--primary-200);
 }
 
-/* Левая часть карточки - основная информация */
-.channel-card .channel-main-info {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex: 1;
-  min-width: 0;
-}
-
 /* Заголовок карточки канала */
 .channel-card .channel-header {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  min-width: 200px;
+  margin-bottom: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .channel-card .channel-avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--radius-full);
-  background: var(--primary-100);
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-300));
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: var(--text-sm);
-  color: var(--primary-600);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: white;
   flex-shrink: 0;
+  box-shadow: var(--shadow-sm);
 }
 
 .channel-card .channel-info {
@@ -126,36 +131,36 @@
 }
 
 .channel-card .channel-title {
-  font-size: var(--text-sm);
+  font-size: var(--text-base);
   font-weight: 600;
   color: var(--text-primary);
   line-height: var(--leading-tight);
-  margin: 0 0 2px 0;
+  margin: 0 0 4px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .channel-card .channel-username {
-  font-size: var(--text-xs);
-  color: var(--text-tertiary);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
   font-family: var(--font-family-mono);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
 }
 
-/* Ключевые метрики - горизонтальное размещение */
+/* Блок основных метрик */
 .channel-card .channel-metrics {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-2);
-  background: var(--success-50);
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--success-200);
-  min-width: 200px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
 }
 
 .channel-card .metric-item {
@@ -163,63 +168,87 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  min-width: 50px;
-}
-
-.channel-card .metric-value {
-  font-size: var(--text-sm);
-  font-weight: 700;
-  color: var(--success-700);
-  line-height: 1;
-}
-
-.channel-card .metric-label {
-  font-size: 10px;
-  color: var(--success-600);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-top: 2px;
-}
-
-/* Дополнительные статистики - горизонтальное размещение */
-.channel-card .channel-stats {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
   padding: var(--space-2);
   background: var(--bg-secondary);
   border-radius: var(--radius-sm);
-  min-width: 150px;
+  border: 1px solid var(--border-subtle);
+  transition: all var(--transition-fast);
 }
 
-.channel-card .stat-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  min-width: 60px;
+.channel-card .metric-item:hover {
+  background: var(--primary-50);
+  border-color: var(--primary-200);
 }
 
-.channel-card .stat-value {
+.channel-card .metric-value {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--primary-600);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.channel-card .metric-label {
   font-size: var(--text-xs);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+/* Блок цены и дохода */
+.channel-card .channel-price-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2);
+  background: var(--success-50);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--success-200);
+  margin-bottom: var(--space-2);
+}
+
+.channel-card .channel-price {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--success-700);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.channel-card .channel-price::before {
+  content: '💰';
+  font-size: var(--text-base);
+}
+
+.channel-card .channel-earnings {
+  text-align: right;
+}
+
+.channel-card .earnings-value {
+  font-size: var(--text-sm);
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--success-600);
   line-height: 1;
 }
 
-.channel-card .stat-label {
-  font-size: 10px;
-  color: var(--text-tertiary);
+.channel-card .earnings-label {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-top: 2px;
 }
 
-/* Статус канала - компактный для горизонтального размещения */
-.channel-card .channel-status-bar {
+/* Нижняя часть карточки - статус и действия */
+.channel-card .channel-footer {
   display: flex;
   align-items: center;
-  min-width: 120px;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .channel-card .channel-status {
@@ -228,8 +257,8 @@
   gap: var(--space-1);
   padding: var(--space-1) var(--space-2);
   border-radius: var(--radius-full);
-  font-size: 10px;
-  font-weight: 500;
+  font-size: var(--text-xs);
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   white-space: nowrap;
@@ -238,42 +267,93 @@
 .channel-card .channel-status.verified {
   background: var(--success-100);
   color: var(--success-700);
+  border: 1px solid var(--success-200);
+}
+
+.channel-card .channel-status.verified::before {
+  content: '✅';
+  margin-right: 4px;
 }
 
 .channel-card .channel-status.pending {
   background: var(--warning-100);
   color: var(--warning-700);
+  border: 1px solid var(--warning-200);
+}
+
+.channel-card .channel-status.pending::before {
+  content: '⏳';
+  margin-right: 4px;
 }
 
 .channel-card .channel-status.error {
   background: var(--error-100);
   color: var(--error-700);
+  border: 1px solid var(--error-200);
 }
 
-.channel-card .quick-actions {
+.channel-card .channel-status.error::before {
+  content: '❌';
+  margin-right: 4px;
+}
+
+/* Действия с каналом */
+.channel-card .channel-actions {
   display: flex;
-  gap: var(--space-1);
-  margin-left: var(--space-2);
+  gap: var(--space-2);
+  flex-shrink: 0;
 }
 
-.channel-card .quick-action {
-  width: 20px;
-  height: 20px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-tertiary);
-  border: none;
-  cursor: pointer;
+.channel-card .channel-actions .btn {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  min-height: 28px;
+  border-radius: var(--radius-md);
+  white-space: nowrap;
+  transition: all var(--transition-fast);
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
+  gap: var(--space-1);
 }
 
-.channel-card .quick-action:hover {
-  background: var(--primary-100);
-  color: var(--primary-600);
+.channel-card .channel-actions .btn-primary {
+  background: var(--primary-500);
+  color: white;
+  border: 1px solid var(--primary-500);
+}
+
+.channel-card .channel-actions .btn-primary:hover {
+  background: var(--primary-600);
+  border-color: var(--primary-600);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.channel-card .channel-actions .btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.channel-card .channel-actions .btn-secondary:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-subtle);
+  transform: translateY(-1px);
+}
+
+.channel-card .channel-actions .btn-danger {
+  background: var(--error-500);
+  color: white;
+  border: 1px solid var(--error-500);
+}
+
+.channel-card .channel-actions .btn-danger:hover {
+  background: var(--error-600);
+  border-color: var(--error-600);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Описание канала */
@@ -445,84 +525,114 @@
   white-space: nowrap;
 }
 
-/* Адаптивность для горизонтального layout */
+/* Адаптивность для планшетов */
 @media (max-width: 1024px) {
-  .channel-card .channel-header {
-    min-width: 160px;
+  #channelsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-3);
+  }
+  
+  .channel-card {
+    min-height: 260px;
+    padding: var(--space-3);
+  }
+  
+  .channel-card .channel-avatar {
+    width: 40px;
+    height: 40px;
+    font-size: var(--text-base);
   }
   
   .channel-card .channel-metrics {
-    min-width: 160px;
     gap: var(--space-2);
   }
   
-  .channel-card .channel-stats {
-    min-width: 120px;
-  }
-  
-  .channel-card .channel-earnings {
-    min-width: 80px;
+  .channel-card .metric-item {
+    padding: var(--space-2);
   }
 }
 
+/* Адаптивность для мобильных устройств */
 @media (max-width: 768px) {
-  .channel-card {
-    flex-direction: column;
-    align-items: stretch;
-    min-height: auto;
-    padding: var(--space-2);
+  #channelsGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+    margin: var(--space-3) 0;
   }
   
-  .channel-card .channel-main-info {
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--space-2);
+  .channel-card {
+    min-height: 240px;
+    padding: var(--space-3);
   }
   
   .channel-card .channel-header {
-    min-width: auto;
+    margin-bottom: var(--space-2);
+    padding-bottom: var(--space-2);
+  }
+  
+  .channel-card .channel-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: var(--text-sm);
+  }
+  
+  .channel-card .channel-title {
+    font-size: var(--text-sm);
+  }
+  
+  .channel-card .channel-username {
+    font-size: var(--text-xs);
   }
   
   .channel-card .channel-metrics {
-    min-width: auto;
-    justify-content: space-around;
+    margin-bottom: var(--space-2);
   }
   
-  .channel-card .channel-stats {
-    min-width: auto;
-    justify-content: space-around;
+  .channel-card .metric-value {
+    font-size: var(--text-base);
+  }
+  
+  .channel-card .channel-price {
+    font-size: var(--text-base);
   }
   
   .channel-card .channel-footer {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: none;
-    border-top: 1px solid var(--border-subtle);
-    padding-top: var(--space-2);
-    justify-content: space-between;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: stretch;
   }
   
-  .channel-card .channel-status-bar {
-    justify-content: space-between;
+  .channel-card .channel-actions {
+    justify-content: center;
+    flex-wrap: wrap;
   }
 }
 
+/* Адаптивность для малых экранов */
 @media (max-width: 480px) {
-  .channel-card .channel-actions {
-    flex-direction: column;
-    gap: var(--space-1);
+  .channel-card {
+    min-height: 220px;
+    padding: var(--space-2);
   }
   
   .channel-card .channel-actions .btn {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
   }
   
   .channel-card .channel-metrics {
-    gap: var(--space-1);
+    grid-template-columns: 1fr;
+    gap: var(--space-2);
   }
   
-  .channel-card .channel-stats {
-    gap: var(--space-1);
+  .channel-card .channel-price-block {
+    flex-direction: column;
+    gap: var(--space-2);
+    text-align: center;
+  }
+  
+  .channel-card .channel-earnings {
+    text-align: center;
   }
 }
 

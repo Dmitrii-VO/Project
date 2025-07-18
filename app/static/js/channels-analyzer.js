@@ -365,9 +365,18 @@ class ChannelAnalyzer {
         `;
 
         // Скрываем дополнительные поля
-        document.getElementById('additionalFields').style.display = 'none';
-        document.getElementById('pricingFields').style.display = 'none';
-        document.getElementById('submitBtn').disabled = true;
+        const additionalFields = document.getElementById('additionalFields');
+        if (additionalFields) {
+            additionalFields.style.display = 'none';
+        }
+        const pricingFields = document.getElementById('pricingFields');
+        if (pricingFields) {
+            pricingFields.style.display = 'none';
+        }
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+        }
     }
 
     // Показ формы ручного ввода
@@ -400,9 +409,18 @@ class ChannelAnalyzer {
 
     // Обработка ручных данных
     processManualData() {
-        const name = document.getElementById('manualChannelName').value.trim();
-        const subscribers = parseInt(document.getElementById('manualSubscribers').value) || 0;
-        const description = document.getElementById('manualDescription').value.trim();
+        const nameElement = document.getElementById('manualChannelName');
+        const subscribersElement = document.getElementById('manualSubscribers');
+        const descriptionElement = document.getElementById('manualDescription');
+        
+        if (!nameElement || !subscribersElement || !descriptionElement) {
+            console.error('Элементы формы ручного ввода не найдены');
+            return;
+        }
+        
+        const name = nameElement.value.trim();
+        const subscribers = parseInt(subscribersElement.value) || 0;
+        const description = descriptionElement.value.trim();
 
         if (!name) {
             alert('Введите название канала');
@@ -451,156 +469,8 @@ window.suggestCategory = function(title) {
 
 console.log('✅ ChannelAnalyzer загружен и доступен глобально как window.channelAnalyzer');
 
-function submitChannelForm(event) {
-    console.log('📤 submitChannelForm called with event:', event);
-    
-    if (event) {
-        event.preventDefault();
-    }
-    
-    // Проверяем что DOM загружен
-    if (document.readyState !== 'complete' && document.readyState !== 'interactive') {
-        console.warn('⚠️ DOM еще не загружен, ждем...');
-        setTimeout(() => submitChannelForm(event), 100);
-        return false;
-    }
-    
-    try {
-        // Отладка: проверяем состояние DOM
-        console.log('🔍 DOM readyState:', document.readyState);
-        console.log('🔍 Поиск элементов формы...');
-        
-        // Получаем элементы формы с проверкой
-        const channelUrlElement = document.getElementById('channelUrl');
-        const channelPriceElement = document.getElementById('channelPrice');
-        const channelContactElement = document.getElementById('channelContact');
-        
-        console.log('🔍 channelUrlElement:', channelUrlElement);
-        console.log('🔍 channelPriceElement:', channelPriceElement);
-        console.log('🔍 channelContactElement:', channelContactElement);
-        
-        // Проверяем что элементы существуют
-        if (!channelUrlElement) {
-            console.error('❌ Элемент channelUrl не найден');
-            alert('Ошибка: поле "Ссылка на канал" не найдено');
-            return false;
-        }
-        
-        if (!channelPriceElement) {
-            console.error('❌ Элемент channelPrice не найден');
-            alert('Ошибка: поле "Стоимость" не найдено');
-            return false;
-        }
-        
-        if (!channelContactElement) {
-            console.error('❌ Элемент channelContact не найден');
-            alert('Ошибка: поле "Контакт" не найдено');
-            return false;
-        }
-        
-        // Получаем данные формы
-        const channelUrl = channelUrlElement.value.trim();
-        const channelPrice = channelPriceElement.value;
-        const channelContact = channelContactElement.value.trim();
-
-        // Валидация
-        if (!channelUrl) {
-            alert('Пожалуйста, укажите ссылку на канал');
-            return false;
-        }
-
-        if (!channelPrice || channelPrice < 500) {
-            alert('Пожалуйста, укажите стоимость не менее 500₽');
-            return false;
-        }
-
-        if (!channelContact) {
-            alert('Пожалуйста, укажите контакт для связи');
-            return false;
-        }
-
-        // Извлекаем username из URL
-        const username = extractUsernameFromUrl(channelUrl);
-        
-        // Подготавливаем данные для отправки
-        const submitData = {
-            username: username,
-            title: `Канал @${username}`,
-            description: `Telegram канал @${username}`,
-            category: 'other',
-            price_per_post: parseFloat(channelPrice),
-            owner_name: channelContact,
-            subscriber_count: 0 // Будет обновлено после анализа
-        };
-
-        console.log('📤 Отправляем данные канала:', submitData);
-
-        // Показываем индикатор загрузки
-        const submitBtn = document.getElementById('submitBtn');
-        const originalText = submitBtn.textContent;
-        submitBtn.disabled = true;
-        submitBtn.textContent = '⏳ Обработка...';
-
-        // Получаем User ID с проверкой
-        let userId;
-        try {
-            userId = getTelegramUserId();
-        } catch (error) {
-            console.error('❌ Ошибка получения User ID:', error);
-            userId = '373086959'; // Fallback ID для тестирования
-        }
-        
-        console.log('👤 User ID для отправки:', userId);
-        
-        // Отправляем на сервер
-        fetch('/api/channels', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Telegram-User-Id': userId
-            },
-            body: JSON.stringify(submitData)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                console.log('✅ Канал добавлен:', data);
-                
-                // Показываем модальное окно верификации
-                if (data.verification_code) {
-                    showVerificationModal(data.channel.id, data.channel.title, data.channel.username, data.verification_code);
-                } else {
-                    alert('Канал успешно добавлен!');
-                    // Переходим к списку каналов
-                    switchTab('channels');
-                    loadUserChannels();
-                }
-            } else {
-                console.error('❌ Ошибка:', data.error);
-                alert('Ошибка: ' + data.error);
-            }
-        })
-        .catch(error => {
-            console.error('❌ Сетевая ошибка:', error);
-            alert('Ошибка сети');
-        })
-        .finally(() => {
-            // Восстанавливаем кнопку
-            submitBtn.disabled = false;
-            submitBtn.textContent = originalText;
-        });
-
-    } catch (error) {
-        console.error('❌ Ошибка отправки формы:', error);
-        alert('Ошибка отправки формы');
-    }
-    
-    return false;
-}
-
-// Делаем функцию глобально доступной
-window.submitChannelForm = submitChannelForm;
-console.log('✅ submitChannelForm добавлена в window:', typeof window.submitChannelForm);
+// ПРИМЕЧАНИЕ: Функция submitChannelForm удалена во избежание дублирования
+// Обработка формы теперь происходит в channels-ui.js с защитой от повторных отправок
 
 // Функция для извлечения username из URL
 function extractUsernameFromUrl(url) {
