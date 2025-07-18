@@ -112,236 +112,80 @@
 
     <!-- Tab: Создать оффер -->
     <div class="tabs-content" id="create-offer">
-        <!-- Progress Stepper -->
-        <div class="stepper-container">
-            <div class="stepper">
-                <div class="stepper-progress" id="stepperProgress"></div>
-                <div class="step active" data-step="1">
-                    <div class="step-circle">1</div>
-                    <div class="step-label">Основная информация</div>
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">🎯 Автоматический подбор каналов</h3>
+                <button class="modal-close" style="background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-tertiary);">&times;</button>
+            </div>
+            <div class="card-body">
+                <!-- Пошаговые инструкции -->
+                <div style="margin-bottom: var(--space-6);">
+                    <div style="display: flex; align-items: flex-start; gap: var(--space-3); margin-bottom: var(--space-4);">
+                        <div style="background: var(--primary-100); border-radius: var(--radius-full); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <span style="color: var(--primary-600); font-size: var(--text-lg);">🎯</span>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 var(--space-1) 0; font-size: var(--text-base); font-weight: 600; color: var(--text-primary);">1. Укажите бюджет кампании и текст объявления.</h4>
+                            <p style="margin: 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-normal);">
+                                Скопируйте текст объявления или коротко опишите то, что будете рекламировать.
+                            </p>
+                            <p style="margin: var(--space-2) 0 0 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-normal);">
+                                Вы также можете указать ссылку на сайт: он будет проанализирован для определения целевой аудитории.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: flex-start; gap: var(--space-3);">
+                        <div style="background: var(--primary-100); border-radius: var(--radius-full); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                            <span style="color: var(--primary-600); font-size: var(--text-lg);">🚀</span>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0 0 var(--space-1) 0; font-size: var(--text-base); font-weight: 600; color: var(--text-primary);">2. Запустите подбор.</h4>
+                            <p style="margin: 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-normal);">
+                                После этого вы сможете просмотреть список предлагаемых каналов, добавить их в кампанию или выгрузить медиаплан.
+                            </p>
+                            <p style="margin: var(--space-2) 0 0 0; font-size: var(--text-sm); color: var(--text-secondary); line-height: var(--leading-normal);">
+                                <strong>Анализ объявления и подбор каналов обычно занимает около 30 секунд.</strong> За это время AI Gooroo Tools как определяет целевую аудиторию, так и учитывает опыт уже размещенных рекламных кампаний.
+                            </p>
+                        </div>
+                    </div>
                 </div>
-                <div class="step" data-step="2">
-                    <div class="step-circle">2</div>
-                    <div class="step-label">Настройки размещения</div>
-                </div>
-                <div class="step" data-step="3">
-                    <div class="step-circle">3</div>
-                    <div class="step-label">Бюджет и тематика</div>
-                </div>
-                <div class="step" data-step="4">
-                    <div class="step-circle">4</div>
-                    <div class="step-label">Подтверждение</div>
-                </div>
+
+                <!-- Форма -->
+                <form id="autoOfferForm">
+                    <div class="form-field">
+                        <label class="form-label form-label-required" for="offerBudget">Бюджет:</label>
+                        <input type="number" class="form-input" id="offerBudget" name="budget" placeholder="20000" min="1000" required>
+                        <div class="form-help" style="margin-top: var(--space-1); font-size: var(--text-xs); color: var(--text-tertiary);">
+                            Укажите бюджет, который вы планируете потратить на кампанию.
+                            Система автоматически подберет каналы в рамках бюджета. Если какой-то из отобранных каналов не подходит больше чем-то, его
+                            вы можете исключить самостоятельно.
+                        </div>
+                    </div>
+
+                    <div class="form-field">
+                        <label class="form-label form-label-required" for="offerDescription">Объявление:</label>
+                        <textarea class="form-textarea" id="offerDescription" name="description" placeholder="🎓 Распродажа Онлайн-Курсов! 🎓" rows="4" required></textarea>
+                        <div style="margin-top: var(--space-2);">
+                            <div style="border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--bg-secondary);">
+                                <div style="padding: var(--space-3); border-bottom: 1px solid var(--border-subtle); font-weight: 500; font-size: var(--text-sm); color: var(--text-primary);">
+                                    📚 Уникальная возможность обучения! Представляем вам нашу эксклюзивную коллекцию онлайн-курсов по самым разнообразным темам – от программирования до кулинарии!
+                                </div>
+                                <div style="padding: var(--space-3); border-bottom: 1px solid var(--border-subtle); font-size: var(--text-sm); color: var(--text-secondary);">
+                                    🚀 Скидка до 50%! Независимо от того, ищете ли вы курс по саморазвитию, хотите изучить новый язык
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-field">
+                        <button type="submit" class="btn btn-primary" style="width: 100%; background: var(--primary-500); border: none; padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); color: white; font-weight: 500; cursor: pointer; transition: all var(--transition-fast);">
+                            Подобрать каналы
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
-
-        <form id="offerForm" class="form-container">
-            <!-- Шаг 1: Основная информация -->
-            <div class="form-step active" data-step="1">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Основная информация</h3>
-                        <p class="card-subtitle">Расскажите о вашем рекламном предложении</p>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-field">
-                            <label class="form-label form-label-required" for="offerTitle">Название оффера</label>
-                            <input type="text" class="form-input" id="offerTitle" name="title" placeholder="Например: Реклама IT-курсов для начинающих" required>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label form-label-required" for="offerDescription">Описание предложения</label>
-                            <textarea class="form-textarea" id="offerDescription" name="description" placeholder="Опишите детали вашего предложения, целевую аудиторию и ожидаемые результаты..." required></textarea>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label" for="contentType">Тип рекламного контента</label>
-                            <select class="form-select" id="contentType" name="content_type">
-                                <option value="">Выберите тип контента</option>
-                                <option value="text">Текстовый пост</option>
-                                <option value="image">Пост с изображением</option>
-                                <option value="video">Видео контент</option>
-                                <option value="link">Ссылка с превью</option>
-                            </select>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label" for="adText">Текст рекламного сообщения</label>
-                            <textarea class="form-textarea" id="adText" name="ad_text" placeholder="Введите текст рекламного сообщения, который будет размещен в каналах..."></textarea>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Шаг 2: Настройки размещения -->
-            <div class="form-step" data-step="2">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Настройки размещения</h3>
-                        <p class="card-subtitle">Определите параметры размещения вашей рекламы</p>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-field">
-                            <label class="form-label" for="targetAudience">Целевая аудитория</label>
-                            <div class="chip-container">
-                                <div class="chip" data-value="18-25">18-25 лет</div>
-                                <div class="chip" data-value="26-35">26-35 лет</div>
-                                <div class="chip" data-value="36-45">36-45 лет</div>
-                                <div class="chip" data-value="46+">46+ лет</div>
-                            </div>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label" for="geography">География размещения</label>
-                            <select class="form-select" id="geography" name="geography">
-                                <option value="">Выберите географию</option>
-                                <option value="russia">Россия</option>
-                                <option value="cis">СНГ</option>
-                                <option value="europe">Европа</option>
-                                <option value="world">Весь мир</option>
-                            </select>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label" for="minSubscribers">Минимальное количество подписчиков канала</label>
-                            <div class="range-container">
-                                <div class="range-values">
-                                    <span>1K</span>
-                                    <span id="subscribersValue">50K</span>
-                                    <span>1M+</span>
-                                </div>
-                                <input type="range" class="range-slider" id="minSubscribers" name="min_subscribers" min="1000" max="1000000" value="50000" step="1000">
-                            </div>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label">Время размещения</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-                                <div class="form-field">
-                                    <label class="form-label" for="startDate">Дата начала</label>
-                                    <input type="date" class="form-input" id="startDate" name="start_date">
-                                </div>
-                                <div class="form-field">
-                                    <label class="form-label" for="endDate">Дата окончания</label>
-                                    <input type="date" class="form-input" id="endDate" name="end_date">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Шаг 3: Бюджет и тематика -->
-            <div class="form-step" data-step="3">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Бюджет и тематика</h3>
-                        <p class="card-subtitle">Установите бюджет и выберите подходящие тематики каналов</p>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-field">
-                            <label class="form-label form-label-required" for="budget">Общий бюджет</label>
-                            <div style="position: relative;">
-                                <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">₽</span>
-                                <input type="number" class="form-input" id="budget" name="budget" placeholder="50000" min="1000" required style="padding-left: 32px;">
-                            </div>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label" for="maxPrice">Максимальная цена за размещение</label>
-                            <div style="position: relative;">
-                                <span style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">₽</span>
-                                <input type="number" class="form-input" id="maxPrice" name="max_price" placeholder="5000" min="100" style="padding-left: 32px;">
-                            </div>
-                        </div>
-
-                        <div class="form-field">
-                            <label class="form-label">Тематики каналов</label>
-                            <div class="chip-container">
-                                <div class="chip" data-value="tech">Технологии</div>
-                                <div class="chip" data-value="business">Бизнес</div>
-                                <div class="chip" data-value="education">Образование</div>
-                                <div class="chip" data-value="lifestyle">Lifestyle</div>
-                                <div class="chip" data-value="finance">Финансы</div>
-                                <div class="chip" data-value="health">Здоровье</div>
-                                <div class="chip" data-value="travel">Путешествия</div>
-                                <div class="chip" data-value="food">Еда</div>
-                                <div class="chip" data-value="entertainment">Развлечения</div>
-                                <div class="chip" data-value="sport">Спорт</div>
-                            </div>
-                        </div>
-
-                        <div class="notification notification-info">
-                            <div class="notification-content">
-                                <div class="notification-title">💡 Совет</div>
-                                <div class="notification-message">
-                                    Выберите 2-4 тематики для лучшего таргетинга.
-                                    Слишком широкий выбор может снизить эффективность рекламы.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Шаг 4: Подтверждение -->
-            <div class="form-step" data-step="4">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Подтверждение оффера</h3>
-                        <p class="card-subtitle">Проверьте все данные перед публикацией</p>
-                    </div>
-                    <div class="card-body">
-                        <div class="preview-card">
-                            <div class="preview-title">Сводка по офферу</div>
-                            <div class="preview-item">
-                                <span class="preview-label">Название:</span>
-                                <span class="preview-value" id="previewTitle">-</span>
-                            </div>
-                            <div class="preview-item">
-                                <span class="preview-label">Бюджет:</span>
-                                <span class="preview-value" id="previewBudget">-</span>
-                            </div>
-                            <div class="preview-item">
-                                <span class="preview-label">Тематики:</span>
-                                <span class="preview-value" id="previewTopics">-</span>
-                            </div>
-                            <div class="preview-item">
-                                <span class="preview-label">Целевая аудитория:</span>
-                                <span class="preview-value" id="previewAudience">-</span>
-                            </div>
-                            <div class="preview-item">
-                                <span class="preview-label">География:</span>
-                                <span class="preview-value" id="previewGeography">-</span>
-                            </div>
-                        </div>
-
-                        <div class="notification notification-success">
-                            <div class="notification-content">
-                                <div class="notification-title">✅ Готово к публикации!</div>
-                                <div class="notification-message">
-                                    После создания оффера, владельцы подходящих каналов получат уведомления
-                                    и смогут откликнуться на ваше предложение.
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Form Actions -->
-            <div class="form-actions">
-                <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
-                    ← Назад
-                </button>
-                <button type="button" class="btn btn-primary" id="nextBtn">
-                    Далее →
-                </button>
-                <button type="submit" class="btn btn-primary" id="submitBtn" style="display: none;">
-                    🚀 Создать оффер
-                </button>
-            </div>
-        </form>
     </div>
 </div>
 {% endblock %}
@@ -370,6 +214,53 @@ function clearFindFilters() {
     console.log('Фильтры очищены');
 }
 
+// Новая функция для автоматического создания оффера
+async function submitAutoOffer(event) {
+    event.preventDefault();
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Подбираем каналы...';
+        
+        const formData = new FormData(event.target);
+        const data = {
+            title: 'Автоматический подбор каналов',
+            description: formData.get('description'),
+            budget: parseInt(formData.get('budget')),
+            price: Math.min(parseInt(formData.get('budget')) * 0.1, 50000),
+            budget_total: parseInt(formData.get('budget')),
+            target_audience: 'general',
+            category: 'general',
+            currency: 'RUB',
+            content: formData.get('description')
+        };
+        
+        console.log('📋 Отправляем данные автоматического оффера:', data);
+        
+        const result = await ApiClient.post('/api/offers', data);
+        
+        if (result.success) {
+            console.log('✅ Оффер создан успешно:', result.offer);
+            showChannelSelectionModal(result.offer.id, result.offer.title);
+            // Сбрасываем форму
+            event.target.reset();
+            // Переключаемся на вкладку "Мои офферы"
+            switchTab('my-offers');
+        } else {
+            throw new Error(result.error || result.errors?.join(', ') || 'Ошибка создания оффера');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка при создании оффера:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+}
+
 // Обработчики кликов по табам
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎯 Страница офферов инициализирована');
@@ -384,6 +275,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
+    
+    // Настраиваем обработчик формы автоматического создания оффера
+    const autoOfferForm = document.getElementById('autoOfferForm');
+    if (autoOfferForm) {
+        autoOfferForm.addEventListener('submit', submitAutoOffer);
+    }
 });
 </script>
 {% endblock %}
