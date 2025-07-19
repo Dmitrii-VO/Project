@@ -204,13 +204,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('📺 Страница каналов загружена');
 });
 
-// Функции форматирования
-function formatNumber(num) {
-    if (!num || num === 0) return '0';
-    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-    return num.toString();
-}
+// Используем функцию formatNumber из channels-core.js
 function formatPrice(price) {
     if (!price || price === 0) return 'Не указана';
     return new Intl.NumberFormat('ru-RU', {

@@ -204,7 +204,7 @@ const DOM = {
     },
 
     // Найти все элементы
-    $(selector) {
+    $all(selector) {
         return document.querySelectorAll(selector);
     },
 

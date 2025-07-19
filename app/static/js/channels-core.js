@@ -90,7 +90,12 @@ async function loadUserChannels() {
         // Скрываем индикатор загрузки
         hideLoadingState();
 
+        // ✅ ОПТИМИЗАЦИЯ: Кэшируем DOM элементы
         const channelsGrid = document.getElementById('channelsGrid');
+        const errorElement = document.getElementById('channelsError');
+        const emptyState = document.getElementById('emptyState');
+        const loadingElement = document.getElementById('channelsLoading');
+        
         if (!channelsGrid) {
             console.error('❌ Элемент channelsGrid не найден!');
             return;
@@ -102,7 +107,6 @@ async function loadUserChannels() {
         existingCards.forEach(card => card.remove());
 
         // Скрываем элементы ошибок
-        const errorElement = document.getElementById('channelsError');
         if (errorElement) {
             errorElement.style.display = 'none';
         }
@@ -113,8 +117,6 @@ async function loadUserChannels() {
             console.log(`🔍 [${loadId}] DEBUG: Полученные каналы:`, data.channels);
 
             // Скрываем все состояния загрузки и пустых данных
-            const emptyState = document.getElementById('emptyState');
-            const loadingElement = document.getElementById('channelsLoading');
 
             if (emptyState) emptyState.style.display = 'none';
             if (loadingElement) loadingElement.style.display = 'none';
@@ -208,65 +210,7 @@ console.log('✅ Channels-core dependencies check:', {
     startChannelVerification: typeof window.startChannelVerification
 });
 
-// Демонстрационная функция для создания тестового канала
-function createTestUnverifiedChannel() {
-    console.log('🧪 Создаем тестовый неверифицированный канал...');
-    
-    // Создаем демо канал
-    const testChannel = {
-        id: 999,
-        title: 'Тестовый канал для верификации',
-        username: 'test_verification_channel',
-        is_verified: false,
-        status: 'pending',
-        owner_name: '@test_user',
-        price_per_post: 500
-    };
-    
-    // Создаем карточку канала
-    const channelCard = createChannelCard(testChannel);
-    
-    // Добавляем в начало списка каналов
-    const channelsGrid = document.getElementById('channelsGrid');
-    if (channelsGrid) {
-        channelsGrid.insertBefore(channelCard, channelsGrid.firstChild);
-        console.log('✅ Тестовый канал добавлен в список');
-    }
-    
-    return testChannel;
-}
-
-// Делаем демо функцию доступной глобально
-window.createTestUnverifiedChannel = createTestUnverifiedChannel;
-function debugChannelData() {
-    console.log('🔧 Запуск отладки каналов...');
-
-    // Проверяем API напрямую
-    fetch('/api/channels/my', {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-Telegram-User-Id': '373086959' // Ваш ID для тестирования
-        }
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log('🔍 Прямой API ответ:', data);
-
-        if (data.channels && data.channels.length > 0) {
-            const firstChannel = data.channels[0];
-            console.log('🔍 Первый канал детально:', {
-                'Все поля': Object.keys(firstChannel),
-                'subscriber_count': firstChannel.subscriber_count,
-                'subscribers_count': firstChannel.subscribers_count,
-                'Полный объект': firstChannel
-            });
-        }
-    })
-    .catch(error => {
-        console.error('❌ Ошибка API:', error);
-    });
-}
+// Неиспользуемые функции удалены
 function createChannelCard(channel) {
     const card = document.createElement('div');
     card.className = 'channel-card';
@@ -745,66 +689,7 @@ async function deleteChannel(channelId) {
     }
 }
 
-// Тестовая функция для прямого вызова API удаления канала
-async function testDeleteChannel(channelId) {
-    console.log(`🧪 Тестируем удаление канала ${channelId} напрямую через API`);
-    
-    try {
-        const telegramUser = getTelegramUser();
-        console.log('👤 Тестовый Telegram User:', telegramUser);
-        
-        if (!telegramUser || !telegramUser.id) {
-            console.error('❌ Тестовая ошибка: telegramUser не определен');
-            return;
-        }
-        
-        console.log(`📤 Тестовый DELETE запрос на /api/channels/${channelId}`);
-        
-        const response = await fetch(`/api/channels/${channelId}`, {
-            method: 'DELETE',
-            headers: {
-                'X-Telegram-User-Id': telegramUser.id.toString(),
-                'X-Telegram-User-Data': JSON.stringify(telegramUser)
-            }
-        });
-        
-        console.log(`📊 Тестовый статус ответа: ${response.status}`);
-        
-        if (response.ok) {
-            const result = await response.json();
-            console.log('✅ Тестовое удаление успешно:', result);
-        } else {
-            const error = await response.json();
-            console.error('❌ Тестовая ошибка удаления:', error);
-        }
-    } catch (error) {
-        console.error('❌ Тестовое исключение:', error);
-    }
-}
-
-// Функция для тестирования клика по кнопке удаления
-function testDeleteButtonClick() {
-    console.log('🧪 Тестируем клик по кнопке удаления');
-    
-    const deleteBtn = document.querySelector('#deleteChannelBtn');
-    if (deleteBtn) {
-        console.log('✅ Кнопка удаления найдена');
-        const channelId = deleteBtn.getAttribute('data-channel-id');
-        console.log(`🔍 Channel ID из кнопки: ${channelId}`);
-        
-        // Проверяем доступность функции showDeleteConfirmation
-        if (window.showDeleteConfirmation) {
-            console.log('✅ Функция showDeleteConfirmation доступна');
-        } else {
-            console.log('❌ Функция showDeleteConfirmation не доступна');
-        }
-        
-        // Имитируем клик
-        deleteBtn.click();
-    } else {
-        console.error('❌ Кнопка удаления не найдена');
-    }
-}
+// Тестовые функции удалены
 // ДОПОЛНИТЕЛЬНО: Функция обновления статистики в реальном времени
 async function refreshChannelStatistics(channelId) {
     try {
@@ -1271,8 +1156,7 @@ window.loadUserChannels = loadUserChannels;
 window.showChannelStats = showChannelStats;
 window.showChannelSettings = showChannelSettings;
 window.editChannel = editChannel;
-window.testDeleteChannel = testDeleteChannel;
-window.testDeleteButtonClick = testDeleteButtonClick;
+// Тестовые функции удалены
 window.confirmChannelDeletion = confirmChannelDeletion;
 window.deleteChannel = deleteChannel;
 window.closeEditModal = closeEditModal;
