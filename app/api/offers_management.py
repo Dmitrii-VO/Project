@@ -94,7 +94,7 @@ def get_offer_details(offer_id: int) -> Optional[Dict]:
         return None
 
 def get_recommended_channels(offer_id: int) -> List[Dict]:
-    """Получение верифицированных каналов кроме собственных"""
+    """Получение всех каналов из базы кроме собственных"""
     try:
         conn = get_db_connection()
         if not conn:
@@ -107,7 +107,7 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
         if not offer:
             return []
         
-        # Запрос с фильтрами верификации и статуса
+        # Запрос показывает ВСЕ каналы кроме своих (убрано ограничение is_verified = 1)
         query = """
             SELECT 
                 c.id, c.title, c.username, c.description,
@@ -126,10 +126,8 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
             LEFT JOIN users u ON c.owner_id = u.id
             WHERE 
                 c.is_active = 1 
-                AND c.is_verified = 1
-             
                 AND c.subscriber_count > 0
-                -- Исключаем только СВОИ каналы
+                -- Исключаем только СВОИ каналы (показываем ВСЕ остальные)
                 AND c.owner_id != ?
             ORDER BY c.subscriber_count DESC, c.is_verified DESC
             LIMIT 50
@@ -149,7 +147,7 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
         
         conn.close()
         
-        logger.info(f"Найдено верифицированных каналов для оффера {offer_id}: {len(channels)}")
+        logger.info(f"Найдено каналов для рекомендации к офферу {offer_id}: {len(channels)}")
         
         # Если нет каналов в базе, добавляем тестовые данные для демонстрации
         if len(channels) == 0:

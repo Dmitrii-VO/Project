@@ -357,6 +357,16 @@ def update_channel(channel_id):
             updates.append('price_per_post = ?')
             params.append(price)
 
+        # Обновляем контакт администратора канала  
+        if 'contact_info' in data:
+            contact = data['contact_info'].strip() if data['contact_info'] else None
+            # Проверяем формат контакта (должен начинаться с @)
+            if contact and not contact.startswith('@'):
+                conn.close()
+                return jsonify({'error': 'Contact must start with @ (e.g. @username)'}), 400
+            updates.append('contact_info = ?')
+            params.append(contact)
+
         if not updates:
             conn.close()
             return jsonify({'error': 'No valid fields to update'}), 400
@@ -819,7 +829,8 @@ def get_my_channels():
         # ✅ ИСПРАВЛЕНО: используем user_db_id напрямую, без дополнительного поиска
         cursor.execute("""
             SELECT id, telegram_id, title, username, subscriber_count, category,
-                    is_verified, verification_code, created_at, status
+                    is_verified, verification_code, created_at, status,
+                    contact_info, price_per_post
             FROM channels
             WHERE owner_id = ?
             ORDER BY created_at DESC
@@ -841,7 +852,8 @@ def get_my_channels():
                 'username': channel['username'],
                 'subscriber_count': channel['subscriber_count'] or 0,
                 'category': channel['category'] or 'other',
-                'price_per_post': 0.0,
+                'price_per_post': channel['price_per_post'] or 0.0,
+                'contact_info': channel['contact_info'],
                 'is_verified': bool(channel['is_verified']),
                 'verification_code': channel['verification_code'] if not channel['is_verified'] else None,
                 'created_at': channel['created_at'],
@@ -1030,6 +1042,8 @@ def add_channel():
         title = data.get('title', f'Канал @{cleaned_username}')
         description = data.get('description', '')
         category = data.get('category', 'other')
+        price_per_post = float(data.get('price_per_post', 0))
+        contact_info = data.get('contact_info', '').strip() if data.get('contact_info') else None
 
         current_time = datetime.now().isoformat()
 
@@ -1055,12 +1069,14 @@ def add_channel():
             cursor.execute("""
                            INSERT INTO channels (telegram_id, title, username, description, category,
                                                  subscriber_count, language, is_verified, is_active,
-                                                 owner_id, created_at, updated_at, status, verification_code)
-                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                                 owner_id, created_at, updated_at, status, verification_code,
+                                                 price_per_post, contact_info)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                            """, (
                 telegram_channel_id, title, cleaned_username, description, category,
                 subscriber_count, 'ru', False, True,
-                user_db_id, current_time, current_time, 'pending', verification_code
+                user_db_id, current_time, current_time, 'pending', verification_code,
+                price_per_post, contact_info
             ))
 
             channel_id = cursor.lastrowid

@@ -227,6 +227,7 @@ function createChannelCard(channel) {
     const channelUsername = channel.username || channel.channel_username || 'unknown';
     const ownerName = channel.owner_name || channel.contact_name || 'Не указано';
     const price = channel.price_per_post || channel.placement_price || 0;
+    const contactInfo = channel.contact_info || 'Не указан';
     
     // Получаем реальные данные подписчиков из разных возможных полей
     console.log('🔍 DEBUG createChannelCard - channel object:', channel);
@@ -278,11 +279,26 @@ function createChannelCard(channel) {
         
         <!-- Блок цены и дохода -->
         <div class="channel-price-block">
-            <div class="channel-price">${price}₽</div>
+            <div class="price-info">
+                <div class="channel-price">${price}₽</div>
+                <div class="price-label">За 24 часа</div>
+            </div>
             <div class="channel-earnings">
                 <div class="earnings-value">${totalEarnings}₽</div>
                 <div class="earnings-label">Заработано</div>
             </div>
+        </div>
+        
+        <!-- Контактная информация -->
+        <div class="channel-contact-info">
+            <div class="contact-label">Контакт:</div>
+            <div class="contact-value">${contactInfo}</div>
+        </div>
+        
+        <!-- Стоимость размещения -->
+        <div class="channel-price-info">
+            <div class="price-info-label">Стоимость:</div>
+            <div class="price-info-value">${price}₽ за 24 часа</div>
         </div>
         
         <!-- Нижняя часть - статус и действия -->
@@ -294,6 +310,9 @@ function createChannelCard(channel) {
                         🔐 Верифицировать
                     </button>
                 ` : ''}
+                <button class="btn btn-secondary" onclick="editChannel(${channel.id})" title="Редактировать канал">
+                    ✏️
+                </button>
                 <button class="btn btn-secondary" onclick="showDeleteConfirmation(${channel.id}, '${channelName}', '${channelUsername}')" title="Удалить канал">
                     🗑️
                 </button>
@@ -454,12 +473,13 @@ function showChannelEditModal(channelId) {
             <div class="modal-body">
                 <form id="editChannelForm">
                     <div class="form-group">
-                        <label for="editOwnerName">Имя владельца канала (контактное лицо)</label>
-                        <input type="text" id="editOwnerName" class="form-input" placeholder="Введите имя владельца">
+                        <label for="editContact">Контакт:</label>
+                        <input type="text" id="editContact" class="form-input" placeholder="Telegram аккаунт администратора для связи" required>
+                        <small class="form-help">Укажите аккаунт в формате @account. Мы свяжемся по данному контакту после запуска кампании.</small>
                     </div>
                     
                     <div class="form-group">
-                        <label for="editPrice">Стоимость размещения (₽)</label>
+                        <label for="editPrice">Стоимость размещения на 24 часа (₽)</label>
                         <input type="number" id="editPrice" class="form-input" placeholder="0" min="0">
                     </div>
                     
@@ -563,13 +583,13 @@ async function loadChannelDataForEdit(channelId) {
             const channel = await response.json();
             
             // Заполняем форму
-            const editOwnerName = document.getElementById('editOwnerName');
-            if (editOwnerName) {
-                editOwnerName.value = channel.owner_name || channel.contact_name || '';
-            }
             const editPrice = document.getElementById('editPrice');
             if (editPrice) {
                 editPrice.value = channel.price_per_post || channel.placement_price || 0;
+            }
+            const editContact = document.getElementById('editContact');
+            if (editContact) {
+                editContact.value = channel.contact_info || '';
             }
         }
     } catch (error) {
@@ -579,19 +599,25 @@ async function loadChannelDataForEdit(channelId) {
 
 // Функция для сохранения изменений канала
 async function saveChannelChanges(channelId) {
-    const editOwnerName = document.getElementById('editOwnerName');
     const editPrice = document.getElementById('editPrice');
+    const editContact = document.getElementById('editContact');
     
-    if (!editOwnerName || !editPrice) {
+    if (!editPrice || !editContact) {
         console.error('Элементы формы редактирования не найдены');
         return;
     }
     
-    const ownerName = editOwnerName.value;
     const price = editPrice.value;
+    const contact = editContact.value;
     
-    if (!ownerName.trim()) {
-        alert('Пожалуйста, укажите имя владельца канала');
+    if (!contact.trim()) {
+        alert('Пожалуйста, укажите контакт для связи');
+        return;
+    }
+    
+    // Проверяем контакт - должен начинаться с @
+    if (!contact.trim().startsWith('@')) {
+        alert('Контакт должен начинаться с @ (например: @username)');
         return;
     }
     
@@ -605,8 +631,8 @@ async function saveChannelChanges(channelId) {
                 'X-Telegram-User-Data': JSON.stringify(telegramUser)
             },
             body: JSON.stringify({
-                owner_name: ownerName,
-                price_per_post: parseFloat(price) || 0
+                price_per_post: parseFloat(price) || 0,
+                contact_info: contact.trim()
             })
         });
         
@@ -971,9 +997,32 @@ function showChannelStats(channelId) {
 function showChannelSettings(channelId) {
     showInfoNotification('⚙️ Настройки канала скоро будут доступны');
 }
-function editChannel(channelId) {
-            alert('Редактирование канала (в разработке)');
+async function editChannel(channelId) {
+    try {
+        // Получаем данные канала с сервера
+        const telegramUser = getTelegramUser();
+        const response = await fetch(`/api/channels/${channelId}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Telegram-User-Id': telegramUser.id.toString()
+            }
+        });
+
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки данных канала');
         }
+
+        const channelData = await response.json();
+        
+        // Показываем модальное окно редактирования
+        showChannelEditModal(channelId);
+        
+    } catch (error) {
+        console.error('Ошибка при редактировании канала:', error);
+        alert('Ошибка загрузки данных канала');
+    }
+}
 function goBack() {
     try {
         console.log('🔙 Переход на главную страницу');
