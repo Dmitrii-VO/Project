@@ -75,8 +75,7 @@ def create_app() -> Flask:
         except Exception as e:
             logger.error(f"❌ Ошибка инициализации Telegram: {e}") 
     else:
-        logger.warning
-        ("⚠️ Telegram интеграция отключена или BOT_TOKEN не задан")
+        logger.warning("⚠️ Telegram интеграция отключена или BOT_TOKEN не задан")
     return app
 
 
