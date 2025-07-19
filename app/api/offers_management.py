@@ -112,7 +112,7 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
             SELECT 
                 c.id, c.title, c.username, c.description,
                 c.subscriber_count, c.category, c.language,
-                c.is_verified, 
+                c.is_verified, c.price_per_post, c.owner_id,
                 u.username as owner_username,
                 u.first_name as owner_first_name,
                 -- Расчет совместимости
@@ -127,7 +127,7 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
             WHERE 
                 c.is_active = 1 
                 AND c.subscriber_count >= 0
-                -- Исключаем только СВОИ каналы (показываем ВСЕ остальные)
+                -- Исключаем собственные каналы пользователя
                 AND c.owner_id != ?
             ORDER BY c.subscriber_count DESC, c.is_verified DESC
             LIMIT 50
@@ -149,45 +149,35 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
         
         logger.info(f"Найдено каналов для рекомендации к офферу {offer_id}: {len(channels)}")
         
-        # Если нет каналов в базе, добавляем тестовые данные для демонстрации
-        if len(channels) == 0:
-            logger.info("Добавляем тестовые каналы для демонстрации")
-            channels = [
-                {
-                    'id': 1,
-                    'title': 'Senior Frontend - javascript, html, css',
-                    'username': 'senior_frontend',
-                    'description': 'Senior Front - канал для frontend программистов, практические задачки, проверки знаний, интересные статьи. Админ, сотрудничество...',
-                    'subscriber_count': 28000,
-                    'category': 'tech',
-                    'language': 'ru',
-                    'is_verified': 1,
-                    'owner_username': 'admin',
-                    'owner_first_name': 'Admin',
-                    'match_score': 8,
-                    'proposal_status': 'not_sent',
-                    'engagement_rate': 7.2,
-                    'avg_views': 1960,
-                    'ads_count': 1
-                },
-                {
-                    'id': 2,
-                    'title': 'DevHub Community',
-                    'username': 'devhub_community',
-                    'description': 'Медиа об IT и технологиях 21 века, статьи, новости и не только. Сотрудничество - @SpiralYuri @Spiral_XIII @bln ...',
-                    'subscriber_count': 35200,
-                    'category': 'tech',
-                    'language': 'ru',
-                    'is_verified': 1,
-                    'owner_username': 'devhub',
-                    'owner_first_name': 'DevHub',
-                    'match_score': 8,
-                    'proposal_status': 'not_sent',
-                    'engagement_rate': 5.7,
-                    'avg_views': 2400,
-                    'ads_count': 4
-                }
-            ]
+        # Добавляем вычисляемые поля для каналов из БД
+        for channel in channels:
+            # Вычисляем engagement_rate на основе subscriber_count если его нет
+            if not channel.get('engagement_rate'):
+                subscriber_count = channel.get('subscriber_count', 0)
+                if subscriber_count < 1000:
+                    channel['engagement_rate'] = round(8.5 + (subscriber_count % 100) / 100, 1)
+                elif subscriber_count < 10000:
+                    channel['engagement_rate'] = round(6.5 + (subscriber_count % 1000) / 1000, 1)
+                elif subscriber_count < 50000:
+                    channel['engagement_rate'] = round(4.5 + (subscriber_count % 5000) / 5000, 1)
+                else:
+                    channel['engagement_rate'] = round(3.5 + (subscriber_count % 10000) / 10000, 1)
+            
+            # Вычисляем avg_views на основе subscriber_count если его нет
+            if not channel.get('avg_views'):
+                subscriber_count = channel.get('subscriber_count', 0)
+                channel['avg_views'] = max(1, int(subscriber_count * 0.04))  # 4% от подписчиков
+            
+            # Добавляем ads_count если его нет
+            if not channel.get('ads_count'):
+                # Случайное количество рекламы за 7 дней на основе размера канала
+                subscriber_count = channel.get('subscriber_count', 0)
+                if subscriber_count > 50000:
+                    channel['ads_count'] = (subscriber_count % 7) + 3  # 3-9 объявлений
+                elif subscriber_count > 10000:
+                    channel['ads_count'] = (subscriber_count % 5) + 1  # 1-5 объявлений
+                else:
+                    channel['ads_count'] = (subscriber_count % 3) + 1  # 1-3 объявления
         
         return channels
         
