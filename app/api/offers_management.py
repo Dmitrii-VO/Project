@@ -126,7 +126,7 @@ def get_recommended_channels(offer_id: int) -> List[Dict]:
             LEFT JOIN users u ON c.owner_id = u.id
             WHERE 
                 c.is_active = 1 
-                AND c.subscriber_count > 0
+                AND c.subscriber_count >= 0
                 -- Исключаем только СВОИ каналы (показываем ВСЕ остальные)
                 AND c.owner_id != ?
             ORDER BY c.subscriber_count DESC, c.is_verified DESC
