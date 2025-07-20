@@ -151,6 +151,35 @@
         </div>
     </div>
 </div>
+
+<!-- Модальное окно отклика на оффер -->
+<div id="responseModal" class="modal-backdrop" style="display: none;">
+    <div class="modal">
+        <div class="modal-header">
+            <h3 class="modal-title">Отклик на оффер</h3>
+            <button class="modal-close" onclick="closeResponseModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="responseOfferDetails">
+                <!-- Детали оффера будут добавлены JavaScript -->
+            </div>
+            <div class="form-field">
+                <label for="responseMessage" class="form-label">Сообщение рекламодателю <span class="required">*</span></label>
+                <textarea id="responseMessage" class="form-input" rows="4" 
+                         placeholder="Расскажите, почему ваш канал подходит для этого оффера..." required></textarea>
+                <div class="form-help">Опишите преимущества вашего канала и условия размещения</div>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeResponseModal()">
+                Отмена
+            </button>
+            <button class="btn btn-primary" onclick="submitResponse()">
+                📩 Отправить отклик
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_scripts %}
@@ -325,21 +354,118 @@ function viewOfferDetails(offerId) {
 
 function respondToOffer(offerId) {
     console.log('Отклик на оффер:', offerId);
-    if (window.Telegram && window.Telegram.WebApp) {
-        window.Telegram.WebApp.showAlert('Функция отклика на офферы будет доступна в следующих обновлениях');
-    } else {
-        alert('Функция отклика на офферы будет доступна в следующих обновлениях');
-    }
+    showResponseModal(offerId);
 }
 
 function closeOfferModal() {
     document.getElementById('offerModal').style.display = 'none';
 }
 
-// Закрытие модального окна при клике на backdrop
+// Функции для модального окна отклика
+let currentOfferId = null;
+
+async function showResponseModal(offerId) {
+    try {
+        currentOfferId = offerId;
+        
+        // Получаем детали оффера
+        const result = await fetch(`/api/offers/${offerId}`)
+            .then(response => response.json());
+        
+        if (result.success) {
+            const offer = result.offer;
+            
+            // Отображаем детали оффера
+            const offerDetailsHTML = `
+                <div class="offer-summary">
+                    <h4>${offer.title}</h4>
+                    <div class="offer-meta">
+                        <span class="offer-budget">💰 ${offer.budget_total || offer.price || 'Не указан'} ₽</span>
+                        <span class="offer-category">📂 ${offer.category || 'Общее'}</span>
+                    </div>
+                    <p class="offer-description">${offer.description || 'Описание не указано'}</p>
+                    <div class="offer-requirements">
+                        <strong>Требования:</strong> ${offer.requirements || 'Особых требований нет'}
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('responseOfferDetails').innerHTML = offerDetailsHTML;
+            document.getElementById('responseModal').style.display = 'flex';
+            
+        } else {
+            alert('Ошибка загрузки данных оффера');
+        }
+        
+    } catch (error) {
+        console.error('Ошибка:', error);
+        alert('Ошибка загрузки данных оффера');
+    }
+}
+
+function closeResponseModal() {
+    document.getElementById('responseModal').style.display = 'none';
+    document.getElementById('responseMessage').value = '';
+    currentOfferId = null;
+}
+
+async function submitResponse() {
+    const message = document.getElementById('responseMessage').value.trim();
+    
+    if (!message) {
+        alert('Введите сообщение рекламодателю');
+        return;
+    }
+    
+    if (!currentOfferId) {
+        alert('Ошибка: не выбран оффер');
+        return;
+    }
+    
+    try {
+        // Отправляем отклик на сервер
+        const response = await fetch(`/api/offers/${currentOfferId}/respond-simple`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: message
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`✅ ${result.message}`);
+            closeResponseModal();
+            
+            // Обновляем кнопку в интерфейсе
+            const offerButton = document.querySelector(`button[onclick*="respondToOffer(${currentOfferId})"]`);
+            if (offerButton) {
+                offerButton.textContent = '✅ Отклик отправлен';
+                offerButton.disabled = true;
+                offerButton.style.background = '#a0aec0';
+                offerButton.onclick = null;
+            }
+        } else {
+            alert(`❌ Ошибка: ${result.error}`);
+        }
+        
+    } catch (error) {
+        console.error('Ошибка отправки отклика:', error);
+        alert('Ошибка отправки отклика');
+    }
+}
+
+// Закрытие модальных окон при клике на backdrop
 document.addEventListener('click', function(e) {
     if (e.target.classList.contains('modal-backdrop')) {
-        closeOfferModal();
+        if (e.target.id === 'offerModal') {
+            closeOfferModal();
+        } else if (e.target.id === 'responseModal') {
+            closeResponseModal();
+        }
     }
 });
 </script>
@@ -473,6 +599,130 @@ document.addEventListener('click', function(e) {
     color: #1e40af;
 }
 
+/* Стили для модального окна отклика */
+.offer-summary {
+    background: var(--bg-secondary);
+    padding: 16px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.offer-summary h4 {
+    margin: 0 0 12px 0;
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 700;
+}
+
+.offer-meta {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.offer-budget {
+    color: var(--primary-color);
+    font-weight: 700;
+    font-size: 16px;
+}
+
+.offer-category {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.offer-description {
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 12px;
+}
+
+.offer-requirements {
+    color: var(--text-primary);
+    font-size: 14px;
+}
+
+.form-help {
+    font-size: 12px;
+    color: var(--text-tertiary);
+    margin-top: 8px;
+    font-style: italic;
+}
+
+.required {
+    color: var(--danger-color);
+}
+
+/* Стили для кнопок в модальных окнах */
+.modal .btn {
+    border-radius: 12px !important;
+    font-weight: 600;
+    padding: 12px 24px;
+    transition: all 0.2s ease;
+}
+
+.modal .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.modal .btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), #5a67d8);
+    border: none;
+}
+
+.modal .btn-secondary {
+    background: linear-gradient(135deg, #a0aec0, #718096);
+    border: none;
+    color: white;
+}
+
+.modal .btn-outline {
+    border: 2px solid var(--border-color);
+    background: transparent;
+    color: var(--text-primary);
+}
+
+.modal .btn-outline:hover {
+    background: var(--bg-secondary);
+    border-color: var(--primary-color);
+}
+
+/* Улучшенные стили для модального окна */
+.modal {
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    border-radius: 16px 16px 0 0;
+    background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+}
+
+.modal-footer {
+    border-radius: 0 0 16px 16px;
+    gap: 12px;
+}
+
+.modal-close {
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.modal-close:hover {
+    transform: rotate(90deg);
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger-color);
+}
+
 @media (max-width: 768px) {
     .offer-header {
         flex-direction: column;
@@ -496,6 +746,11 @@ document.addEventListener('click', function(e) {
     .payment-item {
         flex-direction: column;
         align-items: flex-start;
+        gap: 8px;
+    }
+    
+    .offer-meta {
+        flex-direction: column;
         gap: 8px;
     }
 }

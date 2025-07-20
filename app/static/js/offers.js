@@ -931,21 +931,6 @@ class OffersManager {
 const ResponseManager = {
     async acceptOffer(offerId) {
         try {
-            const channelsResult = await ApiClient.get('/api/channels/my');
-
-            if (!channelsResult.success) {
-                throw new Error(channelsResult.error || 'Ошибка загрузки каналов');
-            }
-
-            const verifiedChannels = (channelsResult.channels || []).filter(channel =>
-                channel.is_verified === true || channel.is_verified === 1 || channel.status === 'verified'
-            );
-
-            if (verifiedChannels.length === 0) {
-                alert('У вас нет верифицированных каналов. Сначала добавьте и верифицируйте канал в разделе "Мои каналы".');
-                return;
-            }
-
             const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
             const titleElement = offerCard?.querySelector('h3');
             const offer = {
@@ -953,10 +938,60 @@ const ResponseManager = {
                 title: titleElement?.textContent?.trim() || 'Оффер'
             };
 
-            this.showResponseModal(offerId, offer, verifiedChannels);
+            this.showSimpleResponseModal(offerId, offer);
         } catch (error) {
             alert(`❌ Ошибка: ${error.message}`);
         }
+    },
+
+    async showSimpleResponseModal(offerId, offer) {
+        const formContent = `
+            ${Templates.infoCard(offer.title, '', '🎯')}
+            <form id="responseForm">
+                ${Templates.formField('Сообщение рекламодателю', 'textarea', 'responseMessage', { 
+                    required: true, 
+                    placeholder: 'Расскажите, почему ваш канал подходит для этого оффера...',
+                    style: 'min-height:120px;'
+                })}
+                <div class="button-group">
+                    ${Templates.button('Отмена', 'closeResponseModal(\'responseModal\')', 'outline', 'md')}
+                    <button type="submit" class="btn-primary btn-md">Отправить отклик</button>
+                </div>
+            </form>
+        `;
+
+        const modal = document.createElement('div');
+        const modalHTML = Templates.modal('📝 Отклик на оффер', formContent, 'responseModal');
+        modal.innerHTML = modalHTML;
+        const modalElement = modal.firstElementChild;
+        
+        // Добавляем класс 'active' для показа модального окна
+        if (modalElement) {
+            modalElement.classList.add('active');
+        }
+        
+        document.body.appendChild(modalElement);
+
+        // Ждем, пока элемент появится в DOM, затем добавляем обработчики
+        setTimeout(() => {
+            const form = document.getElementById('responseForm');
+            if (form) {
+                form.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.submitResponse(offerId, modalElement);
+                });
+            }
+            
+            // Добавляем обработчик для кнопки закрытия
+            const closeButton = modalElement.querySelector('.modal-close');
+            if (closeButton) {
+                closeButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    closeResponseModal('responseModal');
+                });
+            }
+        }, 100);
     },
 
     async showResponseModal(offerId, offer, verifiedChannels) {
@@ -1009,13 +1044,6 @@ const ResponseManager = {
             ${Templates.infoCard(offer.title, '', '🎯')}
             ${existingResponsesWarning}
             <form id="responseForm">
-                <div class="form-field">
-                    <label for="selectedChannel">Выберите канал <span class="required">*</span></label>
-                    <select id="selectedChannel" required>
-                        <option value="">Выберите канал...</option>
-                        ${selectOptions}
-                    </select>
-                </div>
                 ${Templates.formField('Сообщение рекламодателю', 'textarea', 'responseMessage', { 
                     required: true, 
                     placeholder: 'Расскажите, почему ваш канал подходит для этого оффера...',
@@ -1075,17 +1103,15 @@ const ResponseManager = {
     },
 
     async submitResponse(offerId, modal) {
-        const selectedChannelId = document.getElementById('selectedChannel').value;
         const message = document.getElementById('responseMessage').value.trim();
 
-        if (!selectedChannelId || !message) {
-            alert('Заполните все обязательные поля');
+        if (!message) {
+            alert('Введите сообщение рекламодателю');
             return;
         }
 
         try {
-            const result = await ApiClient.post(`/api/offers/${offerId}/respond`, {
-                channel_id: parseInt(selectedChannelId),
+            const result = await ApiClient.post(`/api/offers/${offerId}/respond-simple`, {
                 message: message
             });
 

@@ -776,6 +776,136 @@ def update_offer_status(offer_id):
         logger.error(f"❌ Ошибка изменения статуса оффера: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@offers_bp.route('/<int:offer_id>/respond-simple', methods=['POST'])
+def respond_to_offer_simple(offer_id):
+    """Упрощенный отклик на оффер с автоматическим выбором канала"""
+    try:
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+            
+        data = request.get_json()
+        message = data.get('message', '').strip()
+
+        if not message:
+            return jsonify({'success': False, 'error': 'Сообщение обязательно'}), 400
+
+        # Получаем пользователя
+        user = execute_db_query('SELECT id FROM users WHERE telegram_id = ?', (telegram_id,), fetch_one=True)
+        if not user:
+            return jsonify({'success': False, 'error': 'Пользователь не найден'}), 400
+
+        # Получаем первый верифицированный канал пользователя
+        channel = execute_db_query("""
+            SELECT * FROM channels 
+            WHERE owner_id = ? AND is_verified = 1 AND is_active = 1
+            ORDER BY subscriber_count DESC
+            LIMIT 1
+        """, (user['id'],), fetch_one=True)
+
+        if not channel:
+            return jsonify({
+                'success': False, 
+                'error': 'У вас нет верифицированных каналов. Сначала добавьте и верифицируйте канал.'
+            }), 400
+
+        # Получаем информацию об оффере
+        offer = execute_db_query("""
+            SELECT o.*, u.telegram_id as owner_telegram_id, u.first_name, u.username as owner_username
+            FROM offers o
+            JOIN users u ON o.created_by = u.id
+            WHERE o.id = ?
+        """, (offer_id,), fetch_one=True)
+
+        if not offer:
+            return jsonify({'success': False, 'error': 'Оффер не найден'}), 404
+
+        # Проверяем, есть ли уже отклик от этого пользователя с этим каналом
+        existing_response = execute_db_query("""
+            SELECT id, status FROM offer_responses
+            WHERE offer_id = ? AND user_id = ? AND channel_id = ?
+        """, (offer_id, user['id'], channel['id']), fetch_one=True)
+
+        if existing_response:
+            return jsonify({
+                'success': False, 
+                'error': f'Вы уже отправили отклик на этот оффер с канала "{channel["title"]}"'
+            }), 409
+
+        # Проверяем, что не откликаемся на собственный оффер
+        if offer['owner_telegram_id'] == telegram_id:
+            return jsonify({
+                'success': False, 
+                'error': 'Вы не можете откликаться на собственный оффер'
+            }), 403
+
+        # Проверяем статус оффера
+        if offer['status'] != 'active':
+            return jsonify({
+                'success': False, 
+                'error': f'Оффер неактивен (статус: {offer["status"]})'
+            }), 400
+
+        # Создаем отклик
+        response_id = execute_db_query("""
+            INSERT INTO offer_responses (offer_id, user_id, channel_id, message, status,
+                                       channel_title, channel_username, channel_subscribers, 
+                                       created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (
+            offer_id, user['id'], channel['id'], message, 'pending',
+            channel.get('title', ''), channel.get('username', ''),
+            channel.get('subscriber_count', 0)
+        ))
+
+        # Отправляем уведомление рекламодателю
+        try:
+            from app.telegram.telegram_notifications import TelegramNotificationService
+            
+            sender = execute_db_query("""
+                SELECT first_name, last_name, username, telegram_id
+                FROM users WHERE id = ?
+            """, (user['id'],), fetch_one=True)
+            
+            sender_name = []
+            if sender.get('first_name'):
+                sender_name.append(sender['first_name'])
+            if sender.get('last_name'):
+                sender_name.append(sender['last_name'])
+            full_name = ' '.join(sender_name) if sender_name else sender.get('username', 'Пользователь')
+            
+            notification_text = f"📬 <b>Новый отклик на ваш оффер!</b>\n\n"
+            notification_text += f"🎯 <b>Оффер:</b> {offer['title']}\n"
+            notification_text += f"📺 <b>Канал:</b> @{channel.get('username', 'канал')} ({channel.get('subscriber_count', 0):,} подписчиков)\n"
+            notification_text += f"👤 <b>От:</b> {full_name}\n\n"
+            notification_text += f"💬 <b>Сообщение:</b>\n{message}\n\n"
+            notification_text += f"👀 Просмотреть отклики: /my_offers"
+
+            TelegramNotificationService.send_telegram_notification(
+                offer['owner_telegram_id'],
+                notification_text,
+                {
+                    'type': 'offer_new_response',
+                    'offer_id': offer_id,
+                    'response_id': response_id,
+                    'channel_id': channel['id']
+                }
+            )
+            
+        except Exception as e:
+            logger.error(f"Ошибка отправки уведомления: {e}")
+
+        return jsonify({
+            'success': True,
+            'message': f'Отклик отправлен с канала "{channel["title"]}"',
+            'response_id': response_id,
+            'channel_title': channel['title']
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка отправки отклика: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @offers_bp.route('/<int:offer_id>/respond', methods=['POST'])
 def respond_to_offer(offer_id):
             """Отклик на оффер"""

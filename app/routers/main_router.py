@@ -112,6 +112,7 @@ def available_offers_page():
         return jsonify({'error': 'Internal server error'}), 500
 
 
+
 # === API СТАТИСТИКИ ===
 # тут считаю количество на главной странице
 @main_bp.route('/api/stats/global')
