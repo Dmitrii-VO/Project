@@ -127,24 +127,37 @@ export class OffersManager {
             
             // Попробуем загрузить реальные данные
             try {
+                console.log('🔍 Запрос getMyOffers()...');
                 const result = await this.api.getMyOffers();
+                console.log('📡 Ответ API:', result);
                 
-                if (result.success && result.offers?.length > 0) {
-                    this.renderOffers(result.offers, container);
-                    this.hideEmptyState();
+                if (result && result.success) {
+                    console.log('🔍 Проверка структуры данных:');
+                    console.log('- result.data:', result.data);
+                    console.log('- result.data.offers:', result.data?.offers);
+                    console.log('- Array.isArray(result.data.offers):', Array.isArray(result.data?.offers));
+                    console.log('- result.data.offers.length:', result.data?.offers?.length);
+                    
+                    if (result.data && result.data.offers && Array.isArray(result.data.offers) && result.data.offers.length > 0) {
+                        console.log(`✅ Найдено офферов: ${result.data.offers.length}`);
+                        this.renderOffers(result.data.offers, container);
+                        this.hideEmptyState();
+                    } else {
+                        console.log('ℹ️ Офферов не найдено, показываем пустое состояние');
+                        console.log('📊 Данные которые получили:', JSON.stringify(result.data, null, 2));
+                        this.showEmpty(container, 'У вас пока нет офферов', 'Создайте свой первый оффер для поиска каналов', 
+                            '<button class="btn btn-primary" onclick="window.offersManager?.switchTab(\'create-offer\')">Создать оффер</button>');
+                    }
+                    return;
+                } else {
+                    console.log('❌ API вернул неуспешный результат:', result);
+                    this.showError(container, 'Не удалось загрузить офферы');
                     return;
                 }
             } catch (apiError) {
-                console.log('📡 API недоступен, показываем тестовые данные:', apiError.message);
-            }
-            
-            // Показываем тестовые данные если API недоступен
-            const testOffers = this.generateTestOffers();
-            if (testOffers.length > 0) {
-                this.renderOffers(testOffers, container);
-                this.hideEmptyState();
-            } else {
-                this.showEmptyState();
+                console.error('❌ Исключение при запросе API:', apiError);
+                this.showError(container, 'Ошибка загрузки: ' + apiError.message);
+                return;
             }
             
         } catch (error) {
@@ -164,21 +177,22 @@ export class OffersManager {
             try {
                 const result = await this.api.getOffers(this.filters);
                 
-                if (result.success && result.offers?.length > 0) {
-                    this.renderOffers(result.offers, container);
+                if (result.success) {
+                    if (result.data && result.data.offers && result.data.offers.length > 0) {
+                        this.renderOffers(result.data.offers, container);
+                    } else {
+                        this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');
+                    }
                     return;
                 }
             } catch (apiError) {
-                console.log('📡 API недоступен, показываем тестовые данные:', apiError.message);
+                console.error('❌ Ошибка API getOffers:', apiError);
+                this.showError(container, 'Ошибка загрузки офферов: ' + apiError.message);
+                return;
             }
             
-            // Показываем тестовые данные если API недоступен
-            const testOffers = this.generateAvailableTestOffers();
-            if (testOffers.length > 0) {
-                this.renderOffers(testOffers, container);
-            } else {
-                this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');
-            }
+            // Этот код больше не должен выполняться
+            this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');
             
         } catch (error) {
             console.error('❌ Ошибка поиска офферов:', error);

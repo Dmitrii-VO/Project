@@ -12,7 +12,7 @@ export class OffersAPI {
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json',
-                'X-Telegram-User-Id': window.getTelegramUserId?.() || ''
+                'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'  // Тестовый ID как fallback
             }
         };
 
@@ -22,10 +22,25 @@ export class OffersAPI {
         }
 
         const response = await fetch(url, config);
+        console.log(`📡 ${config.method || 'GET'} ${url} -> HTTP ${response.status}`);
+        
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            let errorText;
+            try {
+                errorText = await response.text();
+            } catch {
+                errorText = response.statusText;
+            }
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
-        return response.json();
+        
+        try {
+            const data = await response.json();
+            console.log('📋 Ответ:', data);
+            return data;
+        } catch (error) {
+            throw new Error('Ответ не является валидным JSON: ' + error.message);
+        }
     }
 
     // Базовые HTTP методы
@@ -54,12 +69,12 @@ export class OffersAPI {
             }
         });
         
-        const url = `${this.baseUrl}/offers${params.toString() ? '?' + params.toString() : ''}`;
+        const url = `${this.baseUrl}/offers/available${params.toString() ? '?' + params.toString() : ''}`;
         return this.get(url);
     }
 
     async getMyOffers() {
-        return this.get(`${this.baseUrl}/offers/my`);
+        return this.get(`${this.baseUrl}/offers/my-offers`);
     }
 
     async getOffer(id) {
@@ -67,11 +82,11 @@ export class OffersAPI {
     }
 
     async createOffer(offerData) {
-        return this.post(`${this.baseUrl}/offers`, offerData);
+        return this.post(`${this.baseUrl}/offers/create`, offerData);
     }
 
     async updateOffer(id, offerData) {
-        return this.patch(`${this.baseUrl}/offers/${id}`, offerData);
+        return this.request(`${this.baseUrl}/offers/${id}/status`, { method: 'PUT', body: JSON.stringify(offerData) });
     }
 
     async deleteOffer(id) {
@@ -80,7 +95,7 @@ export class OffersAPI {
 
     // Методы для работы с откликами
     async getProposals(offerId) {
-        return this.get(`${this.baseUrl}/offers/${offerId}/proposals`);
+        return this.get(`${this.baseUrl}/offers/${offerId}/responses`);
     }
 
     async acceptProposal(proposalId, data = {}) {

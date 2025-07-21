@@ -18,7 +18,7 @@ from app.api.analytics import analytics_bp
 import requests
 from flask import Flask, jsonify, request, render_template
 from app.api.channel_analyzer import analyzer_bp
-from app.api.offers_management import offers_management_bp
+# Удалено - функциональность интегрирована в новый offers API
 from app.api.proposals_management import proposals_management_bp
 from app.api.monitoring_statistics import monitoring_statistics_bp
 from app.api.campaigns_management import campaigns_bp
@@ -88,8 +88,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
     app.register_blueprint(analytics_bp, url_prefix='/api/analytics')
     app.register_blueprint(analyzer_bp, url_prefix='/api/analyzer')
-    app.register_blueprint(offers_management_bp,
-                           url_prefix='/api/offers_management')
+    # Удалено - функциональность интегрирована в новый offers API
     app.register_blueprint(proposals_management_bp)
     app.register_blueprint(campaigns_bp)
     app.register_blueprint(monitoring_statistics_bp,

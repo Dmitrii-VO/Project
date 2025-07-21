@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Отладка Frontend API</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        button { margin: 5px; padding: 10px 15px; }
+        #results { white-space: pre-wrap; font-family: monospace; background: #f5f5f5; padding: 10px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Отладка Frontend API для Offers</h1>
+    
+    <div class="test-section">
+        <h3>Тест удаления оффера</h3>
+        <p>Telegram ID: <input type="text" id="telegramId" value="373086959" /></p>
+        <p>Оффер ID: <input type="text" id="offerId" value="36" /></p>
+        <button onclick="testDeleteOffer()">🗑️ Тест удаления</button>
+        <button onclick="testGetMyOffers()">📋 Получить мои офферы</button>
+        <button onclick="testAPI()">🧪 Полный тест API</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        // Утилиты
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'error' ? 'error' : type === 'success' ? 'success' : 'info';
+            results.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+            console.log(message);
+        }
+
+        // Имитация getTelegramUserId
+        window.getTelegramUserId = () => document.getElementById('telegramId').value;
+
+        // API клиент (упрощенная версия)
+        class TestAPI {
+            constructor() {
+                this.baseUrl = '/api';
+            }
+
+            async request(url, options = {}) {
+                const defaultOptions = {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': window.getTelegramUserId?.() || ''
+                    }
+                };
+
+                const config = { ...defaultOptions, ...options };
+                if (config.headers) {
+                    config.headers = { ...defaultOptions.headers, ...config.headers };
+                }
+
+                log(`Запрос: ${options.method || 'GET'} ${url}`);
+                log(`Заголовки: ${JSON.stringify(config.headers, null, 2)}`);
+
+                try {
+                    const response = await fetch(url, config);
+                    log(`Ответ: HTTP ${response.status}`);
+                    
+                    const data = await response.json();
+                    log(`Данные: ${JSON.stringify(data, null, 2)}`);
+                    
+                    return { status: response.status, data };
+                } catch (error) {
+                    log(`Ошибка: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+
+            async getMyOffers() {
+                return this.request(`${this.baseUrl}/offers/my-offers`, { method: 'GET' });
+            }
+
+            async deleteOffer(id) {
+                return this.request(`${this.baseUrl}/offers/${id}`, { method: 'DELETE' });
+            }
+        }
+
+        const api = new TestAPI();
+
+        // Тестовые функции
+        async function testDeleteOffer() {
+            log('=== ТЕСТ УДАЛЕНИЯ ОФФЕРА ===');
+            const offerId = document.getElementById('offerId').value;
+            
+            try {
+                const result = await api.deleteOffer(offerId);
+                if (result.status === 200) {
+                    log('✅ Оффер успешно удален!', 'success');
+                } else {
+                    log(`❌ Ошибка удаления: ${result.data.error}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Исключение: ${error.message}`, 'error');
+            }
+        }
+
+        async function testGetMyOffers() {
+            log('=== ТЕСТ ПОЛУЧЕНИЯ ОФФЕРОВ ===');
+            
+            try {
+                const result = await api.getMyOffers();
+                if (result.status === 200 && result.data.success) {
+                    const offers = result.data.data.offers;
+                    log(`✅ Получено офферов: ${offers.length}`, 'success');
+                    offers.forEach(offer => {
+                        log(`  Оффер ID: ${offer.id}, Название: ${offer.title}`);
+                    });
+                } else {
+                    log(`❌ Ошибка получения: ${result.data.error}`, 'error');
+                }
+            } catch (error) {
+                log(`💥 Исключение: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAPI() {
+            log('=== ПОЛНЫЙ ТЕСТ API ===');
+            document.getElementById('results').innerHTML = '';
+            
+            await testGetMyOffers();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testDeleteOffer();
+        }
+    </script>
+</body>
+</html>
