@@ -24,6 +24,7 @@
             <li><a href="#" class="active" data-tab="my-offers">Мои офферы</a></li>
             <li><a href="#" data-tab="find-offer">Найти оффер</a></li>
             <li><a href="#" data-tab="create-offer">Создать оффер</a></li>
+            <li><a href="#" data-tab="campaigns">Рекламная кампания</a></li>
         </nav>
     </div>
 
@@ -187,11 +188,162 @@
             </div>
         </div>
     </div>
+
+    <!-- Tab: Рекламная кампания -->
+    <div class="tabs-content" id="campaigns">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">📢 Добавление кампании</h3>
+                <p class="card-subtitle">Создайте новую рекламную кампанию</p>
+            </div>
+            <div class="card-body">
+                <form id="campaignForm">
+                    <!-- Название кампании -->
+                    <div class="form-field">
+                        <label class="form-label" for="campaignName">Название</label>
+                        <input type="text" class="form-input" id="campaignName" name="name" placeholder="Курсы по дизайну" required>
+                    </div>
+
+                    <!-- Лимит бюджета -->
+                    <div class="form-field">
+                        <label class="form-label" for="campaignBudget">Лимит</label>
+                        <input type="number" class="form-input" id="campaignBudget" name="budget_limit" placeholder="Лимит бюджета кампании в рублях" min="0" step="0.01" required>
+                        <div class="form-help">Максимальная сумма расходов на рекламу, при достижении которой кампания автоматически останавливается. Лимит указывается в рублях.</div>
+                    </div>
+
+                    <!-- UTM-метки -->
+                    <div class="form-field">
+                        <label class="form-label">UTM-метки</label>
+                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                            <input type="checkbox" id="campaignUtmTags" name="add_utm_tags" style="margin-top: 4px;">
+                            <div>
+                                <label for="campaignUtmTags" style="font-weight: 500; cursor: pointer;">Добавлять UTM метки к ссылкам</label>
+                                <div class="form-help" style="margin-top: 4px;">
+                                    UTM-метки помогают отслеживать эффективность источников трафика.
+                                    Автоматически добавляются UTM метки utm_source=telegram, utm_medium=channel, utm_campaign=[имя кампании], utm_term=[название канала].
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Трекер -->
+                    <div class="form-field">
+                        <label class="form-label">Трекер</label>
+                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                            <input type="checkbox" id="campaignTracker" name="track_clicks" style="margin-top: 4px;">
+                            <div>
+                                <label for="campaignTracker" style="font-weight: 500; cursor: pointer;">Отслеживать клики по каждой ссылке</label>
+                                <div class="form-help" style="margin-top: 4px;">
+                                    При включении автоматически собирается статистика по кликам из каждой публикации. 
+                                    Данные по кликам доступны в разделе "Аналитика". 
+                                    Данные в личных сообщениях не отслеживаются в связи с ограничениями Telegram.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Период работы -->
+                    <div class="form-field">
+                        <label class="form-label">Период с</label>
+                        <div style="display: flex; gap: 12px; align-items: center;">
+                            <input type="date" class="form-input" id="campaignStartDate" name="start_date" required style="flex: 1;">
+                            <span style="color: var(--text-secondary);">по:</span>
+                            <input type="date" class="form-input" id="campaignEndDate" name="end_date" required style="flex: 1;">
+                        </div>
+                        <div class="form-help">При установке периодов размещение рекламодателем рекламы осуществляется только в указанные даты. (Применимые действие соц.сетей)</div>
+                    </div>
+
+                    <!-- Время работы -->
+                    <div class="form-field">
+                        <label class="form-label">Время работы</label>
+                        <div style="display: flex; flex-direction: column; gap: 12px;">
+                            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                <input type="checkbox" id="campaignWeekends" name="work_weekends" style="margin-top: 4px;" checked>
+                                <div>
+                                    <label for="campaignWeekends" style="font-weight: 500; cursor: pointer;">Выходные дни</label>
+                                    <div class="form-help" style="margin-top: 4px;">
+                                        Размещение рекламы только в выходные дни - размещать публикации только в субботу и воскресенье.
+                                        Только рабочие часы - размещать публикации только в время с 9:00 до 18:00.
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                <input type="checkbox" id="campaignWorkHours" name="work_hours_only" style="margin-top: 4px;">
+                                <div>
+                                    <label for="campaignWorkHours" style="font-weight: 500; cursor: pointer;">Только рабочие часы</label>
+                                    <div class="form-help" style="margin-top: 4px;">
+                                        Размещение рекламы в течение рабочих часов (9:00-18:00).
+                                        Только рабочие часы - размещать публикации только в время с 9:00 до 18:00.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Рекламодатель -->
+                    <div class="form-field">
+                        <label class="form-label" for="campaignAdvertiser">Рекламодатель</label>
+                        <select class="form-select" id="campaignAdvertiser" name="advertiser_type" required>
+                            <option value="">Выберите тип</option>
+                            <option value="legal_entity">Юридическое лицо</option>
+                            <option value="individual_entrepreneur">Индивидуальный предприниматель</option>
+                            <option value="physical_person">Физическое лицо</option>
+                        </select>
+                        <div class="form-help">Информация об рекламодателе необходима для внутренней отчетности и может быть изменена оператором.</div>
+                    </div>
+
+                    <!-- Наименование -->
+                    <div class="form-field">
+                        <label class="form-label" for="campaignProductName">Наименование</label>
+                        <input type="text" class="form-input" id="campaignProductName" name="product_name" placeholder="ООО &quot;Эс как делать&quot;" required>
+                        <div class="form-help">
+                            Если вы физическое лицо, я рекомендую что вы НТ участники рынка.
+                            Пришлите ваш ИП, рекомендую ФGMO Нужно использовать один в том числе.
+                        </div>
+                    </div>
+
+                    <!-- ИНН -->
+                    <div class="form-field">
+                        <label class="form-label" for="campaignInn">ИНН</label>
+                        <input type="text" class="form-input" id="campaignInn" name="advertiser_inn" placeholder="ИНН рекламодателя" pattern="[0-9]{10,12}">
+                        <div class="form-help">
+                            Укажите персональный ИНН если вы физическое лицо, рекомендуемым является то, что регистрация соответствующую ИНН.
+                            Если вы не знаете номер ИНН, узнать его можно с ИП или ООО через сервис на сайте nalog.ru
+                        </div>
+                    </div>
+
+                    <!-- Рекламный пост -->
+                    <div class="form-field">
+                        <label class="form-label" for="campaignAdContent">Рекламный пост</label>
+                        <textarea class="form-input" id="campaignAdContent" name="ad_content" rows="8" placeholder="Введи или переключи содержание рекламного пост" required></textarea>
+                        <div class="form-help">
+                            1. Добавьте в этот блок текстовая рекламных кампаний и иных ресурсов для их размещения.
+                            
+                            2. Добавить ссылку на сайт к публикации и разместить внедряемые ресурс.
+                            
+                            3. Добавить ссылку на применяемые реактивными способ совы во приложении для позиции рации включалось или функциональность.
+                            
+                            4. Добавить ссылку на сайт и активные ресурсы изображений. Каналы обычная кас автоматического ссылки о вашкого действий изображения включить в каждого просмотрено или вместе функциональности.
+                        </div>
+                    </div>
+
+                    <!-- Кнопки действий -->
+                    <div class="form-field" style="display: flex; gap: 12px; justify-content: space-between; margin-top: 24px;">
+                        <button type="button" class="btn btn-outline" onclick="saveCampaignDraft()" style="flex: 0 0 auto;">
+                            Сохранить как черновик
+                        </button>
+                        <button type="submit" class="btn btn-primary" style="flex: 1; min-width: 200px;">
+                            Создать кампанию
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
 <script src="{{ url_for('static', filename='js/offers.js') }}"></script>
 
 <script>
@@ -280,6 +432,132 @@ document.addEventListener('DOMContentLoaded', function() {
     const autoOfferForm = document.getElementById('autoOfferForm');
     if (autoOfferForm) {
         autoOfferForm.addEventListener('submit', submitAutoOffer);
+    }
+    
+    // Настраиваем обработчик формы кампании
+    const campaignForm = document.getElementById('campaignForm');
+    if (campaignForm) {
+        campaignForm.addEventListener('submit', submitCampaign);
+    }
+    
+    // Убираем загрузку рекламодателей, так как теперь это выпадающий список типов
+    
+    // Устанавливаем минимальную дату как сегодня
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('campaignStartDate').min = today;
+    document.getElementById('campaignEndDate').min = today;
+});
+
+// Функции для работы с кампаниями
+
+async function submitCampaign(event) {
+    event.preventDefault();
+    
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    
+    try {
+        submitBtn.disabled = true;
+        submitBtn.textContent = '⏳ Создаем кампанию...';
+        
+        const formData = new FormData(event.target);
+        
+        // Преобразуем данные формы
+        const data = {
+            name: formData.get('name'),
+            budget_limit: parseFloat(formData.get('budget_limit')),
+            add_utm_tags: formData.has('add_utm_tags'),
+            track_clicks: formData.has('track_clicks'),
+            start_date: formData.get('start_date'),
+            end_date: formData.get('end_date'),
+            work_weekends: formData.has('work_weekends'),
+            work_hours_only: formData.has('work_hours_only'),
+            advertiser_type: formData.get('advertiser_type'),
+            product_name: formData.get('product_name'),
+            advertiser_inn: formData.get('advertiser_inn'),
+            ad_content: formData.get('ad_content'),
+            status: 'active'
+        };
+        
+        console.log('📋 Отправляем данные кампании:', data);
+        
+        const response = await fetch('/api/campaigns', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Кампания создана успешно!');
+            event.target.reset();
+            console.log('✅ Кампания создана:', result.campaign);
+        } else {
+            throw new Error(result.error || 'Ошибка создания кампании');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка при создании кампании:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = originalText;
+    }
+}
+
+async function saveCampaignDraft() {
+    const form = document.getElementById('campaignForm');
+    const formData = new FormData(form);
+    
+    const data = {
+        name: formData.get('name'),
+        budget_limit: parseFloat(formData.get('budget_limit')) || 0,
+        add_utm_tags: formData.has('add_utm_tags'),
+        track_clicks: formData.has('track_clicks'),
+        start_date: formData.get('start_date'),
+        end_date: formData.get('end_date'),
+        work_weekends: formData.has('work_weekends'),
+        work_hours_only: formData.has('work_hours_only'),
+        advertiser_type: formData.get('advertiser_type'),
+        product_name: formData.get('product_name'),
+        advertiser_inn: formData.get('advertiser_inn'),
+        ad_content: formData.get('ad_content'),
+        status: 'draft'
+    };
+    
+    try {
+        const response = await fetch('/api/campaigns', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('✅ Черновик кампании сохранен!');
+            console.log('✅ Черновик сохранен:', result.campaign);
+        } else {
+            throw new Error(result.error || 'Ошибка сохранения черновика');
+        }
+    } catch (error) {
+        console.error('❌ Ошибка при сохранении черновика:', error);
+        alert(`❌ Ошибка: ${error.message}`);
+    }
+}
+
+// Валидация дат
+document.getElementById('campaignStartDate').addEventListener('change', function() {
+    const startDate = this.value;
+    const endDateInput = document.getElementById('campaignEndDate');
+    endDateInput.min = startDate;
+    
+    if (endDateInput.value && endDateInput.value < startDate) {
+        endDateInput.value = startDate;
     }
 });
 </script>
