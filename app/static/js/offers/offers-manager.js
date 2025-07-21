@@ -507,4 +507,47 @@ export class OffersManager {
         console.log('Статистика оффера:', offerId);
         this.modals.showNotification(`Статистика оффера ${offerId}`, 'info');
     }
+
+    deleteOffer(offerId) {
+        // Логика удаления оффера
+        console.log('Удаление оффера:', offerId);
+        this.modals.createDeleteConfirmation(offerId);
+    }
+
+    async confirmDeleteOffer(offerId) {
+        try {
+            // Пытаемся удалить через API
+            const result = await this.api.deleteOffer(offerId);
+            
+            if (result && result.success) {
+                this.modals.showNotification('Оффер успешно удален!', 'success');
+                // Обновляем список офферов
+                await this.loadMyOffers();
+                return;
+            } else {
+                throw new Error(result?.error || 'Ошибка удаления оффера');
+            }
+        } catch (error) {
+            console.log('📡 API недоступен, удаляем из тестовых данных:', error.message);
+            
+            // Удаляем из DOM
+            const offerCard = document.querySelector(`[data-offer-id="${offerId}"]`);
+            if (offerCard) {
+                offerCard.style.transition = 'all 0.3s ease';
+                offerCard.style.opacity = '0';
+                offerCard.style.transform = 'scale(0.8)';
+                
+                setTimeout(() => {
+                    offerCard.remove();
+                    this.modals.showNotification('Оффер удален!', 'success');
+                    
+                    // Проверяем, остались ли офферы
+                    const remainingOffers = document.querySelectorAll('.offer-card').length;
+                    if (remainingOffers === 0) {
+                        this.showEmptyState();
+                    }
+                }, 300);
+            }
+        }
+    }
 }

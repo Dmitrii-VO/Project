@@ -90,6 +90,87 @@
   padding: 6px 12px;
 }
 
+.offer-actions .btn-danger {
+  background: var(--error-500, #ef4444);
+  color: white;
+  border: 1px solid var(--error-500, #ef4444);
+}
+
+.offer-actions .btn-danger:hover {
+  background: var(--error-600, #dc2626);
+  border-color: var(--error-600, #dc2626);
+  transform: translateY(-1px);
+}
+
+/* Модальное окно подтверждения удаления */
+.delete-confirmation {
+  text-align: center;
+  padding: var(--space-4);
+  min-width: 300px;
+  max-width: 500px;
+}
+
+.confirmation-icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+}
+
+.delete-confirmation h3 {
+  color: var(--text-primary);
+  margin-bottom: var(--space-3);
+}
+
+.delete-confirmation p {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+}
+
+.warning-text {
+  color: var(--error-600, #dc2626) !important;
+  font-weight: 500;
+  margin-bottom: var(--space-4) !important;
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: center;
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.form-actions .btn {
+  min-width: 120px;
+  padding: 10px 20px;
+  font-weight: 500;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-actions .btn-secondary {
+  background: #e2e8f0;
+  color: #4a5568;
+  border: 1px solid #e2e8f0;
+}
+
+.form-actions .btn-secondary:hover {
+  background: #cbd5e0;
+  border-color: #cbd5e0;
+}
+
+.form-actions .btn-danger {
+  background: #ef4444 !important;
+  color: white !important;
+  border: 1px solid #ef4444 !important;
+}
+
+.form-actions .btn-danger:hover {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  transform: translateY(-1px);
+}
+
 /* Статус бейдж */
 .status-badge {
   font-size: var(--text-xs);

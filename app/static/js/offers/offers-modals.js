@@ -166,6 +166,31 @@ export class ModalManager {
         return this.create('reject-proposal-modal', '❌ Отклонить предложение', content);
     }
 
+    // Модальное окно подтверждения удаления
+    createDeleteConfirmation(offerId) {
+        const content = `
+            <div class="delete-confirmation">
+                <div class="confirmation-icon">⚠️</div>
+                <h3>Подтверждение удаления</h3>
+                <p>Вы действительно хотите удалить этот оффер?</p>
+                <p class="warning-text">Это действие нельзя будет отменить.</p>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="window.modalManager?.close?.('delete-confirmation-modal')">
+                        Отмена
+                    </button>
+                    <button type="button" class="btn btn-danger" onclick="window.modalManager?.confirmDelete?.('${offerId}')" style="background: #ef4444; color: white; border: 1px solid #ef4444;">
+                        🗑️ Да, удалить
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const modal = this.create('delete-confirmation-modal', '🗑️ Удаление оффера', content);
+        console.log('🗑️ Создано модальное окно подтверждения удаления для оффера:', offerId);
+        return modal;
+    }
+
     // Модальное окно деталей оффера
     createOfferDetails(offer) {
         const content = `
@@ -320,6 +345,27 @@ export class ModalManager {
             this.close('reject-proposal-modal');
         } catch (error) {
             this.showNotification('Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    async confirmDelete(offerId) {
+        console.log('🗑️ Подтверждение удаления оффера:', offerId);
+        
+        try {
+            // Закрываем модальное окно подтверждения
+            this.close('delete-confirmation-modal');
+            
+            // Вызываем метод удаления из OffersManager
+            if (window.offersManager) {
+                console.log('✅ Вызываем confirmDeleteOffer для оффера:', offerId);
+                await window.offersManager.confirmDeleteOffer(offerId);
+            } else {
+                console.error('❌ Менеджер офферов недоступен');
+                this.showNotification('Ошибка: менеджер офферов недоступен', 'error');
+            }
+        } catch (error) {
+            console.error('❌ Ошибка удаления:', error);
+            this.showNotification('Ошибка удаления: ' + error.message, 'error');
         }
     }
 

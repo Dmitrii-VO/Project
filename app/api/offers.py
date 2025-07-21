@@ -668,11 +668,12 @@ def delete_offer(offer_id):
             logger.error(f"Пользователь {user['id']} не имеет прав на удаление оффера {offer_id} (владелец: {offer['created_by']})")
             return jsonify({'success': False, 'error': 'У вас нет прав для удаления этого оффера'}), 403
 
-        if offer['status'] in ['active', 'paused']:
-            return jsonify({
-                'success': False,
-                'error': 'Нельзя удалить активный оффер. Сначала завершите или отмените его.'
-            }), 400
+        # Удаляем проверку статуса - пользователь может удалить любой свой оффер
+        # if offer['status'] in ['active', 'paused']:
+        #     return jsonify({
+        #         'success': False,
+        #         'error': 'Нельзя удалить активный оффер. Сначала завершите или отмените его.'
+        #     }), 400
 
         # Удаляем связанные данные и оффер в транзакции
         import sqlite3

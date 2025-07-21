@@ -75,6 +75,12 @@ function setupGlobalFunctions() {
         }
     };
     
+    window.deleteOffer = (offerId) => {
+        if (offersManager) {
+            offersManager.deleteOffer(offerId);
+        }
+    };
+    
     // Функции для фильтров
     window.applyFindFilters = () => {
         if (offersManager) {

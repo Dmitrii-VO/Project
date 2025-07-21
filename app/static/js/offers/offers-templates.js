@@ -90,6 +90,7 @@ export const OffersTemplates = {
                     ${this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offer.id}') || showOfferDetails('${offer.id}')`, 'outline', 'sm')}
                     ${this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offer.id}') || editOffer('${offer.id}')`, 'secondary', 'sm')}
                     ${this.button('📊 Статистика', `window.offersManager?.showOfferStats?.('${offer.id}') || showOfferStats('${offer.id}')`, 'primary', 'sm')}
+                    ${this.button('🗑️ Удалить', `window.offersManager?.deleteOffer?.('${offer.id}') || deleteOffer('${offer.id}')`, 'danger', 'sm')}
                 </div>
             </div>
         `;
