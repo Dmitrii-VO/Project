@@ -37,8 +37,8 @@
             </div>
         </div>
 
-        <div class="stats-grid" id="offersGrid">
-            <div class="empty-state" style="grid-column: 1 / -1;" id="emptyOffersState">
+        <div class="offers-container" id="offersGrid">
+            <div class="empty-state" id="emptyOffersState">
                 <div class="stat-icon">📝</div>
                 <h3>Нет созданных офферов</h3>
                 <p>Создайте свой первый оффер для привлечения каналов</p>
@@ -100,7 +100,7 @@
         </div>
 
         <!-- Результаты поиска -->
-        <div id="findOffersGrid" class="stats-grid">
+        <div id="findOffersGrid" class="offers-container">
             <!-- Доступные офферы будут загружены здесь -->
         </div>
 
@@ -344,221 +344,20 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', filename='js/offers.js') }}"></script>
+<!-- Новая модульная система -->
+<script type="module" src="{{ url_for('static', filename='js/offers/offers-main.js') }}"></script>
+<!-- Fallback для старых браузеров -->
+<script nomodule src="{{ url_for('static', filename='js/offers.js.backup') }}"></script>
 
 <script>
-// Функция для кнопки "Назад"
-function goBack() {
-    window.history.back();
-}
+// Минимальный код для обратной совместимости
+// Основная функциональность теперь в модулях offers/
 
-// Функции для фильтров
-function applyFindFilters() {
-    console.log('Применение фильтров поиска офферов');
-    // Здесь должна быть логика фильтрации
-}
-
-function clearFindFilters() {
-    document.getElementById('findCategoryFilter').value = '';
-    document.getElementById('findBudgetMin').value = '';
-    document.getElementById('findBudgetMax').value = '';
-    document.getElementById('findMinSubscribers').value = '';
-    console.log('Фильтры очищены');
-}
-
-// Новая функция для автоматического создания оффера
-async function submitAutoOffer(event) {
-    event.preventDefault();
-    
-    const submitBtn = event.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.textContent;
-    
-    try {
-        submitBtn.disabled = true;
-        submitBtn.textContent = '⏳ Подбираем каналы...';
-        
-        const formData = new FormData(event.target);
-        const data = {
-            title: 'Автоматический подбор каналов',
-            description: formData.get('description'),
-            budget: parseInt(formData.get('budget')),
-            price: Math.min(parseInt(formData.get('budget')) * 0.1, 50000),
-            budget_total: parseInt(formData.get('budget')),
-            target_audience: 'general',
-            category: 'general',
-            currency: 'RUB',
-            content: formData.get('description')
-        };
-        
-        console.log('📋 Отправляем данные автоматического оффера:', data);
-        
-        const result = await ApiClient.post('/api/offers', data);
-        
-        if (result.success) {
-            console.log('✅ Оффер создан успешно:', result.offer);
-            showChannelSelectionModal(result.offer.id, result.offer.title);
-            // Сбрасываем форму
-            event.target.reset();
-            // Переключаемся на вкладку "Мои офферы"
-            switchTab('my-offers');
-        } else {
-            throw new Error(result.error || result.errors?.join(', ') || 'Ошибка создания оффера');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка при создании оффера:', error);
-        alert(`❌ Ошибка: ${error.message}`);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
-    }
-}
-
-// Обработчики кликов по табам
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🎯 Страница офферов инициализирована');
-
-    // Настраиваем переключение табов
-    document.querySelectorAll('.tabs-nav a').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            const tabName = this.getAttribute('data-tab');
-            if (typeof switchTab === 'function') {
-                switchTab(tabName);
-            }
-        });
-    });
-    
-    // Настраиваем обработчик формы автоматического создания оффера
-    const autoOfferForm = document.getElementById('autoOfferForm');
-    if (autoOfferForm) {
-        autoOfferForm.addEventListener('submit', submitAutoOffer);
-    }
-    
-    // Настраиваем обработчик формы кампании
-    const campaignForm = document.getElementById('campaignForm');
-    if (campaignForm) {
-        campaignForm.addEventListener('submit', submitCampaign);
-    }
-    
-    // Убираем загрузку рекламодателей, так как теперь это выпадающий список типов
-    
-    // Устанавливаем минимальную дату как сегодня
-    const today = new Date().toISOString().split('T')[0];
-    document.getElementById('campaignStartDate').min = today;
-    document.getElementById('campaignEndDate').min = today;
+    console.log('🎯 Страница офферов инициализирована (упрощенная версия)');
 });
 
-// Функции для работы с кампаниями
-
-async function submitCampaign(event) {
-    event.preventDefault();
-    
-    const submitBtn = event.target.querySelector('button[type="submit"]');
-    const originalText = submitBtn.textContent;
-    
-    try {
-        submitBtn.disabled = true;
-        submitBtn.textContent = '⏳ Создаем кампанию...';
-        
-        const formData = new FormData(event.target);
-        
-        // Преобразуем данные формы
-        const data = {
-            name: formData.get('name'),
-            budget_limit: parseFloat(formData.get('budget_limit')),
-            add_utm_tags: formData.has('add_utm_tags'),
-            track_clicks: formData.has('track_clicks'),
-            start_date: formData.get('start_date'),
-            end_date: formData.get('end_date'),
-            work_weekends: formData.has('work_weekends'),
-            work_hours_only: formData.has('work_hours_only'),
-            advertiser_type: formData.get('advertiser_type'),
-            product_name: formData.get('product_name'),
-            advertiser_inn: formData.get('advertiser_inn'),
-            ad_content: formData.get('ad_content'),
-            status: 'active'
-        };
-        
-        console.log('📋 Отправляем данные кампании:', data);
-        
-        const response = await fetch('/api/campaigns', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Кампания создана успешно!');
-            event.target.reset();
-            console.log('✅ Кампания создана:', result.campaign);
-        } else {
-            throw new Error(result.error || 'Ошибка создания кампании');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка при создании кампании:', error);
-        alert(`❌ Ошибка: ${error.message}`);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = originalText;
-    }
-}
-
-async function saveCampaignDraft() {
-    const form = document.getElementById('campaignForm');
-    const formData = new FormData(form);
-    
-    const data = {
-        name: formData.get('name'),
-        budget_limit: parseFloat(formData.get('budget_limit')) || 0,
-        add_utm_tags: formData.has('add_utm_tags'),
-        track_clicks: formData.has('track_clicks'),
-        start_date: formData.get('start_date'),
-        end_date: formData.get('end_date'),
-        work_weekends: formData.has('work_weekends'),
-        work_hours_only: formData.has('work_hours_only'),
-        advertiser_type: formData.get('advertiser_type'),
-        product_name: formData.get('product_name'),
-        advertiser_inn: formData.get('advertiser_inn'),
-        ad_content: formData.get('ad_content'),
-        status: 'draft'
-    };
-    
-    try {
-        const response = await fetch('/api/campaigns', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert('✅ Черновик кампании сохранен!');
-            console.log('✅ Черновик сохранен:', result.campaign);
-        } else {
-            throw new Error(result.error || 'Ошибка сохранения черновика');
-        }
-    } catch (error) {
-        console.error('❌ Ошибка при сохранении черновика:', error);
-        alert(`❌ Ошибка: ${error.message}`);
-    }
-}
-
-// Валидация дат
-document.getElementById('campaignStartDate').addEventListener('change', function() {
-    const startDate = this.value;
-    const endDateInput = document.getElementById('campaignEndDate');
-    endDateInput.min = startDate;
-    
-    if (endDateInput.value && endDateInput.value < startDate) {
-        endDateInput.value = startDate;
-    }
-});
+// Функции для кампаний теперь в модулях offers/
+// Здесь только минимальная совместимость
 </script>
 {% endblock %}
