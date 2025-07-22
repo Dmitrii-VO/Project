@@ -55,6 +55,7 @@ class OfferFormatter:
                 'status': offer['status'],
                 'target_audience': offer['target_audience'],
                 'requirements': offer.get('requirements', ''),
+                'rejection_reason': offer.get('rejection_reason', ''),
                 'deadline': deadline,
                 'expires_at': expires_at,
                 'is_expired': is_expired,

@@ -270,7 +270,8 @@ export class OffersManager {
                 if (result.data && result.data.offer_id) {
                     const offerId = result.data.offer_id;
                     const offerTitle = result.data.offer?.title || offerData.title;
-                    await this.showChannelSelection(offerId, offerTitle);
+                    const offer = result.data.offer || offerData;
+                    await this.showChannelSelection(offerId, offerTitle, false, offer);
                 }
                 
                 event.target.reset();
@@ -331,11 +332,27 @@ export class OffersManager {
         }
     }
 
-    async showChannelSelection(offerId, offerTitle, isDraft = false) {
+    async showChannelSelection(offerId, offerTitle, isDraft = false, offerData = null) {
         try {
             console.log(`🔍 Показываем выбор каналов для оффера ${offerId}: "${offerTitle}" (isDraft: ${isDraft})`);
             
-            const channelsResult = await this.api.getRecommendedChannels({ offer_id: offerId });
+            // Подготавливаем данные для рекомендаций
+            const recommendationData = {
+                offer_id: offerId,
+                title: offerTitle
+            };
+            
+            // Если есть полные данные оффера, добавляем их
+            if (offerData) {
+                recommendationData.description = offerData.description || '';
+                recommendationData.target_audience = offerData.target_audience || '';
+                recommendationData.price = offerData.price || offerData.budget_total || 0;
+                recommendationData.category = offerData.category || 'general';
+            }
+            
+            console.log(`📤 Отправляем данные для рекомендаций:`, recommendationData);
+            
+            const channelsResult = await this.api.getRecommendedChannels(recommendationData);
             
             if (channelsResult.success && channelsResult.channels) {
                 console.log(`✅ Получено ${channelsResult.channels.length} рекомендованных каналов`);
@@ -352,16 +369,41 @@ export class OffersManager {
 
     async completeOffer(offerId) {
         try {
-            console.log(`🚀 Завершение оффера ${offerId}`);
+            console.log(`🚀 Завершение оффера ${offerId}`, typeof offerId);
+            
+            if (!offerId) {
+                throw new Error('ID оффера не указан');
+            }
             
             // Получаем информацию об оффере
             const offerResult = await this.api.getOfferDetails(offerId);
+            
+            console.log('🔍 Результат API getOfferDetails:', offerResult);
             
             if (!offerResult.success) {
                 throw new Error('Не удалось получить информацию об оффере');
             }
             
-            const offer = offerResult.data;
+            // API может возвращать данные в разной структуре
+            let offer = null;
+            
+            if (offerResult.data && offerResult.data.offer) {
+                // Структура: { success: true, data: { offer: {...} } }
+                offer = offerResult.data.offer;
+            } else if (offerResult.data) {
+                // Структура: { success: true, data: {...} }
+                offer = offerResult.data;
+            } else {
+                // Прямая структура оффера
+                offer = offerResult;
+            }
+            
+            console.log('📋 Данные оффера:', offer);
+            console.log('📊 Статус оффера:', offer?.status);
+            
+            if (!offer) {
+                throw new Error('Данные оффера не найдены в ответе API');
+            }
             
             // Проверяем статус
             if (offer.status !== 'draft') {
@@ -370,7 +412,7 @@ export class OffersManager {
             }
             
             // Открываем модальное окно выбора каналов для черновика
-            await this.showChannelSelection(offerId, offer.title, true);
+            await this.showChannelSelection(offerId, offer.title, true, offer);
             
         } catch (error) {
             console.error('❌ Ошибка завершения оффера:', error);
@@ -596,10 +638,33 @@ export class OffersManager {
         this.modals.showNotification(`Просмотр деталей оффера ${offerId}`, 'info');
     }
 
-    editOffer(offerId) {
-        // Логика редактирования оффера
-        console.log('Редактирование оффера:', offerId);
-        this.modals.showNotification(`Редактирование оффера ${offerId}`, 'info');
+    async editOffer(offerId) {
+        console.log('✏️ Редактирование оффера:', offerId);
+        
+        try {
+            // Получаем данные оффера
+            const response = await fetch(`/api/offers_moderation/${offerId}`, {
+                headers: {
+                    'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                const offer = result.data;
+                console.log('📋 Данные оффера для редактирования:', offer);
+                
+                // Создаем модальное окно редактирования
+                this.modals.createEditOffer(offer);
+            } else {
+                throw new Error(result.error || 'Не удалось загрузить данные оффера');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка при открытии редактирования:', error);
+            this.modals.showNotification('Ошибка загрузки данных для редактирования: ' + error.message, 'error');
+        }
     }
 
     showOfferStats(offerId) {
@@ -652,13 +717,25 @@ export class OffersManager {
     }
 
     // Админские методы
+    isOffersPage() {
+        // Проверяем что мы на странице с офферами и есть нужные элементы
+        const hasOffersTabs = document.querySelector('.tabs-nav') && 
+                             document.querySelector('[data-tab="my-offers"]');
+        const hasAdminElements = document.getElementById('admin-tab') && 
+                               document.getElementById('admin-moderation');
+        
+        return hasOffersTabs && hasAdminElements;
+    }
+
     checkAdminAccess() {
         const userId = window.getTelegramUserId?.();
         const adminId = '373086959';
         
         console.log(`🔍 Checking admin access: userId = ${userId}, adminId = ${adminId}`);
+        console.log(`🔍 Current page URL: ${window.location.pathname}`);
         
-        if (userId && userId === adminId) {
+        // Показываем вкладку модерации только для админа и только на странице офферов
+        if (userId && userId === adminId && this.isOffersPage()) {
             console.log('✅ Администраторский доступ предоставлен');
             const adminTab = document.getElementById('admin-tab');
             const adminContent = document.getElementById('admin-moderation');
@@ -666,17 +743,36 @@ export class OffersManager {
             if (adminTab) {
                 adminTab.style.display = 'block';
                 console.log('✅ Админ вкладка показана');
+                console.log('🔍 Админ вкладка classList:', adminTab.classList.toString());
+                console.log('🔍 Админ вкладка style:', adminTab.style.cssText);
             } else {
                 console.error('❌ Элемент admin-tab не найден!');
             }
             
             if (adminContent) {
                 console.log('✅ Админ контент найден');
+                console.log('🔍 Админ контент classList:', adminContent.classList.toString());
+                console.log('🔍 Админ контент style:', adminContent.style.cssText);
             } else {
                 console.error('❌ Элемент admin-moderation не найден!');
             }
         } else {
             console.log('👤 Обычный пользователь, админ-панель скрыта');
+            
+            // Убеждаемся что вкладка скрыта для обычных пользователей
+            const adminTab = document.getElementById('admin-tab');
+            const adminContent = document.getElementById('admin-moderation');
+            
+            if (adminTab) {
+                adminTab.style.display = 'none';
+                console.log('✅ Админ вкладка скрыта для обычного пользователя');
+            }
+            
+            if (adminContent) {
+                adminContent.style.display = 'none';
+                adminContent.classList.remove('active');
+                console.log('✅ Админ контент скрыт для обычного пользователя');
+            }
         }
     }
 
@@ -786,7 +882,13 @@ export class OffersManager {
         const userName = offer.user_name || 'Неизвестный пользователь';
         const userId = offer.user_id || 'N/A';
         
-        console.log(`📋 Статус: ${status}, Дата: ${submittedDate}, Пользователь: ${userName}`);
+        // Отладочная информация для бюджета
+        console.log(`💰 ОТЛАДКА БЮДЖЕТА для оффера ${offer.id}:`);
+        console.log(`   - offer.budget_total: ${offer.budget_total}`);
+        console.log(`   - offer.price: ${offer.price}`);
+        console.log(`   - Будет использоваться: ${offer.budget_total || offer.price || 0} (приоритет budget_total)`);
+        
+        console.log(`📋 Остальные данные - Статус: ${status}, Дата: ${submittedDate}, Пользователь: ${userName}`);
         
         // Проверим наличие templates
         if (!this.templates) {
@@ -812,7 +914,7 @@ export class OffersManager {
                 </div>
                 
                 <div class="offer-meta" style="margin: 12px 0;">
-                    <span class="offer-price" style="font-weight: bold; color: #28a745;">₽ ${this.templates.formatPrice(offer.price || offer.budget_total || 0)}</span>
+                    <span class="offer-price" style="font-weight: bold; color: #28a745;">₽ ${this.templates.formatPrice(offer.budget_total || offer.price || 0)}</span>
                     <span style="margin-left: 12px; color: #6c757d;">${offer.category || 'Общее'}</span>
                 </div>
                 
@@ -993,10 +1095,13 @@ export class OffersManager {
         try {
             console.log(`🗑️ Удаление оффера ${offerId} из модерации`);
             
-            const result = await this.api.deleteOffer(offerId);
+            // Используем специальный endpoint для удаления из модерации
+            const result = await this.api.request(`/api/offers_moderation/${offerId}/delete`, {
+                method: 'DELETE'
+            });
             
             if (result.success) {
-                this.modals.showNotification('Оффер успешно удален!', 'success');
+                this.modals.showNotification(`Оффер "${result.title}" успешно удален!`, 'success');
                 await this.loadModerationOffers(); // Обновляем список
             } else {
                 throw new Error(result.error || 'Ошибка удаления оффера');

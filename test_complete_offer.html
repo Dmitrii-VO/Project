@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Тест кнопки Завершить</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        button { padding: 10px 20px; margin: 10px 5px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Тест кнопки "Завершить" для черновиков</h1>
+    
+    <div class="test-section">
+        <h3>1. Создание тестового черновика</h3>
+        <button onclick="createTestOffer()">Создать тестовый оффер</button>
+        <div id="create-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Тест получения деталей оффера</h3>
+        <input type="number" id="offer-id" placeholder="ID оффера" style="padding: 5px; margin: 5px;">
+        <button onclick="getOfferDetails()">Получить детали</button>
+        <div id="details-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Тест API рекомендаций каналов</h3>
+        <button onclick="testChannelRecommendations()">Тест рекомендаций</button>
+        <div id="recommendations-result" class="result"></div>
+    </div>
+
+    <script>
+        async function createTestOffer() {
+            const resultDiv = document.getElementById('create-result');
+            try {
+                const response = await fetch('/api/offers/create', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': '373086959'
+                    },
+                    body: JSON.stringify({
+                        title: 'Тест кнопки Завершить',
+                        description: 'Проверяем работу кнопки завершить для черновиков',
+                        price: 5000,
+                        budget_total: 5000,
+                        category: 'general',
+                        target_audience: 'Тестовая аудитория для проверки функциональности'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    resultDiv.innerHTML = `✅ Создан оффер ID: ${data.data.offer_id} - "${data.data.offer.title}"`;
+                    document.getElementById('offer-id').value = data.data.offer_id;
+                } else {
+                    resultDiv.innerHTML = `❌ Ошибка: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ Ошибка: ${error.message}`;
+            }
+        }
+        
+        async function getOfferDetails() {
+            const offerId = document.getElementById('offer-id').value;
+            const resultDiv = document.getElementById('details-result');
+            
+            if (!offerId) {
+                resultDiv.innerHTML = '❌ Введите ID оффера';
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/offers/${offerId}`, {
+                    headers: {
+                        'X-Telegram-User-Id': '373086959'
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    const offer = data.data.offer;
+                    resultDiv.innerHTML = `
+                        ✅ Детали оффера:
+                        <br>• ID: ${offer.id}
+                        <br>• Название: ${offer.title}
+                        <br>• Статус: ${offer.status}
+                        <br>• Цена: ${offer.price}
+                        <br>• Категория: ${offer.category}
+                        <br>• Целевая аудитория: ${offer.target_audience}
+                    `;
+                } else {
+                    resultDiv.innerHTML = `❌ Ошибка: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ Ошибка: ${error.message}`;
+            }
+        }
+        
+        async function testChannelRecommendations() {
+            const offerId = document.getElementById('offer-id').value;
+            const resultDiv = document.getElementById('recommendations-result');
+            
+            if (!offerId) {
+                resultDiv.innerHTML = '❌ Введите ID оффера';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/channels/recommend', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': '373086959'
+                    },
+                    body: JSON.stringify({
+                        offer_id: parseInt(offerId),
+                        title: 'Тест кнопки Завершить',
+                        description: 'Проверяем работу кнопки завершить для черновиков',
+                        target_audience: 'Тестовая аудитория для проверки функциональности',
+                        price: 5000,
+                        category: 'general'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        ✅ Получено рекомендаций: ${data.channels.length}
+                        <br>📝 Первые 3 канала:
+                        ${data.channels.slice(0, 3).map(ch => 
+                            `<br>• ${ch.title} (${ch.subscriber_count} подписчиков, ${ch.price_per_post}₽)`
+                        ).join('')}
+                    `;
+                } else {
+                    resultDiv.innerHTML = `❌ Ошибка: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ Ошибка: ${error.message}`;
+            }
+        }
+    </script>
+</body>
+</html>

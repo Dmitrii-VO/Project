@@ -12,7 +12,10 @@ export class OffersAPI {
         const defaultOptions = {
             headers: {
                 'Content-Type': 'application/json',
-                'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'  // Тестовый ID как fallback
+                'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959',  // Тестовый ID как fallback
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
             }
         };
 
@@ -210,7 +213,10 @@ export class OffersAPI {
                 }
             });
             
-            const url = `/api/offers_moderation/offers${params.toString() ? '?' + params.toString() : ''}`;
+            // Добавляем timestamp для предотвращения кэширования
+            params.append('_t', Date.now().toString());
+            
+            const url = `/api/offers_moderation/offers?${params.toString()}`;
             return await this.get(url);
         } catch (error) {
             console.error('❌ Ошибка загрузки офферов для модерации:', error);

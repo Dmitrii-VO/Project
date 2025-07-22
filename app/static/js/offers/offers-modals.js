@@ -199,6 +199,38 @@ export class ModalManager {
         return modal;
     }
 
+    // Модальное окно редактирования оффера
+    createEditOffer(offer) {
+        const content = `
+            <div class="edit-offer">
+                <form id="edit-offer-form" onsubmit="return false;" onclick="event.stopPropagation();">
+                    <div class="form-field">
+                        <label for="edit-budget">Бюджет (₽) <span class="required">*</span></label>
+                        <input type="number" id="edit-budget" class="form-input" value="${offer.budget_total || offer.price || ''}" placeholder="100000" min="100" required onclick="event.stopPropagation();">
+                    </div>
+                    
+                    <div class="form-field">
+                        <label for="edit-description">Объявление <span class="required">*</span></label>
+                        <textarea id="edit-description" class="form-input" rows="4" placeholder="Подробное описание задачи и требований" required onclick="event.stopPropagation();">${offer.description || ''}</textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); window.modalManager?.close?.('edit-offer-modal');">
+                            Отмена
+                        </button>
+                        <button type="button" class="btn btn-primary" onclick="event.stopPropagation(); window.modalManager?.saveOfferEdit?.('${offer.id}');">
+                            💾 Сохранить и отправить на модерацию
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+
+        const modal = this.create('edit-offer-modal', '✏️ Редактирование оффера', content, { size: 'medium' });
+        console.log('✏️ Создано модальное окно редактирования для оффера:', offer.id);
+        return modal;
+    }
+
     // Модальное окно деталей оффера
     createOfferDetails(offer) {
         const content = `
@@ -567,11 +599,89 @@ export class ModalManager {
         }
     }
 
+    async saveOfferEdit(offerId) {
+        console.log('💾 Сохранение изменений оффера:', offerId);
+        
+        try {
+            // Получаем данные из упрощенной формы
+            const budget = document.getElementById('edit-budget').value.trim();
+            const description = document.getElementById('edit-description').value.trim();
+            
+            // Валидация
+            if (!description) {
+                this.showNotification('Введите текст объявления', 'warning');
+                return;
+            }
+            
+            if (!budget || parseFloat(budget) < 100) {
+                this.showNotification('Укажите корректный бюджет (от 100 руб.)', 'warning');
+                return;
+            }
+            
+            // Подготавливаем данные для отправки (сохраняем остальные поля неизменными)
+            const formData = {
+                budget_total: parseFloat(budget),
+                description: description
+            };
+            
+            console.log('📋 Отправляем данные:', formData);
+            
+            // Отправляем запрос на обновление оффера
+            const response = await fetch(`/api/offers_moderation/${offerId}/update`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'
+                },
+                body: JSON.stringify(formData)
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showNotification('✅ Оффер успешно обновлен и отправлен на модерацию!', 'success');
+                this.close('edit-offer-modal');
+                
+                // Принудительно обновляем списки офферов и модерации
+                if (window.offersManager) {
+                    console.log('🔄 Принудительное обновление списков после редактирования');
+                    
+                    // Немедленно обновляем без задержки
+                    if (window.offersManager.loadMyOffers) {
+                        window.offersManager.loadMyOffers();
+                    }
+                    
+                    // Обновляем также список модерации для админа
+                    if (window.offersManager.loadModerationOffers) {
+                        window.offersManager.loadModerationOffers();
+                    }
+                    
+                    // Дополнительное обновление через секунду на случай задержек сервера
+                    setTimeout(() => {
+                        console.log('🔄 Повторное обновление списков (через 1 сек)');
+                        if (window.offersManager.loadMyOffers) {
+                            window.offersManager.loadMyOffers();
+                        }
+                        if (window.offersManager.loadModerationOffers) {
+                            window.offersManager.loadModerationOffers();
+                        }
+                    }, 1000);
+                }
+            } else {
+                throw new Error(result.error || 'Неизвестная ошибка');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка сохранения изменений:', error);
+            this.showNotification('Ошибка сохранения: ' + error.message, 'error');
+        }
+    }
+
     // Глобальные обработчики событий
     setupGlobalHandlers() {
-        // Закрытие по клику вне модального окна
+        // Закрытие по клику вне модального окна (только если клик именно по overlay, а не по его содержимому)
         document.addEventListener('click', (event) => {
-            if (event.target.classList.contains('modal-overlay')) {
+            if (event.target.classList.contains('modal-overlay') && event.target === event.currentTarget) {
                 const modalId = event.target.id;
                 if (modalId) this.close(modalId);
             }

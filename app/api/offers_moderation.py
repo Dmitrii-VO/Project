@@ -4,6 +4,7 @@ API endpoints for offer moderation and status management
 from flask import Blueprint, request, jsonify
 from app.services.auth_service import AuthService
 from app.config.telegram_config import AppConfig
+from datetime import datetime
 
 # Константа администратора
 ADMIN_USER_ID = 373086959
@@ -35,12 +36,32 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row  # Для удобного доступа к столбцам по имени
     return conn
 
-def send_telegram_notification(user_id, message):
+def send_telegram_notification(user_id, message, notification_type="general"):
     """Отправка уведомления в Telegram"""
     try:
-        from app.telegram.telegram_notifications import send_notification
-        send_notification(user_id, message)
-        return True
+        from app.telegram.telegram_notifications import TelegramNotificationService, NotificationData, NotificationType
+        
+        print(f"🔔 Отправка уведомления пользователю {user_id}: {message}")
+        
+        service = TelegramNotificationService()
+        
+        # Создаем уведомление
+        notification = NotificationData(
+            user_id=0,  # Будет заполнено автоматически
+            telegram_id=int(user_id),
+            notification_type=NotificationType.PROPOSAL_ACCEPTED if "одобрен" in message.lower() else 
+                            NotificationType.PROPOSAL_REJECTED if "отклонен" in message.lower() else
+                            NotificationType.NEW_PROPOSAL,
+            title="Система модерации офферов",
+            message=message,
+            data={'user_id': user_id, 'type': notification_type},
+            priority=2
+        )
+        
+        result = service.send_notification(notification)
+        print(f"✅ Результат отправки: {result}")
+        return result
+        
     except Exception as e:
         print(f"❌ Ошибка отправки уведомления: {e}")
         return False
@@ -146,6 +167,74 @@ def get_offers_for_moderation():
     except Exception as e:
         return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
 
+
+@offers_moderation_bp.route('/<int:offer_id>', methods=['GET'])
+def get_offer_by_id(offer_id):
+    """Получение конкретного оффера по ID"""
+    try:
+        print(f"🔍 Получение оффера {offer_id}")
+        
+        # Получаем user_id из заголовков
+        user_id = request.headers.get('X-Telegram-User-Id')
+        if not user_id:
+            return jsonify({'error': 'User ID не передан'}), 400
+        
+        print(f"👤 User ID: {user_id}")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию об оффере и проверяем права доступа
+        cursor.execute("""
+            SELECT o.id, o.title, o.description, o.budget_total, o.category, 
+                   o.status, o.created_at, o.requirements, o.min_subscribers,
+                   o.created_by, u.telegram_id as creator_telegram_id,
+                   u.username as creator_username
+            FROM offers o
+            LEFT JOIN users u ON o.created_by = u.id
+            WHERE o.id = ?
+        """, (offer_id,))
+        
+        offer = cursor.fetchone()
+        conn.close()
+        
+        if not offer:
+            return jsonify({'error': 'Оффер не найден'}), 404
+        
+        # Проверяем права доступа (пользователь может видеть только свои офферы, либо админ видит все)
+        is_admin_user = str(user_id) == str(ADMIN_USER_ID)
+        is_owner = str(offer['creator_telegram_id']) == str(user_id)
+        
+        if not is_admin_user and not is_owner:
+            return jsonify({'error': 'Нет прав для просмотра этого оффера'}), 403
+        
+        offer_data = {
+            'id': offer['id'],
+            'title': offer['title'],
+            'description': offer['description'],
+            'budget_total': offer['budget_total'],
+            'price': offer['budget_total'],  # alias for compatibility
+            'category': offer['category'],
+            'status': offer['status'],
+            'created_at': offer['created_at'],
+            'requirements': offer['requirements'],
+            'min_subscribers': offer['min_subscribers'],
+            'creator_id': offer['creator_telegram_id'],
+            'creator_username': offer['creator_username']
+        }
+        
+        print(f"📋 Оффер найден: {offer_data['title']} (статус: {offer_data['status']})")
+        
+        return jsonify({
+            'success': True,
+            'data': offer_data
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка получения оффера: {e}")
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+
 @offers_moderation_bp.route('/<int:offer_id>/approve', methods=['POST'])
 def approve_offer(offer_id):
     """Одобрение оффера администратором"""
@@ -156,15 +245,20 @@ def approve_offer(offer_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Проверяем, существует ли оффер и его текущий статус
-        cursor.execute("SELECT user_id, title, status FROM offers WHERE id = ?", (offer_id,))
+        # Проверяем, существует ли оффер и получаем telegram_id создателя
+        cursor.execute("""
+            SELECT o.title, o.status, u.telegram_id, o.id
+            FROM offers o
+            LEFT JOIN users u ON o.created_by = u.id
+            WHERE o.id = ?
+        """, (offer_id,))
         offer = cursor.fetchone()
         
         if not offer:
             conn.close()
             return jsonify({'error': 'Offer not found'}), 404
             
-        user_id, title, current_status = offer
+        title, current_status, creator_telegram_id, _ = offer
         
         if current_status != 'pending':
             conn.close()
@@ -178,11 +272,54 @@ def approve_offer(offer_id):
         """, (offer_id,))
         
         conn.commit()
-        conn.close()
         
-        # Отправляем уведомление создателю оффера
-        notification_message = f"✅ Ваш оффер '{title}' одобрен и теперь активен!"
-        send_telegram_notification(user_id, notification_message)
+        # Отправляем детальное уведомление создателю оффера
+        notification_message = f"""✅ <b>Оффер одобрен!</b>
+
+🎯 <b>Название:</b> {title}
+📊 <b>Статус:</b> Активен
+⏰ <b>Время одобрения:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+🚀 <b>Что дальше:</b>
+• Ваш оффер теперь виден всем владельцам каналов
+• Вы будете получать уведомления о новых откликах
+• Проверьте статистику в приложении
+
+💡 Откройте приложение для подробной информации!"""
+
+        send_telegram_notification(creator_telegram_id, notification_message, "offer_approved")
+        
+        # Получаем каналы, которым был отправлен оффер, и уведомляем их владельцев
+        cursor.execute("""
+            SELECT DISTINCT u.telegram_id, c.title, c.username
+            FROM offer_proposals op
+            LEFT JOIN channels c ON op.channel_id = c.id
+            LEFT JOIN users u ON c.owner_id = u.id
+            WHERE op.offer_id = ? AND u.telegram_id IS NOT NULL
+        """, (offer_id,))
+        channels = cursor.fetchall()
+        
+        # Отправляем уведомления владельцам каналов
+        for channel in channels:
+            channel_owner_id, channel_title, channel_username = channel
+            
+            channel_notification = f"""📢 <b>Новый оффер одобрен!</b>
+
+🎯 <b>Название оффера:</b> {title}
+📺 <b>Ваш канал:</b> {channel_title} ({channel_username or 'без username'})
+⏰ <b>Время:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+💼 <b>Что делать:</b>
+• Оффер теперь активен и доступен для отклика
+• Вы можете ответить на предложение в приложении
+• Проверьте детали оффера и условия сотрудничества
+
+🔔 <b>Не упустите возможность!</b>
+💻 Откройте приложение для подробной информации"""
+
+            send_telegram_notification(channel_owner_id, channel_notification, "offer_available_for_channel")
+        
+        conn.close()
         
         return jsonify({
             'success': True,
@@ -207,15 +344,20 @@ def reject_offer(offer_id):
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # Проверяем, существует ли оффер и его текущий статус
-        cursor.execute("SELECT user_id, title, status FROM offers WHERE id = ?", (offer_id,))
+        # Проверяем, существует ли оффер и получаем telegram_id создателя
+        cursor.execute("""
+            SELECT o.title, o.status, u.telegram_id, o.id
+            FROM offers o
+            LEFT JOIN users u ON o.created_by = u.id
+            WHERE o.id = ?
+        """, (offer_id,))
         offer = cursor.fetchone()
         
         if not offer:
             conn.close()
             return jsonify({'error': 'Offer not found'}), 404
             
-        user_id, title, current_status = offer
+        title, current_status, creator_telegram_id, _ = offer
         
         if current_status != 'pending':
             conn.close()
@@ -233,9 +375,24 @@ def reject_offer(offer_id):
         conn.commit()
         conn.close()
         
-        # Отправляем уведомление создателю оффера
-        notification_message = f"❌ Ваш оффер '{title}' отклонен.\nПричина: {rejection_reason}\n\nВы можете отредактировать оффер и отправить его повторно."
-        send_telegram_notification(user_id, notification_message)
+        # Отправляем детальное уведомление создателю оффера
+        notification_message = f"""❌ <b>Оффер отклонен</b>
+
+🎯 <b>Название:</b> {title}
+📊 <b>Статус:</b> Отклонен
+⏰ <b>Время отклонения:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+📝 <b>Причина отклонения:</b>
+{rejection_reason}
+
+🔄 <b>Что можно делать:</b>
+• Отредактировать оффер с учетом замечаний
+• Уточнить детали описания или бюджета
+• Повторно отправить на модерацию
+
+💡 Откройте приложение для редактирования!"""
+
+        send_telegram_notification(creator_telegram_id, notification_message, "offer_rejected")
         
         return jsonify({
             'success': True,
@@ -289,8 +446,30 @@ def update_offer_status(offer_id):
             cursor.execute("UPDATE offers SET status = 'pending', submitted_at = CURRENT_TIMESTAMP WHERE id = ?", (offer_id,))
             
             # Уведомления
-            send_telegram_notification(user_id, f"📤 Ваш оффер '{title}' отправлен на модерацию.")
-            send_telegram_notification(ADMIN_USER_ID, f"📬 Новый оффер на модерации: '{title}' от пользователя {user_id}")
+            user_message = f"""📤 <b>Оффер отправлен на модерацию!</b>
+
+🎯 <b>Название:</b> {title}
+📊 <b>Статус:</b> На модерации
+⏰ <b>Время отправки:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+⏳ <b>Что происходит сейчас:</b>
+• Модераторы проверяют ваш оффер
+• Обычно модерация занимает 1-24 часа
+• Вы получите уведомление о результате
+
+🔔 Следите за уведомлениями!"""
+
+            admin_message = f"""📬 <b>Новый оффер на модерации</b>
+
+🎯 <b>Название:</b> {title}
+👤 <b>От пользователя:</b> {user_id}
+⏰ <b>Время поступления:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+🔍 <b>Требуется:</b> Проверить и принять решение
+💻 Откройте админ-панель для модерации"""
+
+            send_telegram_notification(user_id, user_message, "offer_submitted")
+            send_telegram_notification(ADMIN_USER_ID, admin_message, "admin_new_offer")
             
         elif current_status == 'rejected' and new_status == 'draft':
             # Возврат отклоненного оффера в черновики для редактирования
@@ -411,9 +590,33 @@ def complete_offer(offer_id):
         
         conn.close()
         
-        # Отправляем уведомления
-        send_telegram_notification(user_id, f"📤 Ваш оффер '{title}' отправлен на модерацию с {len(selected_channels)} выбранными каналами.")
-        send_telegram_notification(ADMIN_USER_ID, f"📬 Новый оффер на модерации: '{title}' от пользователя {user_id}")
+        # Отправляем детальные уведомления
+        user_message = f"""🚀 <b>Оффер отправлен на модерацию!</b>
+
+🎯 <b>Название:</b> {title}
+📺 <b>Выбрано каналов:</b> {len(selected_channels)}
+📊 <b>Статус:</b> На модерации
+⏰ <b>Время отправки:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+✅ <b>Что сделано:</b>
+• Созданы предложения для {len(selected_channels)} каналов
+• Оффер отправлен на модерацию
+• Уведомления отправлены администраторам
+
+⏳ <b>Ожидайте:</b> Результат модерации в течение 24 часов"""
+
+        admin_message = f"""📬 <b>Новый оффер готов к модерации</b>
+
+🎯 <b>Название:</b> {title}
+👤 <b>Пользователь:</b> {user_id}
+📺 <b>Каналов выбрано:</b> {len(selected_channels)}
+⏰ <b>Время:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+🔍 <b>Действие:</b> Требуется модерация
+💻 Перейдите в админ-панель"""
+
+        send_telegram_notification(user_id, user_message, "offer_completed")
+        send_telegram_notification(ADMIN_USER_ID, admin_message, "admin_new_complete_offer")
         
         return jsonify({
             'success': True,
@@ -461,8 +664,21 @@ def reopen_offer(offer_id):
         conn.commit()
         conn.close()
         
-        # Отправляем уведомления
-        send_telegram_notification(user_id, f"🔄 Ваш оффер '{title}' возвращен на модерацию.")
+        # Отправляем детальное уведомление
+        user_message = f"""🔄 <b>Оффер возвращен на модерацию</b>
+
+🎯 <b>Название:</b> {title}
+📊 <b>Новый статус:</b> На модерации
+⏰ <b>Время возврата:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+✅ <b>Что произошло:</b>
+• Администратор вернул оффер на повторную модерацию
+• Причина отклонения сброшена
+• Оффер будет рассмотрен заново
+
+⏳ <b>Ожидайте:</b> Новое решение в течение 24 часов"""
+
+        send_telegram_notification(user_id, user_message, "offer_reopened")
         
         return jsonify({
             'success': True,
@@ -472,4 +688,211 @@ def reopen_offer(offer_id):
         })
         
     except Exception as e:
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+@offers_moderation_bp.route('/<int:offer_id>/delete', methods=['DELETE'])
+def delete_offer_from_moderation(offer_id):
+    """Удаление оффера администратором"""
+    if not is_admin():
+        return jsonify({'error': 'Access denied'}), 403
+    
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Получаем информацию об оффере перед удалением
+        cursor.execute("""
+            SELECT o.title, o.created_by, o.user_id, o.status,
+                   u.telegram_id, u.first_name, u.last_name
+            FROM offers o
+            LEFT JOIN users u ON (o.created_by = u.id OR o.user_id = u.id)
+            WHERE o.id = ?
+        """, (offer_id,))
+        offer_data = cursor.fetchone()
+        
+        if not offer_data:
+            conn.close()
+            return jsonify({'error': 'Offer not found'}), 404
+        
+        title = offer_data[0]
+        user_telegram_id = offer_data[4]
+        user_name = f"{offer_data[5] or ''} {offer_data[6] or ''}".strip() or 'Пользователь'
+        
+        # Удаляем связанные предложения
+        cursor.execute("DELETE FROM offer_proposals WHERE offer_id = ?", (offer_id,))
+        
+        # Удаляем оффер
+        cursor.execute("DELETE FROM offers WHERE id = ?", (offer_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        # Отправляем уведомление создателю оффера
+        if user_telegram_id:
+            user_message = f"""🗑️ <b>Оффер удален администратором</b>
+
+🎯 <b>Название:</b> {title}
+📊 <b>Действие:</b> Удален из системы
+⏰ <b>Время удаления:</b> {datetime.now().strftime('%d.%m.%Y в %H:%M')}
+
+ℹ️ <b>Информация:</b>
+• Оффер был удален администратором из системы
+• Все связанные предложения также удалены
+• При необходимости можете создать новый оффер
+
+💡 Обратитесь к поддержке при вопросах"""
+
+            send_telegram_notification(user_telegram_id, user_message, "offer_deleted")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Offer deleted successfully',
+            'offer_id': offer_id,
+            'title': title
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка удаления оффера: {e}")
+        return jsonify({'error': f'Database error: {str(e)}'}), 500
+
+
+@offers_moderation_bp.route('/<int:offer_id>/update', methods=['PUT'])
+def update_offer(offer_id):
+    """Обновление данных оффера и отправка на модерацию"""
+    try:
+        # Получаем user_id из заголовков
+        user_id = request.headers.get('X-Telegram-User-Id')
+        if not user_id:
+            return jsonify({'error': 'User ID не передан'}), 400
+        
+        # Получаем данные для обновления
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Данные для обновления не переданы'}), 400
+        
+        print(f"🔄 Обновление оффера {offer_id} пользователем {user_id}")
+        print(f"📋 Данные для обновления: {data}")
+        
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # Проверяем, что оффер существует и принадлежит пользователю
+        cursor.execute("""
+            SELECT o.id, o.title, o.status, o.created_by, u.telegram_id
+            FROM offers o
+            LEFT JOIN users u ON o.created_by = u.id
+            WHERE o.id = ?
+        """, (offer_id,))
+        
+        offer = cursor.fetchone()
+        
+        if not offer:
+            conn.close()
+            return jsonify({'error': 'Оффер не найден'}), 404
+        
+        # Проверяем права доступа
+        if str(offer['telegram_id']) != str(user_id):
+            conn.close()
+            return jsonify({'error': 'Нет прав для редактирования этого оффера'}), 403
+        
+        # Проверяем, что оффер можно редактировать
+        if offer['status'] not in ['draft', 'rejected']:
+            conn.close()
+            return jsonify({'error': f'Нельзя редактировать оффер со статусом: {offer["status"]}'}), 400
+        
+        old_title = offer['title']
+        
+        # Подготавливаем данные для обновления (обновляем только переданные поля)
+        update_fields = []
+        update_values = []
+        
+        # Всегда устанавливаем статус pending при редактировании и очищаем причину отклонения
+        update_fields.append("status = 'pending'")
+        update_fields.append("updated_at = CURRENT_TIMESTAMP")
+        update_fields.append("rejection_reason = NULL")
+        
+        # Обновляем только те поля, которые были переданы
+        if 'title' in data:
+            update_fields.append("title = ?")
+            update_values.append(data['title'])
+            
+        if 'description' in data:
+            update_fields.append("description = ?")
+            update_values.append(data['description'])
+            
+        if 'category' in data:
+            update_fields.append("category = ?")
+            update_values.append(data['category'])
+            
+        if 'budget_total' in data:
+            update_fields.append("budget_total = ?")
+            update_fields.append("price = ?")  # Синхронизируем price с budget_total
+            update_values.append(data['budget_total'])
+            update_values.append(data['budget_total'])
+            
+        if 'requirements' in data:
+            update_fields.append("requirements = ?")
+            update_values.append(data['requirements'])
+            
+        if 'min_subscribers' in data:
+            update_fields.append("min_subscribers = ?")
+            update_values.append(data['min_subscribers'])
+        
+        # Добавляем offer_id в конец для WHERE условия
+        update_values.append(offer_id)
+        
+        # Формируем и выполняем запрос
+        update_query = f"UPDATE offers SET {', '.join(update_fields)} WHERE id = ?"
+        cursor.execute(update_query, update_values)
+        
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Оффер {offer_id} успешно обновлен и отправлен на модерацию")
+        
+        # Формируем сообщение об изменениях
+        changes_list = []
+        if 'budget_total' in data:
+            changes_list.append(f"• Бюджет: {data['budget_total']} ₽")
+        if 'description' in data:
+            changes_list.append(f"• Объявление: обновлено")
+        if 'title' in data:
+            changes_list.append(f"• Название: {data['title']}")
+        if 'category' in data:
+            changes_list.append(f"• Категория: {data['category']}")
+        
+        changes_text = "\n".join(changes_list) if changes_list else "• Общие правки"
+        
+        # Отправляем уведомление пользователю
+        send_telegram_notification(
+            user_id, 
+            f"🔄 Ваш оффер \"{data.get('title', old_title)}\" был обновлен и отправлен на повторную модерацию.\n\n"
+            f"📋 Внесенные изменения:\n"
+            f"{changes_text}\n\n"
+            f"⏳ Администратор рассмотрит ваши изменения в ближайшее время.",
+            "offer_updated"
+        )
+        
+        # Уведомляем админа о новом оффере на модерации  
+        send_telegram_notification(
+            ADMIN_USER_ID,
+            f"🔄 Пользователь обновил оффер и отправил на повторную модерацию:\n\n"
+            f"📝 Название: {data.get('title', old_title)}\n"
+            f"💰 Бюджет: {data.get('budget_total', 'не изменен')} ₽\n"
+            f"👤 Пользователь: {user_id}\n"
+            f"🆔 Оффер ID: {offer_id}\n\n"
+            f"📝 Изменения:\n{changes_text}\n\n"
+            f"⚡ Требует модерации",
+            "offer_updated_admin"
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Оффер успешно обновлен и отправлен на модерацию',
+            'offer_id': offer_id,
+            'title': data.get('title')
+        })
+        
+    except Exception as e:
+        print(f"❌ Ошибка обновления оффера: {e}")
         return jsonify({'error': f'Database error: {str(e)}'}), 500

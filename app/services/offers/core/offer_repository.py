@@ -35,7 +35,8 @@ class OfferRepository:
                    o.target_audience, o.requirements, o.deadline, o.budget_total,
                    o.duration_days, o.min_subscribers, o.max_subscribers, o.metadata,
                    u.username as creator_username, u.first_name as creator_name,
-                   u.telegram_id as creator_telegram_id, o.created_by as creator_db_id
+                   u.telegram_id as creator_telegram_id, o.created_by as creator_db_id,
+                   o.rejection_reason
             FROM offers o
             JOIN users u ON o.created_by = u.id
             WHERE o.created_by = ?

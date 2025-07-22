@@ -82,7 +82,7 @@ export const OffersTemplates = {
                     ${this.statusBadge(offer.status)}
                 </div>
                 <div class="offer-meta">
-                    <span class="offer-price">₽ ${this.formatPrice(offer.price || offer.budget_total || 0)}</span>
+                    <span class="offer-price">₽ ${this.formatPrice(offer.budget_total || offer.price || 0)}</span>
                     <span class="offer-category">${offer.category || 'Общее'}</span>
                 </div>
                 <div class="offer-description">
@@ -102,12 +102,12 @@ export const OffersTemplates = {
         let buttons = [];
 
         // Кнопка "Просмотр" всегда доступна
-        buttons.push(this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offerId}') || showOfferDetails('${offerId}')`, 'outline', 'sm'));
+        buttons.push(this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offerId}')`, 'outline', 'sm'));
 
         switch (status) {
             case 'draft':
                 // Черновик: Редактировать + Завершить
-                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}') || editOffer('${offerId}')`, 'secondary', 'sm'));
+                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}')`, 'secondary', 'sm'));
                 buttons.push(this.button('🚀 Завершить', `window.offersManager?.completeOffer?.('${offerId}') || completeOffer('${offerId}')`, 'success', 'sm'));
                 break;
 
@@ -118,12 +118,12 @@ export const OffersTemplates = {
 
             case 'active':
                 // Активный: только Статистика
-                buttons.push(this.button('📊 Статистика', `window.offersManager?.showOfferStats?.('${offerId}') || showOfferStats('${offerId}')`, 'primary', 'sm'));
+                buttons.push(this.button('📊 Статистика', `window.offersManager?.showOfferStats?.('${offerId}')`, 'primary', 'sm'));
                 break;
 
             case 'rejected':
                 // Отклонен: Редактировать для исправления
-                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}') || editOffer('${offerId}')`, 'warning', 'sm'));
+                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}')`, 'warning', 'sm'));
                 // Показываем причину отклонения, если есть
                 if (offer.rejection_reason) {
                     buttons.push(`<div class="rejection-reason">❌ ${offer.rejection_reason}</div>`);
@@ -132,12 +132,12 @@ export const OffersTemplates = {
 
             default:
                 // Для остальных статусов - базовый набор
-                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}') || editOffer('${offerId}')`, 'secondary', 'sm'));
+                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}')`, 'secondary', 'sm'));
                 break;
         }
 
-        // Кнопка удаления доступна для черновиков и отклоненных
-        if (['draft', 'rejected'].includes(status)) {
+        // Кнопка удаления доступна для черновиков, отклоненных и активных офферов
+        if (['draft', 'rejected', 'active'].includes(status)) {
             buttons.push(this.button('🗑️ Удалить', `window.offersManager?.deleteOffer?.('${offerId}') || deleteOffer('${offerId}')`, 'danger', 'sm'));
         }
 

@@ -96,6 +96,19 @@ function setupGlobalFunctions() {
         }
     };
     
+    // Функция переключения отображения фильтров
+    window.toggleFindFilters = () => {
+        const filtersContent = document.getElementById('find-filters-content');
+        const toggleIcon = document.getElementById('filter-toggle-icon');
+        
+        if (filtersContent && toggleIcon) {
+            const isHidden = filtersContent.style.display === 'none';
+            filtersContent.style.display = isHidden ? 'block' : 'none';
+            toggleIcon.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+            toggleIcon.textContent = isHidden ? '▲' : '▼';
+        }
+    };
+    
     // Функции для модальных окон
     window.showChannelSelectionModal = async (offerId, offerTitle) => {
         if (offersManager) {
