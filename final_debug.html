@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Final Debug</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .debug-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .debug-section h3 { margin-top: 0; color: #333; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 3px; overflow-x: auto; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Финальная отладка админ-панели</h1>
+    
+    <div class="debug-section">
+        <h3>1. Тест API модерации</h3>
+        <div id="api-result">Загрузка...</div>
+    </div>
+    
+    <div class="debug-section">
+        <h3>2. Проверка HTML элементов</h3>
+        <div id="elements-result">Загрузка...</div>
+    </div>
+    
+    <div class="debug-section">
+        <h3>3. Создание тестовой карточки</h3>
+        <div id="card-test-result">Загрузка...</div>
+        <div id="test-card-container" style="border: 2px solid #007bff; padding: 10px; margin-top: 10px;"></div>
+    </div>
+
+    <script>
+        // Эмуляция получения User ID
+        window.getTelegramUserId = () => '373086959';
+        
+        async function runDebug() {
+            // 1. Тест API
+            try {
+                const response = await fetch('/api/offers_moderation/offers?status=pending', {
+                    headers: { 'X-Telegram-User-Id': '373086959' }
+                });
+                const data = await response.json();
+                
+                let apiResult = '';
+                if (data.success && data.data.offers.length > 0) {
+                    apiResult = `<span class="success">✅ API работает: ${data.data.offers.length} офферов</span>`;
+                    apiResult += '<pre>' + JSON.stringify(data.data.offers[0], null, 2) + '</pre>';
+                    
+                    // Создаем тестовую карточку
+                    createTestCard(data.data.offers[0]);
+                } else {
+                    apiResult = `<span class="error">❌ API не вернул офферы</span>`;
+                }
+                document.getElementById('api-result').innerHTML = apiResult;
+            } catch (error) {
+                document.getElementById('api-result').innerHTML = `<span class="error">❌ Ошибка API: ${error.message}</span>`;
+            }
+            
+            // 2. Проверка элементов
+            checkElements();
+        }
+        
+        function checkElements() {
+            const elements = [
+                'moderationGrid',
+                'moderationLoading', 
+                'moderationEmpty',
+                'admin-tab',
+                'admin-moderation'
+            ];
+            
+            let result = '<ul>';
+            elements.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    const styles = window.getComputedStyle(el);
+                    result += `<li><span class="success">✅ ${id}</span> - display: ${styles.display}, visibility: ${styles.visibility}</li>`;
+                } else {
+                    result += `<li><span class="error">❌ ${id} не найден</span></li>`;
+                }
+            });
+            result += '</ul>';
+            
+            document.getElementById('elements-result').innerHTML = result;
+        }
+        
+        function createTestCard(offer) {
+            const html = `
+                <div class="offer-card moderation pending" data-offer-id="${offer.id}" style="border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; background: #f9f9f9;">
+                    <div class="offer-header" style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+                        <h3 style="margin: 0; color: #333;">${offer.title}</h3>
+                        <span style="background: orange; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px;">⏳ На модерации</span>
+                    </div>
+                    <div style="background: #e9ecef; padding: 10px; border-radius: 5px; margin: 10px 0;">
+                        <div><strong>👤 Пользователь:</strong> ${offer.user_name} (ID: ${offer.user_id})</div>
+                        <div><strong>📅 Подано:</strong> ${offer.submitted_at}</div>
+                    </div>
+                    <div style="margin: 10px 0;">
+                        <span style="font-weight: bold;">₽ ${offer.budget_total}</span> | 
+                        <span>${offer.category}</span>
+                    </div>
+                    <div style="margin: 10px 0; color: #666;">
+                        ${offer.description.substring(0, 100)}...
+                    </div>
+                    <div style="display: flex; gap: 5px; margin-top: 15px;">
+                        <button style="padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px;">👁️ Просмотр</button>
+                        <button style="padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 3px;">✅ Одобрить</button>
+                        <button style="padding: 5px 10px; background: #dc3545; color: white; border: none; border-radius: 3px;">❌ Отклонить</button>
+                        <button style="padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 3px;">🗑️ Удалить</button>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('test-card-container').innerHTML = html;
+            document.getElementById('card-test-result').innerHTML = '<span class="success">✅ Тестовая карточка создана успешно</span>';
+        }
+        
+        // Запускаем отладку при загрузке
+        window.addEventListener('load', runDebug);
+    </script>
+</body>
+</html>

@@ -6,12 +6,14 @@
 export const OffersTemplates = {
     statusBadge(status, text) {
         const statusTexts = {
-            active: '✅ Активен',
             draft: '📝 Черновик', 
+            pending: '⏳ На модерации',
+            active: '✅ Активен',
+            rejected: '❌ Отклонен',
             completed: '✅ Завершен',
             paused: '⏸️ Приостановлен'
         };
-        const displayText = text || statusTexts[status] || statusTexts.active;
+        const displayText = text || statusTexts[status] || statusTexts.draft;
         return `<span class="status-badge ${status}">${displayText}</span>`;
     },
 
@@ -74,7 +76,7 @@ export const OffersTemplates = {
     // Шаблоны для списка офферов
     offerCard(offer) {
         return `
-            <div class="offer-card" data-offer-id="${offer.id}">
+            <div class="offer-card ${offer.status}" data-offer-id="${offer.id}">
                 <div class="offer-header">
                     <h3 class="offer-title">${offer.title || 'Без названия'}</h3>
                     ${this.statusBadge(offer.status)}
@@ -87,13 +89,59 @@ export const OffersTemplates = {
                     ${offer.description ? (offer.description.length > 100 ? offer.description.substring(0, 100) + '...' : offer.description) : 'Описание отсутствует'}
                 </div>
                 <div class="offer-actions">
-                    ${this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offer.id}') || showOfferDetails('${offer.id}')`, 'outline', 'sm')}
-                    ${this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offer.id}') || editOffer('${offer.id}')`, 'secondary', 'sm')}
-                    ${this.button('📊 Статистика', `window.offersManager?.showOfferStats?.('${offer.id}') || showOfferStats('${offer.id}')`, 'primary', 'sm')}
-                    ${this.button('🗑️ Удалить', `window.offersManager?.deleteOffer?.('${offer.id}') || deleteOffer('${offer.id}')`, 'danger', 'sm')}
+                    ${this.getOfferStatusButtons(offer)}
                 </div>
             </div>
         `;
+    },
+
+    // Генерация кнопок в зависимости от статуса оффера
+    getOfferStatusButtons(offer) {
+        const status = offer.status || 'draft';
+        const offerId = offer.id;
+        let buttons = [];
+
+        // Кнопка "Просмотр" всегда доступна
+        buttons.push(this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offerId}') || showOfferDetails('${offerId}')`, 'outline', 'sm'));
+
+        switch (status) {
+            case 'draft':
+                // Черновик: Редактировать + Завершить
+                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}') || editOffer('${offerId}')`, 'secondary', 'sm'));
+                buttons.push(this.button('🚀 Завершить', `window.offersManager?.completeOffer?.('${offerId}') || completeOffer('${offerId}')`, 'success', 'sm'));
+                break;
+
+            case 'pending':
+                // На модерации: нет активных кнопок, показываем статус
+                buttons.push(`<span class="status-info">⏳ Ожидает решения администратора</span>`);
+                break;
+
+            case 'active':
+                // Активный: только Статистика
+                buttons.push(this.button('📊 Статистика', `window.offersManager?.showOfferStats?.('${offerId}') || showOfferStats('${offerId}')`, 'primary', 'sm'));
+                break;
+
+            case 'rejected':
+                // Отклонен: Редактировать для исправления
+                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}') || editOffer('${offerId}')`, 'warning', 'sm'));
+                // Показываем причину отклонения, если есть
+                if (offer.rejection_reason) {
+                    buttons.push(`<div class="rejection-reason">❌ ${offer.rejection_reason}</div>`);
+                }
+                break;
+
+            default:
+                // Для остальных статусов - базовый набор
+                buttons.push(this.button('✏️ Редактировать', `window.offersManager?.editOffer?.('${offerId}') || editOffer('${offerId}')`, 'secondary', 'sm'));
+                break;
+        }
+
+        // Кнопка удаления доступна для черновиков и отклоненных
+        if (['draft', 'rejected'].includes(status)) {
+            buttons.push(this.button('🗑️ Удалить', `window.offersManager?.deleteOffer?.('${offerId}') || deleteOffer('${offerId}')`, 'danger', 'sm'));
+        }
+
+        return buttons.join('');
     },
 
     // Шаблон пустого состояния

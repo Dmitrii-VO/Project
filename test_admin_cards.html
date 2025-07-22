@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Admin Cards</title>
+    <script>
+        // Эмуляция Telegram WebApp
+        window.getTelegramUserId = () => '373086959';
+        
+        function testAdminCards() {
+            console.log('🧪 Тестирование админских карточек...');
+            
+            // Тест API вызова
+            fetch('/api/offers_moderation/offers?status=pending', {
+                headers: {
+                    'X-Telegram-User-Id': '373086959'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('📋 API response:', data);
+                
+                if (data.success && data.data.offers.length > 0) {
+                    console.log(`✅ Получено ${data.data.offers.length} офферов`);
+                    document.getElementById('result').innerHTML = `
+                        <h3>✅ API работает корректно</h3>
+                        <p>Получено офферов: ${data.data.offers.length}</p>
+                        <pre>${JSON.stringify(data.data.offers[0], null, 2)}</pre>
+                    `;
+                } else {
+                    document.getElementById('result').innerHTML = '<h3>❌ Нет офферов</h3>';
+                }
+            })
+            .catch(error => {
+                console.error('❌ Ошибка:', error);
+                document.getElementById('result').innerHTML = `<h3>❌ Ошибка: ${error.message}</h3>`;
+            });
+        }
+    </script>
+</head>
+<body>
+    <h1>Тест админских карточек</h1>
+    <button onclick="testAdminCards()">Тестировать API</button>
+    <div id="result"></div>
+</body>
+</html>

@@ -57,7 +57,15 @@ export class ModalManager {
 
     // Модальное окно выбора каналов
     createChannelSelection(offerId, offerTitle, channels, isDraft = false) {
-        const channelsHtml = channels.map(channel => this.createChannelCard(channel)).join('');
+        console.log('🔍 Создание модального окна с каналами:', channels.length);
+        console.log('🔍 Первый канал:', channels[0]);
+        
+        const channelsHtml = channels.map((channel, index) => {
+            this.currentChannelNumber = index + 1;
+            const cardHtml = this.createChannelCard(channel);
+            console.log(`🔍 Карточка ${index + 1} создана, HTML содержит channel-card-compact:`, cardHtml.includes('channel-card-compact'));
+            return cardHtml;
+        }).join('');
         
         const content = `
             <div class="channel-selection">
@@ -235,6 +243,16 @@ export class ModalManager {
 
     // Уведомления
     showNotification(message, type = 'info', duration = 5000) {
+        // Создаем или находим контейнер для уведомлений
+        let container = document.getElementById('notifications-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'notifications-container';
+            container.className = 'notifications-container';
+            document.body.appendChild(container);
+        }
+        
+        // Создаем уведомление
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.innerHTML = `
@@ -244,45 +262,194 @@ export class ModalManager {
             </div>
         `;
         
-        document.body.appendChild(notification);
+        // Добавляем в контейнер
+        container.appendChild(notification);
+        
+        // Показываем с анимацией
         setTimeout(() => notification.classList.add('show'), 10);
         
-        // Автоматическое скрытие
-        setTimeout(() => {
+        // Функция скрытия
+        const hideNotification = () => {
             notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        }, duration);
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+                // Удаляем контейнер если он пустой
+                if (container.children.length === 0) {
+                    container.remove();
+                }
+            }, 300);
+        };
+        
+        // Автоматическое скрытие
+        setTimeout(hideNotification, duration);
         
         // Закрытие по клику
-        notification.querySelector('.notification-close').onclick = () => {
-            notification.classList.remove('show');
-            setTimeout(() => notification.remove(), 300);
-        };
+        notification.querySelector('.notification-close').onclick = hideNotification;
+        
+        // Ограничиваем количество уведомлений
+        const notifications = container.querySelectorAll('.notification');
+        if (notifications.length > 3) {
+            const oldest = notifications[0];
+            oldest.classList.remove('show');
+            setTimeout(() => {
+                if (oldest.parentNode) {
+                    oldest.remove();
+                }
+            }, 300);
+        }
     }
 
     // Вспомогательные методы
     createChannelCard(channel) {
+        const username = channel.username || channel.channel_username || '';
+        const displayUsername = username.startsWith('@') ? username : (username ? `@${username}` : '');
+        const price = channel.price_per_post || channel.price || 0;
+        // Используем реальные данные цены за 24ч из базы данных
+        const price24h = channel.price_per_24h || channel.price_24h || price || 0;
+        const subscribers = channel.subscriber_count || 0;
+        const engagement = channel.engagement_rate || this.calculateEngagement(subscribers);
+        const views = channel.avg_views || Math.round(subscribers * 0.3);
+        const ads7days = channel.ads_count_7d || 0;
+        const description = channel.description || channel.channel_description || '';
+        const truncatedDesc = description.length > 60 ? description.substring(0, 60) + '...' : description;
+        
         return `
-            <div class="channel-card" data-channel-id="${channel.id}">
+            <div class="channel-card-compact" data-channel-id="${channel.id}">
                 <div class="channel-header">
-                    <h4>${channel.title}</h4>
-                    <input type="checkbox" class="channel-checkbox" onchange="window.modalManager.toggleChannelSelection(this, '${channel.id}')">
+                    <div class="channel-number">${this.currentChannelNumber || 1}.</div>
+                    <div class="channel-info">
+                        <h4 class="channel-title">${channel.title || channel.channel_name || 'Канал'}</h4>
+                        <p class="channel-description">${truncatedDesc}</p>
+                        ${displayUsername ? `<span class="channel-username">${displayUsername}</span>` : ''}
+                    </div>
                 </div>
-                <div class="channel-meta">
-                    <span>👥 ${this.formatNumber(channel.subscriber_count)} подписчиков</span>
-                    <span>💰 ₽ ${this.formatPrice(channel.price)}</span>
+
+                <div class="channel-stats">
+                    <div class="stats-grid">
+                        <!-- Первая строка: Подписчики + Вовлеченность -->
+                        <div class="stat-item">
+                            <span class="stat-label">Подписчики</span>
+                            <span class="stat-value">👥 ${this.formatNumber(subscribers)}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Вовлеченность (ER)</span>
+                            <span class="stat-value">📊 ${engagement}%</span>
+                        </div>
+                        <!-- Вторая строка: Просмотры + Реклама -->
+                        <div class="stat-item">
+                            <span class="stat-label">Просмотры</span>
+                            <span class="stat-value">👁 ${this.formatNumber(views)}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Реклама за 7 дней</span>
+                            <span class="stat-value">📢 ${ads7days}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="channel-pricing">
+                    <div class="price-item">
+                        <span class="price-label">Цена за просмотр:</span>
+                        <span class="price-value">${price > 0 && views > 0 ? (price / views * 1000).toFixed(2) : '0.50'}Р</span>
+                    </div>
+                    <div class="price-item">
+                        <span class="price-label">Цена за 24ч:</span>
+                        <span class="price-value">${price24h > 0 ? this.formatPrice(price24h) : this.formatPrice(price)}Р</span>
+                    </div>
+                </div>
+
+                <div class="channel-actions">
+                    <button type="button" class="btn-details" onclick="window.modalManager.showChannelDetails('${channel.id}')">
+                        Подробнее
+                    </button>
+                    <button type="button" class="btn-add" onclick="window.modalManager.toggleChannelSelection(this, '${channel.id}')">
+                        Добавить
+                    </button>
+                </div>
+
+                <!-- Скрытая детальная информация -->
+                <div class="channel-details" id="details-${channel.id}" style="display: none;">
+                    <div class="demographics">
+                        <h5>Гендер</h5>
+                        <div class="gender-stats">
+                            <span>М:${channel.male_percent || '65'}%</span>
+                            <span>Ж:${channel.female_percent || '35'}%</span>
+                        </div>
+                    </div>
+                    <div class="age-groups">
+                        <h5>Возрастные группы</h5>
+                        <div class="age-stats">
+                            <span>18-24: ${channel.age_18_24 || '5'}%</span>
+                            <span>25-30: ${channel.age_25_30 || '20'}%</span>
+                            <span>35-30: ${channel.age_35_44 || '25'}%</span>
+                            <span>45-25: ${channel.age_45_54 || '25'}%</span>
+                            <span>55-15: ${channel.age_55_64 || '15'}%</span>
+                            <span>65-5: ${channel.age_65_plus || '5'}%</span>
+                        </div>
+                    </div>
+                    <div class="income-level">
+                        <h5>Уровень дохода</h5>
+                        <div class="income-stats">
+                            <span>↓50%</span>
+                            <span>↑30%</span>
+                            <span>↑20%</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
     }
 
-    toggleChannelSelection(checkbox, channelId) {
-        // Логика выбора каналов
+    // Показать/скрыть детальную информацию о канале
+    showChannelDetails(channelId) {
+        const detailsElement = document.getElementById(`details-${channelId}`);
+        const button = document.querySelector(`[onclick="window.modalManager.showChannelDetails('${channelId}')"]`);
+        
+        if (detailsElement && button) {
+            if (detailsElement.style.display === 'none' || detailsElement.style.display === '') {
+                detailsElement.style.display = 'block';
+                button.textContent = 'Скрыть';
+                button.classList.add('active');
+            } else {
+                detailsElement.style.display = 'none';
+                button.textContent = 'Подробнее';
+                button.classList.remove('active');
+            }
+        }
+    }
+
+    // Переключение выбора канала (теперь работает с кнопкой "Добавить")
+    toggleChannelSelection(button, channelId) {
+        const channelCard = button.closest('.channel-card-compact');
+        
+        if (channelCard.classList.contains('selected')) {
+            // Убираем выбор
+            channelCard.classList.remove('selected');
+            button.textContent = 'Добавить';
+            button.classList.remove('selected');
+        } else {
+            // Добавляем выбор
+            channelCard.classList.add('selected');
+            button.textContent = '✓ Добавлен';
+            button.classList.add('selected');
+        }
+        
         this.updateSelectedCount();
     }
 
+    // Вспомогательные методы
+    calculateEngagement(subscribers) {
+        // Простая формула для расчета ER на основе подписчиков
+        if (subscribers < 1000) return '45';
+        if (subscribers < 10000) return '32';
+        if (subscribers < 100000) return '25';
+        return '16';
+    }
+
     updateSelectedCount() {
-        const selected = document.querySelectorAll('.channel-checkbox:checked').length;
+        const selected = document.querySelectorAll('.channel-card-compact.selected').length;
         const counter = document.getElementById('selected-count');
         if (counter) counter.textContent = selected;
     }
@@ -294,8 +461,8 @@ export class ModalManager {
 
     // Обработчики действий
     async confirmChannelSelection(offerId, isDraft) {
-        const selectedChannels = Array.from(document.querySelectorAll('.channel-checkbox:checked'))
-            .map(cb => cb.closest('.channel-card').dataset.channelId);
+        const selectedChannels = Array.from(document.querySelectorAll('.channel-card-compact.selected'))
+            .map(card => card.dataset.channelId);
         
         if (selectedChannels.length === 0) {
             this.showNotification('Выберите хотя бы один канал', 'warning');
@@ -303,10 +470,41 @@ export class ModalManager {
         }
 
         try {
-            // Здесь должна быть логика отправки предложений
-            this.showNotification('Предложения отправлены успешно!', 'success');
-            this.close('channel-selection-modal');
+            console.log(`📤 Завершение оффера ${offerId} с ${selectedChannels.length} выбранными каналами`);
+            
+            // Используем API для завершения оффера
+            const response = await fetch(`/api/offers_moderation/complete/${offerId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'
+                },
+                body: JSON.stringify({
+                    channels: selectedChannels
+                })
+            });
+
+            const result = await response.json();
+            
+            if (result.success) {
+                this.showNotification(
+                    `✅ Оффер отправлен на модерацию с ${result.channels_count} каналами!`, 
+                    'success'
+                );
+                this.close('channel-selection-modal');
+                
+                // Обновляем список офферов если есть менеджер
+                if (window.offersManager && window.offersManager.loadMyOffers) {
+                    setTimeout(() => {
+                        window.offersManager.loadMyOffers();
+                    }, 1000);
+                }
+            } else {
+                throw new Error(result.error || 'Неизвестная ошибка');
+            }
+            
         } catch (error) {
+            console.error('❌ Ошибка завершения оффера:', error);
             this.showNotification('Ошибка отправки предложений: ' + error.message, 'error');
         }
     }
@@ -422,3 +620,6 @@ export class ModalManager {
         return statusTexts[status] || statusTexts.active;
     }
 }
+
+// Экспорт по умолчанию
+export default ModalManager;

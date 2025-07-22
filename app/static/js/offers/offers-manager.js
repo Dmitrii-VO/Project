@@ -28,6 +28,7 @@ export class OffersManager {
         try {
             this.setupEventListeners();
             this.setupTabSwitching();
+            this.checkAdminAccess();
             await this.loadInitialData();
             this.isInitialized = true;
             console.log('✅ OffersManager успешно инициализирован');
@@ -65,6 +66,20 @@ export class OffersManager {
         const campaignForm = document.getElementById('campaignForm');
         if (campaignForm) {
             campaignForm.addEventListener('submit', (e) => this.handleCreateCampaign(e));
+        }
+
+        // Фильтры модерации
+        const moderationStatusFilter = document.getElementById('moderationStatusFilter');
+        const moderationSearch = document.getElementById('moderationSearch');
+        
+        if (moderationStatusFilter) {
+            moderationStatusFilter.addEventListener('change', () => this.loadModerationOffers());
+        }
+        
+        if (moderationSearch) {
+            moderationSearch.addEventListener('input', this.debounce(() => {
+                this.loadModerationOffers();
+            }, 300));
         }
     }
 
@@ -110,6 +125,20 @@ export class OffersManager {
                 break;
             case 'campaigns':
                 this.setupCampaignForm();
+                break;
+            case 'admin-moderation':
+                console.log('🔄 Переключение на админ-модерацию');
+                
+                // Принудительно показываем вкладку
+                const adminContent = document.getElementById('admin-moderation');
+                if (adminContent) {
+                    adminContent.style.display = 'block';
+                    console.log('✅ Админ контент принудительно показан');
+                } else {
+                    console.error('❌ Элемент admin-moderation не найден!');
+                }
+                
+                await this.loadModerationOffers();
                 break;
         }
     }
@@ -219,13 +248,14 @@ export class OffersManager {
             const offerData = {
                 title: 'Автоматический подбор каналов',
                 description: formData.get('description'),
-                budget: parseInt(formData.get('budget')),
+                target_audience: 'Владельцы и администраторы Telegram каналов, ищущие качественный рекламный контент',
                 price: Math.min(parseInt(formData.get('budget')) * 0.1, 50000),
                 budget_total: parseInt(formData.get('budget')),
-                target_audience: 'general',
                 category: 'general',
                 currency: 'RUB',
-                content: formData.get('description')
+                content: formData.get('description'),
+                requirements: 'Размещение рекламного контента в соответствии с требованиями площадки',
+                deadline: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // +30 дней
             };
             
             console.log('📋 Создание оффера:', offerData);
@@ -233,11 +263,15 @@ export class OffersManager {
             const result = await this.api.createOffer(offerData);
             
             if (result.success) {
-                console.log('✅ Оффер создан успешно:', result.offer);
+                console.log('✅ Оффер создан успешно:', result.data);
                 this.modals.showNotification('Оффер создан успешно!', 'success');
                 
-                // Показываем модальное окно выбора каналов
-                await this.showChannelSelection(result.offer.id, result.offer.title);
+                // Показываем модальное окно выбора каналов, если есть данные оффера
+                if (result.data && result.data.offer_id) {
+                    const offerId = result.data.offer_id;
+                    const offerTitle = result.data.offer?.title || offerData.title;
+                    await this.showChannelSelection(offerId, offerTitle);
+                }
                 
                 event.target.reset();
                 this.switchTab('my-offers');
@@ -297,18 +331,70 @@ export class OffersManager {
         }
     }
 
-    async showChannelSelection(offerId, offerTitle) {
+    async showChannelSelection(offerId, offerTitle, isDraft = false) {
         try {
+            console.log(`🔍 Показываем выбор каналов для оффера ${offerId}: "${offerTitle}" (isDraft: ${isDraft})`);
+            
             const channelsResult = await this.api.getRecommendedChannels({ offer_id: offerId });
             
             if (channelsResult.success && channelsResult.channels) {
-                this.modals.createChannelSelection(offerId, offerTitle, channelsResult.channels);
+                console.log(`✅ Получено ${channelsResult.channels.length} рекомендованных каналов`);
+                this.modals.createChannelSelection(offerId, offerTitle, channelsResult.channels, isDraft);
             } else {
-                this.modals.showNotification('Не удалось загрузить каналы', 'error');
+                console.log('❌ Не удалось получить каналы:', channelsResult.error);
+                this.modals.showNotification('Не удалось загрузить каналы для выбора', 'error');
             }
         } catch (error) {
             console.error('❌ Ошибка загрузки каналов:', error);
             this.modals.showNotification('Ошибка загрузки каналов: ' + error.message, 'error');
+        }
+    }
+
+    async completeOffer(offerId) {
+        try {
+            console.log(`🚀 Завершение оффера ${offerId}`);
+            
+            // Получаем информацию об оффере
+            const offerResult = await this.api.getOfferDetails(offerId);
+            
+            if (!offerResult.success) {
+                throw new Error('Не удалось получить информацию об оффере');
+            }
+            
+            const offer = offerResult.data;
+            
+            // Проверяем статус
+            if (offer.status !== 'draft') {
+                this.modals.showNotification(`Нельзя завершить оффер со статусом: ${offer.status}`, 'error');
+                return;
+            }
+            
+            // Открываем модальное окно выбора каналов для черновика
+            await this.showChannelSelection(offerId, offer.title, true);
+            
+        } catch (error) {
+            console.error('❌ Ошибка завершения оффера:', error);
+            this.modals.showNotification('Ошибка завершения оффера: ' + error.message, 'error');
+        }
+    }
+
+    async showOfferStats(offerId) {
+        try {
+            console.log(`📊 Показываем статистику для оффера ${offerId}`);
+            
+            // Получаем статистику оффера
+            const statsResult = await this.api.getOfferStatistics(offerId);
+            
+            if (statsResult.success) {
+                // Создаем модальное окно со статистикой
+                this.modals.showOfferStatistics(offerId, statsResult.data);
+            } else {
+                this.modals.showNotification('Не удалось загрузить статистику', 'error');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка загрузки статистики:', error);
+            this.modals.showNotification('Ошибка загрузки статистики: ' + error.message, 'error');
         }
     }
 
@@ -563,5 +649,368 @@ export class OffersManager {
                 }, 300);
             }
         }
+    }
+
+    // Админские методы
+    checkAdminAccess() {
+        const userId = window.getTelegramUserId?.();
+        const adminId = '373086959';
+        
+        console.log(`🔍 Checking admin access: userId = ${userId}, adminId = ${adminId}`);
+        
+        if (userId && userId === adminId) {
+            console.log('✅ Администраторский доступ предоставлен');
+            const adminTab = document.getElementById('admin-tab');
+            const adminContent = document.getElementById('admin-moderation');
+            
+            if (adminTab) {
+                adminTab.style.display = 'block';
+                console.log('✅ Админ вкладка показана');
+            } else {
+                console.error('❌ Элемент admin-tab не найден!');
+            }
+            
+            if (adminContent) {
+                console.log('✅ Админ контент найден');
+            } else {
+                console.error('❌ Элемент admin-moderation не найден!');
+            }
+        } else {
+            console.log('👤 Обычный пользователь, админ-панель скрыта');
+        }
+    }
+
+    async loadModerationOffers() {
+        const container = document.getElementById('moderationGrid');
+        const loading = document.getElementById('moderationLoading');
+        const empty = document.getElementById('moderationEmpty');
+        
+        console.log('🔍 Элементы модерации:', {
+            container: container,
+            loading: loading,
+            empty: empty,
+            containerVisible: container ? container.style.display : 'not found'
+        });
+        
+        if (!container) {
+            console.error('❌ Контейнер moderationGrid не найден!');
+            return;
+        }
+
+        try {
+            // Показываем загрузку
+            this.showModerationLoading(true);
+            
+            // Получаем фильтры
+            const statusFilter = document.getElementById('moderationStatusFilter')?.value || 'pending';
+            const searchQuery = document.getElementById('moderationSearch')?.value || '';
+            
+            const filters = {
+                status: statusFilter === 'all' ? null : statusFilter,
+                search: searchQuery.trim() || null
+            };
+            
+            console.log('🔍 Загрузка офферов для модерации:', filters);
+            
+            // Запрос к API
+            const result = await this.api.getModerationOffers(filters);
+            
+            if (result.success && result.data && Array.isArray(result.data.offers)) {
+                const offers = result.data.offers;
+                console.log(`📋 Получено офферов для модерации: ${offers.length}`);
+                
+                if (offers.length > 0) {
+                    this.renderModerationOffers(offers, container);
+                    this.showModerationLoading(false);
+                } else {
+                    this.showModerationEmpty(true);
+                }
+            } else {
+                console.error('❌ Ошибка загрузки офферов для модерации:', result.error);
+                this.showModerationError(result.error || 'Неизвестная ошибка');
+            }
+            
+        } catch (error) {
+            console.error('❌ Исключение при загрузке офферов для модерации:', error);
+            this.showModerationError(error.message);
+        }
+    }
+
+    renderModerationOffers(offers, container) {
+        console.log(`🎨 Рендеринг ${offers.length} офферов для модерации`);
+        console.log('📋 Container:', container);
+        console.log('📋 First offer:', offers[0]);
+        
+        const offersHtml = offers.map((offer, index) => {
+            console.log(`🎯 Создание карточки ${index + 1}:`, offer);
+            const cardHtml = this.createModerationOfferCard(offer);
+            console.log(`✅ Карточка ${index + 1} создана, HTML length:`, cardHtml.length);
+            return cardHtml;
+        }).join('');
+        
+        console.log(`📄 Общий HTML length:`, offersHtml.length);
+        
+        // Устанавливаем HTML с принудительными стилями
+        container.innerHTML = `<div class="offers-list" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; background: #f8f9fa; border: 2px solid #007bff; border-radius: 8px;">${offersHtml}</div>`;
+        
+        // Принудительно показываем контейнер
+        container.style.display = 'block';
+        container.style.visibility = 'visible';
+        container.style.opacity = '1';
+        container.style.height = 'auto';
+        container.style.background = '#ffffff';
+        container.style.border = '1px solid #dee2e6';
+        container.style.borderRadius = '8px';
+        container.style.padding = '16px';
+        container.style.margin = '16px 0';
+        
+        console.log(`✅ HTML установлен в контейнер с принудительными стилями`);
+        
+        // Проверим, что карточки действительно добавились
+        const cards = container.querySelectorAll('.offer-card');
+        console.log(`🎯 Найдено карточек в DOM: ${cards.length}`);
+        
+        cards.forEach((card, index) => {
+            card.style.display = 'block';
+            card.style.visibility = 'visible';
+            card.style.opacity = '1';
+            console.log(`✅ Карточка ${index + 1} принудительно показана`);
+        });
+    }
+
+    createModerationOfferCard(offer) {
+        console.log('🎯 Создание карточки модерации для оффера:', offer);
+        
+        const status = offer.status || 'draft';
+        const submittedDate = offer.submitted_at ? new Date(offer.submitted_at).toLocaleString('ru-RU') : 'Не указана';
+        const userName = offer.user_name || 'Неизвестный пользователь';
+        const userId = offer.user_id || 'N/A';
+        
+        console.log(`📋 Статус: ${status}, Дата: ${submittedDate}, Пользователь: ${userName}`);
+        
+        // Проверим наличие templates
+        if (!this.templates) {
+            console.error('❌ Templates не найдены!');
+            return '<div style="padding: 20px; border: 2px solid red; margin: 10px; background: #ffe6e6;">Error: Templates not found</div>';
+        }
+        
+        // Создаем карточку с упрощенной структурой для отладки
+        const html = `
+            <div class="offer-card moderation ${status}" data-offer-id="${offer.id}" style="border: 1px solid #ddd; padding: 16px; margin: 12px 0; border-radius: 8px; background: white;">
+                <div class="offer-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <h3 class="offer-title" style="margin: 0; color: #333; font-size: 18px;">${offer.title || 'Без названия'}</h3>
+                    ${this.templates.statusBadge(status)}
+                </div>
+                
+                <div class="offer-user-info" style="background: #f8f9fa; padding: 12px; border-radius: 6px; margin: 12px 0;">
+                    <div style="margin-bottom: 8px;">
+                        <strong>👤 Пользователь:</strong> ${userName} (ID: ${userId})
+                    </div>
+                    <div>
+                        <strong>📅 Подано:</strong> ${submittedDate}
+                    </div>
+                </div>
+                
+                <div class="offer-meta" style="margin: 12px 0;">
+                    <span class="offer-price" style="font-weight: bold; color: #28a745;">₽ ${this.templates.formatPrice(offer.price || offer.budget_total || 0)}</span>
+                    <span style="margin-left: 12px; color: #6c757d;">${offer.category || 'Общее'}</span>
+                </div>
+                
+                <div class="offer-description" style="margin: 12px 0; color: #495057; line-height: 1.4;">
+                    ${offer.description ? (offer.description.length > 150 ? offer.description.substring(0, 150) + '...' : offer.description) : 'Описание отсутствует'}
+                </div>
+                
+                <div class="offer-actions moderation-actions" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px;">
+                    ${this.getModerationButtons(offer)}
+                </div>
+                
+                ${offer.rejection_reason ? `
+                    <div class="rejection-reason" style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 12px; margin-top: 12px; border-radius: 0 6px 6px 0; color: #721c24;">
+                        <strong>❌ Причина отклонения:</strong>
+                        <p style="margin: 4px 0 0 0;">${offer.rejection_reason}</p>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+        
+        console.log(`✅ HTML карточка создана, длина: ${html.length} символов`);
+        return html;
+    }
+
+    getModerationButtons(offer) {
+        const status = offer.status || 'draft';
+        const offerId = offer.id;
+        let buttons = [];
+        
+        // Кнопка просмотра деталей всегда доступна
+        buttons.push(`<button class="btn btn-outline btn-sm" onclick="window.offersManager?.showOfferDetails('${offerId}')">👁️ Просмотр</button>`);
+        
+        if (status === 'pending') {
+            // Для офферов на модерации показываем кнопки одобрения, отклонения и удаления
+            buttons.push(`<button class="btn btn-success btn-sm" onclick="window.offersManager?.approveOffer('${offerId}')">✅ Одобрить</button>`);
+            buttons.push(`<button class="btn btn-danger btn-sm" onclick="window.offersManager?.rejectOffer('${offerId}')">❌ Отклонить</button>`);
+            buttons.push(`<button class="btn btn-outline btn-sm" onclick="window.offersManager?.deleteOfferFromModeration('${offerId}')" style="color: var(--danger-600); border-color: var(--danger-300);">🗑️ Удалить</button>`);
+        } else if (status === 'active') {
+            // Для активных офферов показываем статистику
+            buttons.push(`<button class="btn btn-primary btn-sm" onclick="window.offersManager?.showOfferStats('${offerId}')">📊 Статистика</button>`);
+        } else if (status === 'rejected') {
+            // Для отклоненных можно повторно рассмотреть
+            buttons.push(`<button class="btn btn-warning btn-sm" onclick="window.offersManager?.reopenOffer('${offerId}')">🔄 Пересмотреть</button>`);
+        }
+        
+        return buttons.join('');
+    }
+
+    async approveOffer(offerId) {
+        if (!confirm('Вы уверены, что хотите одобрить этот оффер?')) {
+            return;
+        }
+        
+        try {
+            console.log(`✅ Одобрение оффера ${offerId}`);
+            
+            const result = await this.api.approveOffer(offerId);
+            
+            if (result.success) {
+                this.modals.showNotification('Оффер успешно одобрен!', 'success');
+                await this.loadModerationOffers(); // Обновляем список
+            } else {
+                throw new Error(result.error || 'Ошибка одобрения оффера');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка одобрения оффера:', error);
+            this.modals.showNotification('Ошибка одобрения: ' + error.message, 'error');
+        }
+    }
+
+    async rejectOffer(offerId) {
+        const reason = prompt('Укажите причину отклонения:');
+        if (!reason || reason.trim() === '') {
+            return;
+        }
+        
+        try {
+            console.log(`❌ Отклонение оффера ${offerId} с причиной: ${reason}`);
+            
+            const result = await this.api.rejectOffer(offerId, reason.trim());
+            
+            if (result.success) {
+                this.modals.showNotification('Оффер отклонен!', 'success');
+                await this.loadModerationOffers(); // Обновляем список
+            } else {
+                throw new Error(result.error || 'Ошибка отклонения оффера');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка отклонения оффера:', error);
+            this.modals.showNotification('Ошибка отклонения: ' + error.message, 'error');
+        }
+    }
+
+    async reopenOffer(offerId) {
+        if (!confirm('Вы уверены, что хотите вернуть этот оффер на модерацию?')) {
+            return;
+        }
+        
+        try {
+            console.log(`🔄 Возврат оффера ${offerId} на модерацию`);
+            
+            const result = await this.api.reopenOffer(offerId);
+            
+            if (result.success) {
+                this.modals.showNotification('Оффер возвращен на модерацию!', 'success');
+                await this.loadModerationOffers(); // Обновляем список
+            } else {
+                throw new Error(result.error || 'Ошибка возврата оффера на модерацию');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка возврата оффера:', error);
+            this.modals.showNotification('Ошибка: ' + error.message, 'error');
+        }
+    }
+
+    // UI методы для модерации
+    showModerationLoading(show) {
+        const loading = document.getElementById('moderationLoading');
+        const container = document.getElementById('moderationGrid');
+        const empty = document.getElementById('moderationEmpty');
+        
+        console.log(`🔄 showModerationLoading(${show}):`, {
+            loading: loading,
+            container: container,
+            empty: empty
+        });
+        
+        if (loading) loading.style.display = show ? 'block' : 'none';
+        if (container) {
+            container.style.display = show ? 'none' : 'block';
+            
+            // Принудительно показываем контейнер при скрытии загрузки
+            if (!show) {
+                container.style.visibility = 'visible';
+                container.style.opacity = '1';
+                container.style.minHeight = '200px';
+                console.log('🔧 Принудительно показан контейнер модерации');
+            }
+        }
+        if (empty) empty.style.display = 'none';
+        
+        console.log('✅ Состояние элементов после изменения:', {
+            loadingDisplay: loading ? loading.style.display : 'not found',
+            containerDisplay: container ? container.style.display : 'not found',
+            emptyDisplay: empty ? empty.style.display : 'not found'
+        });
+    }
+
+    showModerationEmpty(show) {
+        const loading = document.getElementById('moderationLoading');
+        const container = document.getElementById('moderationGrid');
+        const empty = document.getElementById('moderationEmpty');
+        
+        if (loading) loading.style.display = 'none';
+        if (container) container.style.display = show ? 'none' : 'block';
+        if (empty) empty.style.display = show ? 'block' : 'none';
+    }
+
+    showModerationError(message) {
+        const container = document.getElementById('moderationGrid');
+        if (container) {
+            container.innerHTML = this.templates.errorState(
+                message, 
+                () => this.loadModerationOffers()
+            );
+        }
+        this.showModerationLoading(false);
+    }
+
+    async deleteOfferFromModeration(offerId) {
+        if (!confirm('Вы уверены, что хотите удалить этот оффер? Это действие нельзя отменить.')) {
+            return;
+        }
+        
+        try {
+            console.log(`🗑️ Удаление оффера ${offerId} из модерации`);
+            
+            const result = await this.api.deleteOffer(offerId);
+            
+            if (result.success) {
+                this.modals.showNotification('Оффер успешно удален!', 'success');
+                await this.loadModerationOffers(); // Обновляем список
+            } else {
+                throw new Error(result.error || 'Ошибка удаления оффера');
+            }
+            
+        } catch (error) {
+            console.error('❌ Ошибка удаления оффера:', error);
+            this.modals.showNotification('Ошибка удаления: ' + error.message, 'error');
+        }
+    }
+
+    // Глобальная функция обновления модерации для HTML
+    refreshModeration() {
+        console.log('🔄 Обновление модерации по запросу пользователя');
+        this.loadModerationOffers();
     }
 }

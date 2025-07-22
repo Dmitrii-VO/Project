@@ -181,7 +181,7 @@ class OfferRepository:
             offer_data['target_audience'],
             offer_data.get('requirements', ''),
             offer_data.get('deadline'),
-            offer_data.get('status', 'active'),
+            offer_data.get('status', 'draft'),
             offer_data.get('category', 'general'),
             json.dumps(metadata),
             float(offer_data.get('budget_total', offer_data['price'])),

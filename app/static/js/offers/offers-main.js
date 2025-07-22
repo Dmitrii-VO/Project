@@ -23,11 +23,13 @@ async function initializeOffers() {
         console.log('🚀 Инициализация модульной системы офферов...');
         
         // Создаем экземпляры менеджеров
-        modalManager = new ModalManager();
         offersManager = new OffersManager();
         
         // Инициализируем
         await offersManager.init();
+        
+        // Используем тот же экземпляр modalManager из offersManager
+        modalManager = offersManager.modals;
         
         // Делаем доступными глобально для совместимости
         window.offersManager = offersManager;
@@ -134,6 +136,23 @@ function setupGlobalFunctions() {
         }
     };
     
+    // Функции модерации
+    window.refreshModeration = () => {
+        if (offersManager && offersManager.refreshModeration) {
+            offersManager.refreshModeration();
+        } else {
+            console.warn('⚠️ OffersManager не найден или метод refreshModeration недоступен');
+        }
+    };
+
+    window.deleteOfferFromModeration = (offerId) => {
+        if (offersManager && offersManager.deleteOfferFromModeration) {
+            offersManager.deleteOfferFromModeration(offerId);
+        } else {
+            console.warn('⚠️ OffersManager не найден или метод deleteOfferFromModeration недоступен');
+        }
+    };
+
     // Функция назад
     window.goBack = () => {
         if (window.history.length > 1) {

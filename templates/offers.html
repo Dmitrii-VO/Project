@@ -25,6 +25,7 @@
             <li><a href="#" data-tab="find-offer">Найти оффер</a></li>
             <li><a href="#" data-tab="create-offer">Создать оффер</a></li>
             <li><a href="#" data-tab="campaigns">Рекламная кампания</a></li>
+            <li id="admin-tab" style="display: none;"><a href="#" data-tab="admin-moderation">⚖️ Модерация</a></li>
         </nav>
     </div>
 
@@ -185,6 +186,48 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Модерация (только для админа) -->
+    <div class="tabs-content" id="admin-moderation" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">⚖️ Модерация офферов</h3>
+                <p class="card-subtitle">Офферы, ожидающие модерации</p>
+            </div>
+            <div class="card-body">
+                <div class="moderation-filters" style="margin-bottom: 20px;">
+                    <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                        <select id="moderationStatusFilter" class="form-select" style="min-width: 150px;">
+                            <option value="pending">На модерации</option>
+                            <option value="all">Все статусы</option>
+                            <option value="approved">Одобренные</option>
+                            <option value="rejected">Отклоненные</option>
+                        </select>
+                        <div style="position: relative;">
+                            <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">🔍</span>
+                            <input type="text" class="form-input" placeholder="Поиск по названию..." id="moderationSearch" style="padding-left: 40px; min-width: 200px;">
+                        </div>
+                        <button class="btn btn-outline" onclick="refreshModeration()">🔄 Обновить</button>
+                    </div>
+                </div>
+
+                <div id="moderationGrid" class="offers-container">
+                    <!-- Офферы на модерации будут загружены здесь -->
+                </div>
+
+                <div id="moderationLoading" class="loading-state" style="display: none;">
+                    <div class="loading-spinner">⏳</div>
+                    <p>Загрузка офферов на модерации...</p>
+                </div>
+
+                <div id="moderationEmpty" class="empty-state" style="display: none;">
+                    <div class="empty-icon">✅</div>
+                    <h3>Нет офферов на модерации</h3>
+                    <p>Все офферы обработаны</p>
+                </div>
             </div>
         </div>
     </div>
@@ -355,9 +398,209 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     console.log('🎯 Страница офферов инициализирована (упрощенная версия)');
+    
+    // Временный тест стилей компактных карточек
+    setTimeout(() => {
+        const testButton = document.createElement('button');
+        testButton.innerHTML = 'Тест компактных карточек';
+        testButton.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 9999; padding: 8px; background: red; color: white; border: none; border-radius: 4px; cursor: pointer;';
+        testButton.onclick = () => {
+            testCompactChannelCards();
+        };
+        document.body.appendChild(testButton);
+    }, 1000);
 });
+
+// Функция тестирования компактных карточек
+function testCompactChannelCards() {
+    console.log('🧪 Тестирование компактных карточек');
+    
+    const testData = [
+        {
+            id: 'test1',
+            title: 'Владимир Горбовский',
+            description: 'Авторский канал Владимира Горбовского. Присылать новость @gorbovsk По вопросам рекламы @KlimentTG Ресурс включён в перечень...',
+            username: '@werwfvsd',
+            subscriber_count: 27500,
+            engagement_rate: 32,
+            avg_views: 8800,
+            ads_count_7d: 0,
+            price_per_post: 3500,
+            price_per_24h: 7137
+        }
+    ];
+    
+    // Создаем тестовое модальное окно с той же структурой, что и в реальном коде
+    const modalHtml = `
+        <div class="modal-overlay modal-large active" id="test-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 10000;">
+            <div class="modal-content" style="background: white; border-radius: 12px; padding: 20px; max-width: 900px; max-height: 90vh; overflow: hidden;">
+                <div class="modal-header">
+                    <h3 class="modal-title">📺 Тест компактных карточек</h3>
+                </div>
+                <div class="modal-body" style="overflow-y: auto; max-height: calc(90vh - 120px);">
+                    <div class="channel-selection">
+                        <div class="channel-selection-header">
+                            <p>Выберите каналы для размещения оффера: <strong>Тестовый оффер</strong></p>
+                            <div class="channel-selection-stats">
+                                <span id="test-selected-count">0</span> каналов выбрано
+                            </div>
+                        </div>
+                        
+                        <div class="channel-filters">
+                            <select id="test-channel-sort">
+                                <option value="subscribers">По подписчикам</option>
+                                <option value="price">По цене</option>
+                                <option value="engagement">По вовлеченности</option>
+                            </select>
+                        </div>
+                        
+                        <div class="channels-grid" id="test-channels-grid">
+                            ${testData.map((channel, index) => createTestChannelCard(channel, index + 1)).join('')}
+                        </div>
+                        
+                        <div class="channel-selection-actions" style="margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button onclick="document.getElementById('test-modal').remove()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 6px; cursor: pointer; flex: 1; min-width: 120px;">Закрыть</button>
+                            <button style="padding: 8px 16px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; flex: 2; min-width: 150px;">Отправить предложения</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+}
+
+// Тестовая функция создания карточки
+function createTestChannelCard(channel, number) {
+    const price = channel.price_per_post || 0;
+    // Используем реальные данные цены за 24ч
+    const price24h = channel.price_per_24h || price;
+    const views = channel.avg_views || Math.round(channel.subscriber_count * 0.3);
+    
+    return `
+        <div class="channel-card-compact" data-channel-id="${channel.id}">
+            <div class="channel-header">
+                <div class="channel-number">${number}.</div>
+                <div class="channel-info">
+                    <h4 class="channel-title">${channel.title}</h4>
+                    <p class="channel-description">${channel.description.substring(0, 60)}...</p>
+                    <span class="channel-username">${channel.username}</span>
+                </div>
+            </div>
+
+            <div class="channel-stats">
+                <div class="stats-grid">
+                    <!-- Первая строка: Подписчики + Вовлеченность -->
+                    <div class="stat-item">
+                        <span class="stat-label">Подписчики</span>
+                        <span class="stat-value">👥 ${new Intl.NumberFormat('ru-RU').format(channel.subscriber_count)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Вовлеченность (ER)</span>
+                        <span class="stat-value">📊 ${channel.engagement_rate}%</span>
+                    </div>
+                    <!-- Вторая строка: Просмотры + Реклама -->
+                    <div class="stat-item">
+                        <span class="stat-label">Просмотры</span>
+                        <span class="stat-value">👁 ${new Intl.NumberFormat('ru-RU').format(views)}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Реклама за 7 дней</span>
+                        <span class="stat-value">📢 ${channel.ads_count_7d}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="channel-pricing">
+                <div class="price-item">
+                    <span class="price-label">Цена за просмотр:</span>
+                    <span class="price-value">${(price / views * 1000).toFixed(2)}Р</span>
+                </div>
+                <div class="price-item">
+                    <span class="price-label">Цена за 24ч:</span>
+                    <span class="price-value">${new Intl.NumberFormat('ru-RU').format(price24h)}Р</span>
+                </div>
+            </div>
+
+            <div class="channel-actions">
+                <button type="button" class="btn-details" onclick="toggleDetails('${channel.id}')">
+                    Подробнее
+                </button>
+                <button type="button" class="btn-add" onclick="toggleSelection('${channel.id}', this)">
+                    Добавить
+                </button>
+            </div>
+
+            <div class="channel-details" id="details-${channel.id}" style="display: none;">
+                <div class="demographics">
+                    <h5>Гендер</h5>
+                    <div class="gender-stats">
+                        <span>М:65%</span>
+                        <span>Ж:35%</span>
+                    </div>
+                </div>
+                <div class="age-groups">
+                    <h5>Возрастные группы</h5>
+                    <div class="age-stats">
+                        <span>18-24: 5%</span>
+                        <span>25-30: 20%</span>
+                        <span>35-30: 25%</span>
+                        <span>45-25: 25%</span>
+                        <span>55-15: 15%</span>
+                        <span>65-5: 5%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Тестовые функции
+function toggleDetails(channelId) {
+    const details = document.getElementById(`details-${channelId}`);
+    const button = event.target;
+    
+    if (details.style.display === 'none' || !details.style.display) {
+        details.style.display = 'block';
+        button.textContent = 'Скрыть';
+        button.classList.add('active');
+    } else {
+        details.style.display = 'none';
+        button.textContent = 'Подробнее';
+        button.classList.remove('active');
+    }
+}
+
+function toggleSelection(channelId, button) {
+    const card = button.closest('.channel-card-compact');
+    
+    if (card.classList.contains('selected')) {
+        card.classList.remove('selected');
+        button.textContent = 'Добавить';
+        button.classList.remove('selected');
+    } else {
+        card.classList.add('selected');
+        button.textContent = '✓ Добавлен';
+        button.classList.add('selected');
+    }
+    
+    // Обновляем счетчик
+    const selectedCount = document.querySelectorAll('.channel-card-compact.selected').length;
+    const counter = document.getElementById('test-selected-count');
+    if (counter) counter.textContent = selectedCount;
+}
 
 // Функции для кампаний теперь в модулях offers/
 // Здесь только минимальная совместимость
+
+// Глобальная функция для обновления модерации
+function refreshModeration() {
+    if (window.offersManager && window.offersManager.loadModerationOffers) {
+        window.offersManager.loadModerationOffers();
+    } else {
+        console.warn('⚠️ OffersManager не найден или метод loadModerationOffers недоступен');
+    }
+}
 </script>
 {% endblock %}

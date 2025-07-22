@@ -3,7 +3,7 @@ import re
 import logging
 from typing import Dict, List, Any, Tuple
 from datetime import datetime, timedelta
-from working_app import safe_execute_query
+from app.models.database import execute_db_query as safe_execute_query
 
 logger = logging.getLogger(__name__)
 
@@ -164,16 +164,12 @@ def get_recommended_channels(offer_analysis: Dict[str, Any], price: float, limit
         # Базовый запрос для получения активных каналов
         base_query = '''
             SELECT c.*, 
-                   COALESCE(AVG(r.rating), 4.0) as avg_rating,
-                   COUNT(DISTINCT r.id) as total_reviews,
-                   COUNT(DISTINCT recent_offers.id) as recent_offers_count
+                   COALESCE(c.reliability_rating, 4.0) as avg_rating,
+                   0 as total_reviews,
+                   0 as recent_offers_count
             FROM channels c
-            LEFT JOIN channel_reviews r ON c.id = r.channel_id
-            LEFT JOIN offers recent_offers ON c.id = recent_offers.channel_id 
-                AND recent_offers.created_at >= date('now', '-30 days')
             WHERE c.is_active = 1 
-                AND c.is_deleted = 0
-                AND c.subscriber_count > 100
+                AND c.subscriber_count > 10
         '''
         
         # Фильтрация по категории если есть
@@ -196,12 +192,10 @@ def get_recommended_channels(offer_analysis: Dict[str, Any], price: float, limit
             # Если нет каналов в категории, получаем общие рекомендации
             channels = safe_execute_query('''
                 SELECT c.*, 
-                       COALESCE(AVG(r.rating), 4.0) as avg_rating,
-                       COUNT(DISTINCT r.id) as total_reviews
+                       COALESCE(c.reliability_rating, 4.0) as avg_rating,
+                       0 as total_reviews
                 FROM channels c
-                LEFT JOIN channel_reviews r ON c.id = r.channel_id
-                WHERE c.is_active = 1 AND c.is_deleted = 0
-                GROUP BY c.id
+                WHERE c.is_active = 1
                 ORDER BY c.subscriber_count DESC, avg_rating DESC
                 LIMIT ?
             ''', (limit,), fetch_all=True)

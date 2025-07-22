@@ -197,4 +197,74 @@ export class OffersAPI {
             `;
         }
     }
+
+    // Админские методы модерации
+    async getModerationOffers(filters = {}) {
+        try {
+            console.log('🔍 Запрос офферов для модерации:', filters);
+            
+            const params = new URLSearchParams();
+            Object.entries(filters).forEach(([key, value]) => {
+                if (value !== null && value !== undefined && value !== '') {
+                    params.append(key, value);
+                }
+            });
+            
+            const url = `/api/offers_moderation/offers${params.toString() ? '?' + params.toString() : ''}`;
+            return await this.get(url);
+        } catch (error) {
+            console.error('❌ Ошибка загрузки офферов для модерации:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async approveOffer(offerId) {
+        try {
+            console.log(`✅ Одобрение оффера ${offerId}`);
+            return await this.post(`/api/offers_moderation/${offerId}/approve`);
+        } catch (error) {
+            console.error('❌ Ошибка одобрения оффера:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async rejectOffer(offerId, reason) {
+        try {
+            console.log(`❌ Отклонение оффера ${offerId} с причиной: ${reason}`);
+            return await this.post(`/api/offers_moderation/${offerId}/reject`, { reason });
+        } catch (error) {
+            console.error('❌ Ошибка отклонения оффера:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async reopenOffer(offerId) {
+        try {
+            console.log(`🔄 Возврат оффера ${offerId} на модерацию`);
+            return await this.post(`/api/offers_moderation/${offerId}/reopen`);
+        } catch (error) {
+            console.error('❌ Ошибка возврата оффера на модерацию:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getOfferStatistics(offerId) {
+        try {
+            console.log(`📊 Запрос статистики оффера ${offerId}`);
+            return await this.get(`/api/offers/${offerId}/statistics`);
+        } catch (error) {
+            console.error('❌ Ошибка загрузки статистики оффера:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    async getOfferDetails(offerId) {
+        try {
+            console.log(`📋 Запрос деталей оффера ${offerId}`);
+            return await this.get(`/api/offers/${offerId}`);
+        } catch (error) {
+            console.error('❌ Ошибка загрузки деталей оффера:', error);
+            return { success: false, error: error.message };
+        }
+    }
 }

@@ -12,6 +12,7 @@ from datetime import datetime
 from app.models.database import execute_db_query
 from app.config.telegram_config import AppConfig
 from app.api.offers import offers_bp
+from app.api.offers_moderation import offers_moderation_bp
 from app.routers.main_router import main_bp
 from app.api.channels import channels_bp
 from app.api.analytics import analytics_bp
@@ -84,6 +85,7 @@ def create_app() -> Flask:
 def register_blueprints(app: Flask) -> None:
     """Регистрация Blueprint'ов"""
     app.register_blueprint(offers_bp, url_prefix='/api/offers')
+    app.register_blueprint(offers_moderation_bp)  # Модерация офферов
     app.register_blueprint(main_bp)
     app.register_blueprint(channels_bp, url_prefix='/api/channels')
     app.register_blueprint(analytics_bp, url_prefix='/api/analytics')

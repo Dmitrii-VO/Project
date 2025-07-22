@@ -1214,6 +1214,86 @@ def get_channel_offers_count(channel_id: int) -> int:
         return 0
 
 
+@channels_bp.route('/recommend', methods=['POST'])
+def get_channel_recommendations():
+    """Получение рекомендованных каналов для оффера"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Данные оффера обязательны'}), 400
+
+        # Получаем telegram_id из заголовков
+        telegram_id = request.headers.get('X-Telegram-User-Id')
+        if not telegram_id:
+            return jsonify({'success': False, 'error': 'Требуется авторизация'}), 401
+
+        logger.info(f"🔍 Получаем рекомендации каналов для пользователя {telegram_id}")
+
+        # Извлекаем параметры оффера
+        offer_id = data.get('offer_id')
+        title = data.get('title', 'Автоматический подбор каналов')
+        description = data.get('description', '')
+        target_audience = data.get('target_audience', '')
+        price = float(data.get('price', 0))
+        category = data.get('category', 'general')
+
+        # Импортируем функцию рекомендаций
+        from app.api.channel_recommendations import get_channel_recommendations_api
+
+        # Получаем рекомендации
+        recommendations_result = get_channel_recommendations_api(
+            title=title,
+            description=description,
+            target_audience=target_audience,
+            price=price,
+            limit=20
+        )
+
+        if not recommendations_result.get('success'):
+            logger.error(f"Ошибка получения рекомендаций: {recommendations_result.get('error')}")
+            return jsonify({'success': False, 'error': 'Не удалось получить рекомендации'}), 500
+
+        recommendations = recommendations_result.get('recommendations', [])
+        
+        # Исключаем каналы пользователя
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        # Получаем ID пользователя
+        cursor.execute("SELECT id FROM users WHERE telegram_id = ?", (telegram_id,))
+        user = cursor.fetchone()
+        
+        if user:
+            user_db_id = user['id']
+            # Получаем ID каналов пользователя
+            cursor.execute("SELECT id FROM channels WHERE owner_id = ?", (user_db_id,))
+            user_channel_ids = {row['id'] for row in cursor.fetchall()}
+            
+            # Фильтруем рекомендации
+            recommendations = [r for r in recommendations if r.get('id') not in user_channel_ids]
+
+        conn.close()
+
+        logger.info(f"✅ Найдено {len(recommendations)} рекомендованных каналов")
+
+        return jsonify({
+            'success': True,
+            'channels': recommendations,
+            'metadata': recommendations_result.get('metadata', {}),
+            'total': len(recommendations),
+            'offer_analysis': recommendations_result.get('offer_analysis', {})
+        })
+
+    except Exception as e:
+        logger.error(f"❌ Ошибка получения рекомендаций каналов: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': 'Внутренняя ошибка сервера'
+        }), 500
+
 def get_channel_posts_count(channel_id: int) -> int:
     """Получение количества постов канала"""
     try:
