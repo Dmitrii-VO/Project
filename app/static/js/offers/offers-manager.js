@@ -202,27 +202,69 @@ export class OffersManager {
         try {
             this.showLoading(container, 'Поиск доступных офферов...');
             
-            // Попробуем загрузить реальные данные
+            // Загружаем входящие предложения для владельцев каналов
             try {
-                const result = await this.api.getOffers(this.filters);
+                const response = await fetch('/api/proposals/incoming', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'
+                    }
+                });
+
+                const result = await response.json();
                 
-                if (result.success) {
-                    if (result.data && result.data.offers && result.data.offers.length > 0) {
-                        this.renderOffers(result.data.offers, container);
+                if (response.ok && result.success) {
+                    if (result.proposals && result.proposals.length > 0) {
+                        // Преобразуем предложения в формат офферов с информацией о proposal_id
+                        const proposalsAsOffers = result.proposals.map(proposal => ({
+                            id: proposal.id, // ID оффера
+                            proposal_id: proposal.proposal_id, // ID предложения
+                            proposal_status: proposal.proposal_status, // Статус предложения
+                            title: proposal.title,
+                            description: proposal.description,
+                            price: proposal.price,
+                            currency: proposal.currency || 'RUB',
+                            status: 'active', // Для корректного отображения
+                            target_audience: proposal.target_audience,
+                            creator_name: proposal.creator_name,
+                            first_name: proposal.first_name,
+                            channel_title: proposal.channel_title,
+                            can_respond: proposal.can_respond,
+                            is_expired: proposal.is_expired
+                        }));
+                        
+                        this.renderOffers(proposalsAsOffers, container);
+                        console.log(`✅ Загружено предложений: ${result.proposals.length}`);
                     } else {
-                        this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');
+                        this.showEmpty(container, 'Нет входящих предложений', 'У вас пока нет предложений от рекламодателей');
                     }
                     return;
+                } else {
+                    throw new Error(result.message || 'Ошибка загрузки предложений');
                 }
             } catch (apiError) {
-                console.error('❌ Ошибка API getOffers:', apiError);
-                this.showError(container, 'Ошибка загрузки офферов: ' + apiError.message);
+                console.error('❌ Ошибка API proposals/incoming:', apiError);
+                
+                // Fallback на обычные офферы
+                try {
+                    const result = await this.api.getOffers(this.filters);
+                    
+                    if (result.success) {
+                        if (result.data && result.data.offers && result.data.offers.length > 0) {
+                            this.renderOffers(result.data.offers, container);
+                        } else {
+                            this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');
+                        }
+                        return;
+                    }
+                } catch (fallbackError) {
+                    console.error('❌ Ошибка fallback API:', fallbackError);
+                }
+                
+                this.showError(container, 'Ошибка загрузки: ' + apiError.message);
                 return;
             }
-            
-            // Этот код больше не должен выполняться
-            this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');
-            
         } catch (error) {
             console.error('❌ Ошибка поиска офферов:', error);
             this.showEmpty(container, 'Офферы не найдены', 'Попробуйте изменить фильтры поиска');

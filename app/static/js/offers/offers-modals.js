@@ -109,18 +109,14 @@ export class ModalManager {
                 <p>Вы собираетесь принять предложение для оффера: <strong>${offerTitle}</strong></p>
                 
                 <div class="form-field">
-                    <label for="accept-price">Цена размещения (₽)</label>
-                    <input type="number" id="accept-price" class="form-input" placeholder="Укажите цену" min="0" required>
-                </div>
-                
-                <div class="form-field">
                     <label for="accept-comment">Комментарий (необязательно)</label>
-                    <textarea id="accept-comment" class="form-input" placeholder="Дополнительные условия или комментарии"></textarea>
+                    <textarea id="accept-comment" class="form-input" placeholder="Дополнительные условия или комментарии" rows="3"></textarea>
                 </div>
                 
                 <div class="form-field">
-                    <label for="accept-deadline">Срок выполнения</label>
+                    <label for="accept-deadline">Дата размещения (необязательно)</label>
                     <input type="date" id="accept-deadline" class="form-input" min="${new Date().toISOString().split('T')[0]}">
+                    <div class="form-help">Если не указано, размещение ожидается в течение 24 часов</div>
                 </div>
                 
                 <div class="form-actions">
@@ -128,7 +124,7 @@ export class ModalManager {
                         Отмена
                     </button>
                     <button class="btn btn-primary" onclick="window.modalManager.submitAcceptProposal('${proposalId}')">
-                        Принять предложение
+                        ✅ Принять предложение
                     </button>
                 </div>
             </div>
@@ -542,20 +538,43 @@ export class ModalManager {
     }
 
     async submitAcceptProposal(proposalId) {
-        const price = document.getElementById('accept-price').value;
         const comment = document.getElementById('accept-comment').value;
         const deadline = document.getElementById('accept-deadline').value;
 
-        if (!price) {
-            this.showNotification('Укажите цену размещения', 'warning');
-            return;
-        }
-
         try {
-            // Здесь должна быть логика принятия предложения
-            this.showNotification('Предложение принято!', 'success');
-            this.close('accept-proposal-modal');
+            console.log('✅ Принятие предложения:', proposalId);
+            
+            // Формируем данные для отправки
+            const data = {
+                message: comment || '',
+                scheduled_date: deadline ? `${deadline}T12:00:00` : null
+            };
+
+            // Отправляем запрос на API
+            const response = await fetch(`/api/proposals/${proposalId}/accept`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                this.showNotification('✅ Предложение принято!', 'success');
+                this.close('accept-proposal-modal');
+                
+                // Обновляем список офферов
+                if (window.offersManager?.loadAvailableOffers) {
+                    setTimeout(() => window.offersManager.loadAvailableOffers(), 500);
+                }
+            } else {
+                throw new Error(result.message || 'Ошибка принятия предложения');
+            }
         } catch (error) {
+            console.error('❌ Ошибка принятия предложения:', error);
             this.showNotification('Ошибка: ' + error.message, 'error');
         }
     }
@@ -570,10 +589,40 @@ export class ModalManager {
         }
 
         try {
-            // Здесь должна быть логика отклонения предложения
-            this.showNotification('Предложение отклонено', 'success');
-            this.close('reject-proposal-modal');
+            console.log('❌ Отклонение предложения:', proposalId);
+            
+            // Формируем данные для отправки
+            const data = {
+                reason: comment || 'Не указано',
+                reason_category: reason,
+                custom_reason: comment || ''
+            };
+
+            // Отправляем запрос на API
+            const response = await fetch(`/api/proposals/${proposalId}/reject`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Telegram-User-Id': window.getTelegramUserId?.() || '373086959'
+                },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.success) {
+                this.showNotification('❌ Предложение отклонено', 'success');
+                this.close('reject-proposal-modal');
+                
+                // Обновляем список офферов
+                if (window.offersManager?.loadAvailableOffers) {
+                    setTimeout(() => window.offersManager.loadAvailableOffers(), 500);
+                }
+            } else {
+                throw new Error(result.message || 'Ошибка отклонения предложения');
+            }
         } catch (error) {
+            console.error('❌ Ошибка отклонения предложения:', error);
             this.showNotification('Ошибка: ' + error.message, 'error');
         }
     }

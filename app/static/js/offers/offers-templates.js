@@ -99,8 +99,18 @@ export const OffersTemplates = {
     getOfferStatusButtons(offer) {
         const status = offer.status || 'draft';
         const offerId = offer.id;
+        const proposalId = offer.proposal_id; // ID предложения для владельцев каналов
         let buttons = [];
 
+        // Если это предложение для владельца канала (есть proposal_id и статус sent)
+        if (proposalId && offer.proposal_status === 'sent') {
+            buttons.push(this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offerId}')`, 'outline', 'sm'));
+            buttons.push(this.button('✅ Принять', `acceptProposal('${proposalId}', '${offer.title || 'Оффер'}')`, 'success', 'sm'));
+            buttons.push(this.button('❌ Отклонить', `rejectProposal('${proposalId}', '${offer.title || 'Оффер'}')`, 'danger', 'sm'));
+            return buttons.join('');
+        }
+
+        // Обычная логика для владельцев офферов
         // Кнопка "Просмотр" всегда доступна
         buttons.push(this.button('👁️ Просмотр', `window.offersManager?.showOfferDetails?.('${offerId}')`, 'outline', 'sm'));
 
