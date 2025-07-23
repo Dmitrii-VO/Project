@@ -1,0 +1,232 @@
+# Docker Compose для Production окружения
+version: '3.8'
+
+services:
+  # PostgreSQL Database с репликацией
+  postgres_master:
+    image: postgres:15
+    container_name: telegram_postgres_master
+    environment:
+      POSTGRES_DB: telegram_mini_app
+      POSTGRES_USER: telegram_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: ${POSTGRES_REPLICATION_PASSWORD}
+    volumes:
+      - postgres_master_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+      - ./config/postgresql/master.conf:/etc/postgresql/postgresql.conf
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  postgres_replica:
+    image: postgres:15
+    container_name: telegram_postgres_replica
+    environment:
+      PGUSER: ${POSTGRES_USER:-telegram_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_MASTER_USER: ${POSTGRES_USER:-telegram_user}
+      POSTGRES_MASTER_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_MASTER_HOST: postgres_master
+    volumes:
+      - postgres_replica_data:/var/lib/postgresql/data
+    command: |
+      bash -c "
+      until pg_basebackup --pgdata=/var/lib/postgresql/data -R --slot=replication_slot --host=postgres_master --port=5432
+      do
+        echo 'Waiting for master to be available'
+        sleep 1s
+      done
+      echo 'Streaming from master'
+      postgres
+      "
+    depends_on:
+      - postgres_master
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Redis Cluster
+  redis_master:
+    image: redis:7-alpine
+    container_name: telegram_redis_master
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_master_data:/data
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  redis_replica:
+    image: redis:7-alpine
+    container_name: telegram_redis_replica
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --replicaof redis_master 6379
+    volumes:
+      - redis_replica_data:/data
+    depends_on:
+      - redis_master
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Main Application - 3 replicas для высокой доступности
+  main_app:
+    image: ${IMAGE_TAG:-ghcr.io/your-username/telegram-mini-app:latest}
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD}@postgres_master:5432/telegram_mini_app
+      - DATABASE_REPLICA_URL=postgresql://telegram_user:${POSTGRES_PASSWORD}@postgres_replica:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis_master:6379/0
+      - BOT_TOKEN=${BOT_TOKEN}
+      - SECRET_KEY=${SECRET_KEY}
+      - WEBAPP_URL=${WEBAPP_URL:-https://telegram-mini-app.com}
+    depends_on:
+      - postgres_master
+      - redis_master
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+      update_config:
+        parallelism: 1
+        delay: 30s
+        failure_action: rollback
+        order: start-first
+      rollback_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: telegram_nginx_production
+    volumes:
+      - ./nginx/nginx.production.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./ssl:/etc/nginx/ssl
+      - ./app/static:/var/www/static
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - main_app
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+  # Monitoring stack
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: telegram_prometheus_prod
+    volumes:
+      - ./monitoring/prometheus.prod.yml:/etc/prometheus/prometheus.yml
+      - prometheus_prod_data:/prometheus
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: telegram_grafana_prod
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana_prod_data:/var/lib/grafana
+      - ./monitoring/grafana/prod-dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Log aggregation
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: telegram_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: telegram_kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Backup service
+  backup:
+    image: prodrigestivill/postgres-backup-local
+    container_name: telegram_backup
+    environment:
+      - POSTGRES_HOST=postgres_master
+      - POSTGRES_DB=telegram_mini_app
+      - POSTGRES_USER=telegram_user
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - BACKUP_KEEP_DAYS=30
+      - BACKUP_KEEP_WEEKS=8
+      - BACKUP_KEEP_MONTHS=12
+      - HEALTHCHECK_PORT=8080
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      - postgres_master
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+networks:
+  telegram_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: telegram_prod
+
+volumes:
+  postgres_master_data:
+    driver: local
+  postgres_replica_data:
+    driver: local
+  redis_master_data:
+    driver: local
+  redis_replica_data:
+    driver: local
+  prometheus_prod_data:
+    driver: local
+  grafana_prod_data:
+    driver: local
+  elasticsearch_data:
+    driver: local

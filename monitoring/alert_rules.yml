@@ -1,0 +1,135 @@
+# Alert Rules для Telegram Mini App
+groups:
+  - name: telegram_app_alerts
+    rules:
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: (rate(flask_http_request_exceptions_total[5m]) / rate(flask_http_request_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value | humanizePercentage }} for the last 5 minutes"
+
+      # High Response Time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(flask_http_request_duration_seconds_bucket[5m])) > 2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s"
+
+      # Database Connection Issues
+      - alert: DatabaseConnectionDown
+        expr: up{job="postgresql"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database is not responding"
+
+      # Redis Connection Issues
+      - alert: RedisConnectionDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis cache is not responding"
+
+      # High Memory Usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is {{ $value | humanizePercentage }}"
+
+      # High CPU Usage
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is {{ $value }}%"
+
+      # Disk Space Running Low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space running low"
+          description: "Disk space is {{ $value | humanizePercentage }} full"
+
+      # Too Many Active Users
+      - alert: TooManyActiveUsers
+        expr: telegram_app_active_users > 1000
+        for: 2m
+        labels:
+          severity: info
+        annotations:
+          summary: "High user activity"
+          description: "{{ $value }} active users detected"
+
+      # Failed Telegram API Calls
+      - alert: TelegramAPIFailures
+        expr: rate(telegram_bot_api_errors_total[5m]) > 0.1
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Telegram API failures"
+          description: "{{ $value }} Telegram API errors per second"
+
+      # Event Processing Lag
+      - alert: EventProcessingLag
+        expr: telegram_app_event_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Event processing lag"
+          description: "{{ $value }} events in queue"
+
+  - name: business_metrics_alerts
+    rules:
+      # No New Users
+      - alert: NoNewUsers
+        expr: increase(telegram_app_new_users_total[1h]) == 0
+        for: 2h
+        labels:
+          severity: info
+        annotations:
+          summary: "No new user registrations"
+          description: "No new users registered in the last 2 hours"
+
+      # High Offer Rejection Rate
+      - alert: HighOfferRejectionRate
+        expr: (increase(telegram_app_offers_rejected_total[1h]) / increase(telegram_app_offers_created_total[1h])) > 0.8
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "High offer rejection rate"
+          description: "{{ $value | humanizePercentage }} of offers are being rejected"
+
+      # Payment Processing Issues
+      - alert: PaymentProcessingIssues
+        expr: increase(telegram_app_payments_failed_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Payment processing issues"
+          description: "{{ $value }} payment failures in the last 10 minutes"

@@ -1,0 +1,265 @@
+# Docker Compose для Telegram Mini App - Microservices
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15
+    container_name: telegram_postgres
+    environment:
+      POSTGRES_DB: telegram_mini_app
+      POSTGRES_USER: telegram_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_2025}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=ru_RU.UTF-8"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/migrations:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telegram_user -d telegram_mini_app"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis для кэширования и сессий
+  redis:
+    image: redis:7-alpine
+    container_name: telegram_redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_2025}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx как API Gateway и Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: telegram_nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./app/static:/var/www/static
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - main_app
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Основное приложение (monolith для начала)
+  main_app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram_main_app
+    environment:
+      - FLASK_APP=working_app.py
+      - FLASK_ENV=production
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_2025}@postgres:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_2025}@redis:6379/0
+      - BOT_TOKEN=${BOT_TOKEN}
+      - SECRET_KEY=${SECRET_KEY:-super-secret-key-2025}
+      - WEBAPP_URL=${WEBAPP_URL:-http://localhost}
+    volumes:
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+  # User Service (микросервис пользователей)
+  user_service:
+    build:
+      context: ./services/user_service
+      dockerfile: Dockerfile
+    container_name: telegram_user_service
+    environment:
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_2025}@postgres:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_2025}@redis:6379/1
+      - SERVICE_PORT=5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telegram_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Channel Service (микросервис каналов)
+  channel_service:
+    build:
+      context: ./services/channel_service
+      dockerfile: Dockerfile
+    container_name: telegram_channel_service
+    environment:
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_2025}@postgres:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_2025}@redis:6379/2
+      - SERVICE_PORT=5002
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Offer Service (микросервис офферов)
+  offer_service:
+    build:
+      context: ./services/offer_service
+      dockerfile: Dockerfile
+    container_name: telegram_offer_service
+    environment:
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_2025}@postgres:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_2025}@redis:6379/3
+      - SERVICE_PORT=5003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Analytics Service (микросервис аналитики)
+  analytics_service:
+    build:
+      context: ./services/analytics_service
+      dockerfile: Dockerfile
+    container_name: telegram_analytics_service
+    environment:
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_2025}@postgres:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_2025}@redis:6379/4
+      - SERVICE_PORT=5004
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Notification Service (микросервис уведомлений)
+  notification_service:
+    build:
+      context: ./services/notification_service
+      dockerfile: Dockerfile
+    container_name: telegram_notification_service
+    environment:
+      - DATABASE_URL=postgresql://telegram_user:${POSTGRES_PASSWORD:-secure_password_2025}@postgres:5432/telegram_mini_app
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_password_2025}@redis:6379/5
+      - BOT_TOKEN=${BOT_TOKEN}
+      - SERVICE_PORT=5005
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Message Queue для Event-driven архитектуры
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: telegram_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: telegram
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq_password_2025}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Monitoring с Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: telegram_prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+  # Grafana для визуализации метрик
+  grafana:
+    image: grafana/grafana:latest
+    container_name: telegram_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin123}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - telegram_network
+    restart: unless-stopped
+
+networks:
+  telegram_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local

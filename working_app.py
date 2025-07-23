@@ -26,6 +26,17 @@ from app.api.campaigns_management import campaigns_bp
 from app.telegram.telegram_bot_commands import TelegramBotExtension
 from app.telegram.telegram_channel_parser import TelegramChannelParser
 from app.telegram.telegram_notifications import TelegramNotificationService
+from app.security import (
+    setup_csrf_protection, 
+    setup_rate_limiting, 
+    setup_security_headers,
+    SecurityAuditLogger
+)
+from app.performance import (
+    setup_caching,
+    setup_performance_monitoring,
+    DatabaseOptimizer
+)
 
 try:
     from dotenv import load_dotenv
@@ -63,6 +74,8 @@ def create_app() -> Flask:
 
     # Инициализация компонентов
     register_blueprints(app)
+    register_security(app)
+    register_performance(app)
     register_middleware(app)
     register_error_handlers(app)
     register_system_routes(app)
@@ -95,7 +108,186 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(campaigns_bp)
     app.register_blueprint(monitoring_statistics_bp,
                            url_prefix='/api/monitoring_statistics')
-                           
+
+
+# === БЕЗОПАСНОСТЬ ===
+def register_security(app: Flask) -> None:
+    """Регистрация модулей безопасности"""
+    try:
+        # 1. CSRF Protection - защита от межсайтовых запросов
+        csrf = setup_csrf_protection(app)
+        logger.info("✅ CSRF Protection настроена")
+        
+        # 2. Rate Limiting - ограничение частоты запросов
+        rate_limiter = setup_rate_limiting(app)
+        logger.info("✅ Rate Limiting настроен")
+        
+        # 3. Security Headers - заголовки безопасности
+        security_headers = setup_security_headers(app)
+        logger.info("✅ Security Headers настроены")
+        
+        # 4. Audit Logger - аудит действий пользователей
+        audit_logger = SecurityAuditLogger(app, db_path=AppConfig.DATABASE_PATH)
+        logger.info("✅ Security Audit Logger настроен")
+        
+        # Добавляем эндпоинты безопасности
+        @app.route('/api/security/dashboard', methods=['GET'])
+        def security_dashboard():
+            """Дашборд безопасности (только для администратора)"""
+            user_id = request.headers.get('X-Telegram-User-Id')
+            
+            # Проверяем права администратора
+            if user_id != '373086959':  # ID администратора
+                return jsonify({
+                    'error': 'Access Denied',
+                    'message': 'Administrator access required'
+                }), 403
+            
+            try:
+                dashboard_data = audit_logger.get_security_dashboard_data()
+                return jsonify({
+                    'success': True,
+                    'data': dashboard_data
+                })
+            except Exception as e:
+                logger.error(f"Security dashboard error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to load security dashboard'
+                }), 500
+        
+        @app.route('/api/security/user-activity/<user_id>', methods=['GET'])
+        def user_activity_summary(user_id):
+            """Сводка активности пользователя (только для администратора)"""
+            requester_id = request.headers.get('X-Telegram-User-Id')
+            
+            # Проверяем права (администратор или сам пользователь)
+            if requester_id != '373086959' and requester_id != user_id:
+                return jsonify({
+                    'error': 'Access Denied',
+                    'message': 'Insufficient permissions'
+                }), 403
+            
+            try:
+                hours = int(request.args.get('hours', 24))
+                activity_data = audit_logger.get_user_activity_summary(user_id, hours)
+                return jsonify({
+                    'success': True,
+                    'data': activity_data
+                })
+            except Exception as e:
+                logger.error(f"User activity summary error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to load user activity'
+                }), 500
+        
+        logger.info("✅ Модули безопасности зарегистрированы")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка настройки безопасности: {e}")
+        # Не останавливаем приложение, но логируем критическую ошибку
+        logger.critical("🚨 ПРИЛОЖЕНИЕ ЗАПУЩЕНО БЕЗ ПОЛНОЙ ЗАЩИТЫ БЕЗОПАСНОСТИ!")
+
+
+# === ПРОИЗВОДИТЕЛЬНОСТЬ ===
+def register_performance(app: Flask) -> None:
+    """Регистрация модулей производительности"""
+    try:
+        # 1. Кэширование - Redis с fallback на память
+        cache_manager = setup_caching(app)
+        logger.info("✅ Кэширование настроено")
+        
+        # 2. Оптимизация базы данных - индексы и оптимизированные запросы
+        db_optimizer = DatabaseOptimizer(app, db_path=AppConfig.DATABASE_PATH)
+        logger.info("✅ Оптимизация БД настроена")
+        
+        # 3. Мониторинг производительности - метрики API и БД
+        performance_monitor = setup_performance_monitoring(app)
+        logger.info("✅ Мониторинг производительности настроен")
+        
+        # Добавляем сводный endpoint производительности
+        @app.route('/api/performance/dashboard', methods=['GET'])
+        def performance_dashboard():
+            """Дашборд производительности (только для администратора)"""
+            user_id = request.headers.get('X-Telegram-User-Id')
+            
+            # Проверяем права администратора
+            if user_id != '373086959':
+                return jsonify({
+                    'error': 'Access Denied',
+                    'message': 'Administrator access required'
+                }), 403
+            
+            try:
+                # Собираем данные от всех модулей
+                dashboard_data = {
+                    'cache_stats': cache_manager.get_stats(),
+                    'performance_metrics': performance_monitor.get_current_metrics(),
+                    'slow_queries': db_optimizer.get_slow_queries_report()[:10],
+                    'system_info': {
+                        'cache_backend': 'redis' if cache_manager.redis_client else 'memory',
+                        'db_optimization': 'enabled',
+                        'monitoring': 'active'
+                    }
+                }
+                
+                return jsonify({
+                    'success': True,
+                    'data': dashboard_data,
+                    'generated_at': datetime.utcnow().isoformat()
+                })
+            except Exception as e:
+                logger.error(f"Performance dashboard error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to load performance dashboard'
+                }), 500
+        
+        @app.route('/api/performance/optimize', methods=['POST'])
+        def optimize_performance():
+            """Запуск оптимизации производительности (администратор)"""
+            user_id = request.headers.get('X-Telegram-User-Id')
+            
+            if user_id != '373086959':
+                return jsonify({
+                    'error': 'Access Denied',
+                    'message': 'Administrator access required'
+                }), 403
+            
+            try:
+                # Запускаем обслуживание БД
+                db_optimizer.optimize_database_maintenance()
+                
+                # Очищаем старые данные из кэша
+                cache_manager.invalidate_pattern("*old*")
+                
+                # Сбрасываем метрики производительности
+                performance_monitor.reset_current_period()
+                
+                return jsonify({
+                    'success': True,
+                    'message': 'Performance optimization completed',
+                    'actions': [
+                        'Database maintenance executed',
+                        'Cache cleaned up',
+                        'Performance metrics reset'
+                    ]
+                })
+            except Exception as e:
+                logger.error(f"Performance optimization error: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to optimize performance'
+                }), 500
+        
+        logger.info("✅ Модули производительности зарегистрированы")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка настройки производительности: {e}")
+        # Не останавливаем приложение, но логируем критическую ошибку
+        logger.critical("🚨 ПРИЛОЖЕНИЕ ЗАПУЩЕНО БЕЗ ПОЛНОЙ ОПТИМИЗАЦИИ ПРОИЗВОДИТЕЛЬНОСТИ!")
+
 
 # === MIDDLEWARE ===
 def register_middleware(app: Flask) -> None:
