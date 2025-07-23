@@ -1,0 +1,357 @@
+# CI/CD Pipeline для Telegram Mini App
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ published ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Проверка безопасности и качества кода
+  security-scan:
+    name: Security & Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install bandit safety flake8 black isort
+
+      - name: Security scan with Bandit
+        run: |
+          bandit -r app/ -f json -o bandit-report.json || true
+          bandit -r app/ --severity-level medium
+
+      - name: Check for vulnerabilities with Safety
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check
+
+      - name: Code quality with Flake8
+        run: |
+          flake8 app/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 app/ --count --max-complexity=10 --max-line-length=100 --statistics
+
+      - name: Code formatting with Black
+        run: |
+          black --check --diff app/
+
+      - name: Import sorting with isort
+        run: |
+          isort --check-only --diff app/
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # Тестирование приложения
+  test:
+    name: Test Application
+    runs-on: ubuntu-latest
+    needs: security-scan
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: telegram_test
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-flask pytest-cov pytest-mock
+
+      - name: Run database migrations
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/telegram_test
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          python database/migrate.py --test-mode
+
+      - name: Run unit tests
+        env:
+          DATABASE_URL: postgresql://test_user:test_password@localhost:5432/telegram_test
+          REDIS_URL: redis://localhost:6379/0
+          BOT_TOKEN: test_token
+          SECRET_KEY: test_secret_key
+        run: |
+          pytest tests/ -v --cov=app --cov-report=xml --cov-report=html
+
+      - name: Upload test coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results
+          path: |
+            coverage.xml
+            htmlcov/
+
+  # Сборка Docker образов
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
+            BUILD_VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
+            BUILD_COMMIT=${{ github.sha }}
+
+  # Деплой в staging окружение
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/develop'
+    environment:
+      name: staging
+      url: https://staging.telegram-mini-app.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        env:
+          STAGING_HOST: ${{ secrets.STAGING_HOST }}
+          STAGING_USER: ${{ secrets.STAGING_USER }}
+          STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+          IMAGE_TAG: ${{ needs.build.outputs.image-tags }}
+        run: |
+          echo "$STAGING_SSH_KEY" > staging_key
+          chmod 600 staging_key
+          
+          scp -i staging_key -o StrictHostKeyChecking=no docker-compose.staging.yml $STAGING_USER@$STAGING_HOST:~/
+          
+          ssh -i staging_key -o StrictHostKeyChecking=no $STAGING_USER@$STAGING_HOST << EOF
+            export IMAGE_TAG="$IMAGE_TAG"
+            docker-compose -f docker-compose.staging.yml pull
+            docker-compose -f docker-compose.staging.yml up -d
+            docker system prune -af
+          EOF
+
+      - name: Run staging tests
+        env:
+          STAGING_URL: https://staging.telegram-mini-app.com
+        run: |
+          curl -f $STAGING_URL/health || exit 1
+          # Добавить дополнительные integration tests
+
+  # Деплой в production окружение
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'release'
+    environment:
+      name: production
+      url: https://telegram-mini-app.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to production
+        env:
+          PRODUCTION_HOST: ${{ secrets.PRODUCTION_HOST }}
+          PRODUCTION_USER: ${{ secrets.PRODUCTION_USER }}
+          PRODUCTION_SSH_KEY: ${{ secrets.PRODUCTION_SSH_KEY }}
+          IMAGE_TAG: ${{ needs.build.outputs.image-tags }}
+        run: |
+          echo "$PRODUCTION_SSH_KEY" > production_key
+          chmod 600 production_key
+          
+          # Blue-Green deployment strategy
+          scp -i production_key -o StrictHostKeyChecking=no docker-compose.production.yml $PRODUCTION_USER@$PRODUCTION_HOST:~/
+          
+          ssh -i production_key -o StrictHostKeyChecking=no $PRODUCTION_USER@$PRODUCTION_HOST << EOF
+            export IMAGE_TAG="$IMAGE_TAG"
+            
+            # Backup current deployment
+            docker-compose -f docker-compose.production.yml config > backup-$(date +%Y%m%d-%H%M%S).yml
+            
+            # Pull new images
+            docker-compose -f docker-compose.production.yml pull
+            
+            # Run database migrations
+            docker-compose -f docker-compose.production.yml run --rm main_app python database/migrate.py --production
+            
+            # Rolling update
+            docker-compose -f docker-compose.production.yml up -d --no-deps main_app
+            sleep 30
+            
+            # Health check
+            curl -f http://localhost/health || (docker-compose -f docker-compose.production.yml logs main_app && exit 1)
+            
+            # Update other services
+            docker-compose -f docker-compose.production.yml up -d
+            
+            # Cleanup
+            docker system prune -af
+          EOF
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          curl -X POST ${{ secrets.TELEGRAM_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🚀 Deployment to production completed successfully!\nVersion: ${{ github.event.release.tag_name }}\nCommit: ${{ github.sha }}"
+            }'
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          curl -X POST ${{ secrets.TELEGRAM_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "❌ Deployment to production failed!\nVersion: ${{ github.event.release.tag_name }}\nCommit: ${{ github.sha }}\nCheck the logs for details."
+            }'
+
+  # Мониторинг и алерты
+  monitoring:
+    name: Setup Monitoring
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always() && (needs.deploy-staging.result == 'success' || needs.deploy-production.result == 'success')
+
+    steps:
+      - name: Health check staging
+        if: needs.deploy-staging.result == 'success'
+        run: |
+          for i in {1..5}; do
+            if curl -f https://staging.telegram-mini-app.com/health; then
+              echo "✅ Staging is healthy"
+              break
+            else
+              echo "⚠️ Staging health check failed, attempt $i/5"
+              sleep 30
+            fi
+          done
+
+      - name: Health check production
+        if: needs.deploy-production.result == 'success'
+        run: |
+          for i in {1..5}; do
+            if curl -f https://telegram-mini-app.com/health; then
+              echo "✅ Production is healthy"
+              break
+            else
+              echo "❌ Production health check failed, attempt $i/5"
+              sleep 30
+            fi
+          done
+
+      - name: Update monitoring dashboard
+        env:
+          GRAFANA_API_KEY: ${{ secrets.GRAFANA_API_KEY }}
+          GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
+        run: |
+          # Update Grafana annotations about deployment
+          curl -X POST "$GRAFANA_URL/api/annotations" \
+            -H "Authorization: Bearer $GRAFANA_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "Deployment: ${{ github.event.release.tag_name || github.ref_name }}",
+              "tags": ["deployment", "ci-cd"],
+              "time": '$(date +%s000)'
+            }'
