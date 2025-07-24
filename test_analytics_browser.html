@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест аналитики в браузере</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .info { background-color: #d1ecf1; color: #0c5460; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .data-display {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+        }
+        .metric {
+            display: inline-block;
+            margin: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            min-width: 150px;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .metric-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест загрузки данных аналитики</h1>
+        
+        <div class="status info">
+            <strong>Информация:</strong> Эта страница тестирует API аналитики напрямую в браузере
+        </div>
+
+        <div style="margin: 20px 0;">
+            <button onclick="testAnalyticsAPI()">🔄 Тестировать API аналитики</button>
+            <button onclick="testDirectFetch()">📡 Прямой запрос к API</button>
+            <button onclick="clearLogs()">🗑️ Очистить логи</button>
+        </div>
+
+        <div id="status-container">
+            <!-- Здесь будут отображаться статусы -->
+        </div>
+
+        <div id="data-display" class="data-display" style="display: none;">
+            <h3>📊 Полученные данные:</h3>
+            <div id="metrics-container"></div>
+            <h4>🔍 Raw JSON:</h4>
+            <pre id="raw-json"></pre>
+        </div>
+
+        <div id="logs-container">
+            <h3>📋 Логи консоли:</h3>
+            <pre id="console-logs"></pre>
+        </div>
+    </div>
+
+    <script>
+        let originalConsoleLog = console.log;
+        let originalConsoleError = console.error;
+        let logs = [];
+
+        // Перехватываем консольные сообщения
+        console.log = function(...args) {
+            logs.push({type: 'log', message: args.join(' '), time: new Date().toLocaleTimeString()});
+            updateConsoleLogs();
+            originalConsoleLog.apply(console, args);
+        };
+
+        console.error = function(...args) {
+            logs.push({type: 'error', message: args.join(' '), time: new Date().toLocaleTimeString()});
+            updateConsoleLogs();
+            originalConsoleError.apply(console, args);
+        };
+
+        function updateConsoleLogs() {
+            const logsElement = document.getElementById('console-logs');
+            logsElement.textContent = logs.map(log => 
+                `[${log.time}] ${log.type.toUpperCase()}: ${log.message}`
+            ).join('\n');
+            logsElement.scrollTop = logsElement.scrollHeight;
+        }
+
+        function addStatus(message, type = 'info') {
+            const container = document.getElementById('status-container');
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            container.appendChild(statusDiv);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLogs() {
+            logs = [];
+            document.getElementById('console-logs').textContent = '';
+            document.getElementById('status-container').innerHTML = '';
+            document.getElementById('data-display').style.display = 'none';
+        }
+
+        async function testDirectFetch() {
+            addStatus('🔄 Запуск прямого теста API...', 'info');
+            
+            try {
+                console.log('📡 Начинаем прямой запрос к /api/analytics/dashboard');
+                
+                const response = await fetch('/api/analytics/dashboard', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-Web-App-Data': 'test'
+                    }
+                });
+
+                console.log('📞 Получен ответ:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    ok: response.ok,
+                    headers: Object.fromEntries(response.headers.entries())
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}\nОтвет сервера: ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log('📊 Данные получены:', data);
+
+                if (data.success) {
+                    addStatus('✅ API работает корректно!', 'success');
+                    displayData(data);
+                } else {
+                    addStatus(`❌ API вернул ошибку: ${data.error || 'Неизвестная ошибка'}`, 'error');
+                }
+
+            } catch (error) {
+                console.error('❌ Ошибка прямого запроса:', error);
+                addStatus(`❌ Ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        async function testAnalyticsAPI() {
+            addStatus('🚀 Запуск теста через AnalyticsManager...', 'info');
+            
+            try {
+                // Симулируем класс AnalyticsManager
+                const analytics = new AnalyticsManager();
+                await analytics.loadAnalyticsData();
+                
+                addStatus('✅ AnalyticsManager работает!', 'success');
+                displayData(analytics.data);
+                
+            } catch (error) {
+                console.error('❌ Ошибка AnalyticsManager:', error);
+                addStatus(`❌ AnalyticsManager ошибка: ${error.message}`, 'error');
+            }
+        }
+
+        function displayData(data) {
+            const dataDisplay = document.getElementById('data-display');
+            const metricsContainer = document.getElementById('metrics-container');
+            const rawJsonElement = document.getElementById('raw-json');
+
+            // Показываем блок с данными
+            dataDisplay.style.display = 'block';
+
+            // Отображаем метрики
+            const stats = data.data || {};
+            metricsContainer.innerHTML = `
+                <div class="metric">
+                    <div class="metric-value">${stats.total_views || 0}</div>
+                    <div class="metric-label">Всего просмотров</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">${(stats.click_rate || 0).toFixed(1)}%</div>
+                    <div class="metric-label">CTR</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">₽${stats.total_revenue || 0}</div>
+                    <div class="metric-label">Доход</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">${(stats.conversion_rate || 0).toFixed(1)}%</div>
+                    <div class="metric-label">Конверсия</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">${stats.channels_count || 0}</div>
+                    <div class="metric-label">Каналы</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-value">${stats.offers_count || 0}</div>
+                    <div class="metric-label">Офферы</div>
+                </div>
+            `;
+
+            // Показываем raw JSON
+            rawJsonElement.textContent = JSON.stringify(data, null, 2);
+        }
+
+        // Упрощенная версия AnalyticsManager для тестирования
+        class AnalyticsManager {
+            constructor() {
+                this.data = {};
+                console.log('📊 Test AnalyticsManager создан');
+            }
+
+            async loadAnalyticsData() {
+                console.log('📡 Загрузка данных через test AnalyticsManager...');
+                
+                const response = await fetch('/api/analytics/dashboard', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Telegram-Web-App-Data': 'test'
+                    }
+                });
+
+                console.log('📞 Test Manager - ответ получен:', {
+                    status: response.status,
+                    ok: response.ok
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+
+                const result = await response.json();
+                console.log('📊 Test Manager - данные:', result);
+
+                if (!result.success) {
+                    throw new Error(result.error || 'API error');
+                }
+
+                this.data = result;
+                return this.data;
+            }
+        }
+
+        // Автоматически запускаем тест при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Тестовая страница загружена');
+            addStatus('📄 Страница загружена. Нажмите кнопку для тестирования API.', 'info');
+        });
+    </script>
+</body>
+</html>

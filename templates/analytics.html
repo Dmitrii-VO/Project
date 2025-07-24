@@ -5,6 +5,8 @@
 {% block extra_css %}
     <!-- Chart.js для графиков -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <!-- Стили для вкладок аналитики -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/analytics-tabs.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -120,23 +122,78 @@
 
     <!-- Tab: По каналам -->
     <div class="tabs-content" id="channels">
+        <!-- Сводные метрики каналов -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📺</div>
+                <div class="stat-number" id="channels-total-count">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Всего каналов</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">✅</div>
+                <div class="stat-number" id="channels-verified-count">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Верифицированных</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">👥</div>
+                <div class="stat-number" id="channels-total-subscribers">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Общий охват</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-number" id="channels-total-earned">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Общий доход</div>
+            </div>
+        </div>
+
+        <!-- Таблица каналов -->
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">📺 Аналитика по каналам</h3>
-                <p class="card-subtitle">Детальная статистика каждого канала</p>
+                <h3 class="card-title">📊 Детальная статистика каналов</h3>
+                <p class="card-subtitle">Производительность каждого канала</p>
             </div>
             <div class="card-body">
-                <div class="empty-state">
-                    <div class="stat-icon">📺</div>
-                    <h3>Аналитика по каналам</h3>
-                    <p>Здесь будет отображаться детальная аналитика по каждому из ваших каналов.</p>
-                    <div class="notification notification-info">
-                        <div class="notification-content">
-                            <div class="notification-title">В разработке</div>
-                            <div class="notification-message">
-                                Скоро здесь появится подробная статистика по доходам, охватам и эффективности каждого канала.
-                            </div>
-                        </div>
+                <div id="channels-loading" class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Загрузка данных каналов...</p>
+                </div>
+                <div id="channels-error" class="error-state" style="display: none;">
+                    <div class="error-icon">❌</div>
+                    <p>Ошибка загрузки данных каналов</p>
+                    <button onclick="loadChannelsData()" class="btn-retry">Попробовать снова</button>
+                </div>
+                <div id="channels-content" style="display: none;">
+                    <div class="table-container">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Канал</th>
+                                    <th>Подписчики</th>
+                                    <th>Статус</th>
+                                    <th>Предложения</th>
+                                    <th>Принято</th>
+                                    <th>CTR</th>
+                                    <th>Заработано</th>
+                                </tr>
+                            </thead>
+                            <tbody id="channels-table-body">
+                                <!-- Данные будут загружены через JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="channels-empty" class="empty-state" style="display: none;">
+                        <div class="stat-icon">📺</div>
+                        <h3>Нет каналов</h3>
+                        <p>У вас пока нет добавленных каналов для анализа.</p>
+                        <a href="/channels" class="btn-primary">Добавить канал</a>
                     </div>
                 </div>
             </div>
@@ -145,23 +202,79 @@
 
     <!-- Tab: По офферам -->
     <div class="tabs-content" id="offers">
+        <!-- Сводные метрики офферов -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">📢</div>
+                <div class="stat-number" id="offers-total-count">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Всего офферов</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">🟢</div>
+                <div class="stat-number" id="offers-active-count">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Активных</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💸</div>
+                <div class="stat-number" id="offers-total-spent">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Общие расходы</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-number" id="offers-avg-ctr">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Средний CTR</div>
+            </div>
+        </div>
+
+        <!-- Таблица офферов -->
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">📢 Аналитика по офферам</h3>
+                <h3 class="card-title">📊 Детальная статистика офферов</h3>
                 <p class="card-subtitle">Эффективность рекламных кампаний</p>
             </div>
             <div class="card-body">
-                <div class="empty-state">
-                    <div class="stat-icon">📢</div>
-                    <h3>Аналитика по офферам</h3>
-                    <p>Здесь будет отображаться детальная аналитика по эффективности ваших рекламных кампаний.</p>
-                    <div class="notification notification-info">
-                        <div class="notification-content">
-                            <div class="notification-title">В разработке</div>
-                            <div class="notification-message">
-                                Скоро здесь появится подробная статистика по CTR, конверсии и ROI ваших офферов.
-                            </div>
-                        </div>
+                <div id="offers-loading" class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Загрузка данных офферов...</p>
+                </div>
+                <div id="offers-error" class="error-state" style="display: none;">
+                    <div class="error-icon">❌</div>
+                    <p>Ошибка загрузки данных офферов</p>
+                    <button onclick="loadOffersData()" class="btn-retry">Попробовать снова</button>
+                </div>
+                <div id="offers-content" style="display: none;">
+                    <div class="table-container">
+                        <table class="analytics-table">
+                            <thead>
+                                <tr>
+                                    <th>Оффер</th>
+                                    <th>Категория</th>
+                                    <th>Цена</th>
+                                    <th>Статус</th>
+                                    <th>Отклики</th>
+                                    <th>CTR</th>
+                                    <th>ROI</th>
+                                    <th>Потрачено</th>
+                                </tr>
+                            </thead>
+                            <tbody id="offers-table-body">
+                                <!-- Данные будут загружены через JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="offers-empty" class="empty-state" style="display: none;">
+                        <div class="stat-icon">📢</div>
+                        <h3>Нет офферов</h3>
+                        <p>У вас пока нет созданных офферов для анализа.</p>
+                        <a href="/create-offer" class="btn-primary">Создать оффер</a>
                     </div>
                 </div>
             </div>
@@ -170,23 +283,109 @@
 
     <!-- Tab: Доходы -->
     <div class="tabs-content" id="revenue">
+        <!-- Сводные финансовые метрики -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">💰</div>
+                <div class="stat-number" id="revenue-current-balance">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Текущий баланс</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📈</div>
+                <div class="stat-number" id="revenue-total-earned">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Всего заработано</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">📉</div>
+                <div class="stat-number" id="revenue-total-spent">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Всего потрачено</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">💎</div>
+                <div class="stat-number" id="revenue-net-profit">
+                    <span class="loading-skeleton">Загрузка...</span>
+                </div>
+                <div class="stat-label">Чистая прибыль</div>
+            </div>
+        </div>
+
+        <!-- Графики доходов и расходов -->
+        <div class="stats-grid">
+            <div class="card animate-slide-in">
+                <div class="card-header">
+                    <h3 class="card-title">📊 Динамика доходов</h3>
+                    <p class="card-subtitle">За последние 30 дней</p>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" style="height: 300px;">
+                        <canvas id="revenueChart"></canvas>
+                    </div>
+                    <div id="revenue-chart-loading" class="loading-state">
+                        <p>Загрузка графика доходов...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card animate-slide-in">
+                <div class="card-header">
+                    <h3 class="card-title">📈 Прогноз заработка</h3>
+                    <p class="card-subtitle">Оценка на основе трендов</p>
+                </div>
+                <div class="card-body">
+                    <div class="revenue-projection">
+                        <div class="projection-item">
+                            <span class="projection-label">Прогноз на месяц:</span>
+                            <span class="projection-value" id="revenue-monthly-projection">
+                                <span class="loading-skeleton">Загрузка...</span>
+                            </span>
+                        </div>
+                        <div class="projection-item">
+                            <span class="projection-label">Средний доход в день:</span>
+                            <span class="projection-value" id="revenue-daily-average">
+                                <span class="loading-skeleton">Загрузка...</span>
+                            </span>
+                        </div>
+                        <div class="projection-item">
+                            <span class="projection-label">Тренд:</span>
+                            <span class="projection-value" id="revenue-trend">
+                                <span class="loading-skeleton">Загрузка...</span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Доходы по категориям -->
         <div class="card">
             <div class="card-header">
-                <h3 class="card-title">💸 Финансовая аналитика</h3>
-                <p class="card-subtitle">Доходы и прогнозы</p>
+                <h3 class="card-title">🏷️ Доходы по категориям</h3>
+                <p class="card-subtitle">Распределение заработка по типам офферов</p>
             </div>
             <div class="card-body">
-                <div class="empty-state">
-                    <div class="stat-icon">💸</div>
-                    <h3>Финансовая аналитика</h3>
-                    <p>Здесь будет отображаться детальная финансовая аналитика и прогнозы доходов.</p>
-                    <div class="notification notification-info">
-                        <div class="notification-content">
-                            <div class="notification-title">В разработке</div>
-                            <div class="notification-message">
-                                Скоро здесь появится подробная статистика по доходам, трендам и прогнозам заработка.
-                            </div>
-                        </div>
+                <div id="revenue-loading" class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <p>Загрузка финансовых данных...</p>
+                </div>
+                <div id="revenue-error" class="error-state" style="display: none;">
+                    <div class="error-icon">❌</div>
+                    <p>Ошибка загрузки финансовых данных</p>
+                    <button onclick="loadRevenueData()" class="btn-retry">Попробовать снова</button>
+                </div>
+                <div id="revenue-content" style="display: none;">
+                    <div class="category-revenue-list" id="revenue-categories">
+                        <!-- Данные будут загружены через JavaScript -->
+                    </div>
+                    <div id="revenue-empty" class="empty-state" style="display: none;">
+                        <div class="stat-icon">💰</div>
+                        <h3>Нет финансовых данных</h3>
+                        <p>У вас пока нет завершенных размещений для финансового анализа.</p>
                     </div>
                 </div>
             </div>
@@ -234,8 +433,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Загружаем данные аналитики
-    loadAnalyticsData();
+    // Данные аналитики загружаются через analytics.js
     
     // Инициализируем графики
     initializeCharts();
@@ -246,16 +444,7 @@ function goBack() {
     window.history.back();
 }
 
-// Загрузка данных аналитики
-function loadAnalyticsData() {
-    // Симуляция загрузки данных
-    setTimeout(() => {
-        document.getElementById('total-views').innerHTML = '1,234,567';
-        document.getElementById('click-rate').innerHTML = '3.8%';
-        document.getElementById('total-revenue').innerHTML = '₽ 45,230';
-        document.getElementById('conversion-rate').innerHTML = '2.1%';
-    }, 1000);
-}
+// Загрузка данных аналитики - теперь в analytics.js
 
 // Инициализация графиков
 function initializeCharts() {

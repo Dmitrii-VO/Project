@@ -48,7 +48,7 @@ class TelegramCSRFProtection:
             return
         
         # Пропускаем некоторые публичные API endpoints
-        exempt_paths = ['/api/health', '/api/status']
+        exempt_paths = ['/api/health', '/api/status', '/webhook/telegram']
         if request.path in exempt_paths:
             return
         

@@ -84,50 +84,11 @@
                 <span class="badge badge-success">5 новых</span>
             </div>
             <div class="card-body">
-                <div class="payment-list" id="recent-payments">
-                    <div class="payment-item">
-                        <div class="payment-info">
-                            <div class="payment-title">Оплата за рекламу в @tech_channel</div>
-                            <div class="payment-date">15 июня 2025, 14:32</div>
-                        </div>
-                        <div class="payment-amount success">+₽ 2,500</div>
-                        <div class="badge badge-success">Завершен</div>
-                    </div>
-
-                    <div class="payment-item">
-                        <div class="payment-info">
-                            <div class="payment-title">Комиссия за размещение</div>
-                            <div class="payment-date">14 июня 2025, 10:15</div>
-                        </div>
-                        <div class="payment-amount warning">-₽ 125</div>
-                        <div class="badge badge-success">Завершен</div>
-                    </div>
-
-                    <div class="payment-item">
-                        <div class="payment-info">
-                            <div class="payment-title">Вывод на карту *1234</div>
-                            <div class="payment-date">13 июня 2025, 16:45</div>
-                        </div>
-                        <div class="payment-amount warning">-₽ 10,000</div>
-                        <div class="badge badge-warning">Обработка</div>
-                    </div>
-
-                    <div class="payment-item">
-                        <div class="payment-info">
-                            <div class="payment-title">Доход от @news_channel</div>
-                            <div class="payment-date">12 июня 2025, 09:20</div>
-                        </div>
-                        <div class="payment-amount success">+₽ 1,750</div>
-                        <div class="badge badge-success">Завершен</div>
-                    </div>
-
-                    <div class="payment-item">
-                        <div class="payment-info">
-                            <div class="payment-title">Бонус за активность</div>
-                            <div class="payment-date">11 июня 2025, 12:00</div>
-                        </div>
-                        <div class="payment-amount success">+₽ 500</div>
-                        <div class="badge badge-success">Завершен</div>
+                <div class="payment-list" id="transaction-history">
+                    <!-- Транзакции будут загружены через JavaScript -->
+                    <div class="loading-state">
+                        <div class="loading-spinner"></div>
+                        <p>Загрузка истории транзакций...</p>
                     </div>
                 </div>
             </div>
@@ -244,91 +205,5 @@
 {% endblock %}
 
 {% block extra_scripts %}
-<script>
-// Функция переключения табов
-function switchTab(tabName) {
-    // Удаляем активный класс со всех табов
-    document.querySelectorAll('.tabs-nav a').forEach(tab => {
-        tab.classList.remove('active');
-    });
-    
-    // Скрываем все содержимое табов
-    document.querySelectorAll('.tabs-content').forEach(content => {
-        content.classList.remove('active');
-    });
-    
-    // Активируем нужный таб
-    const activeTab = document.querySelector(`[data-tab="${tabName}"]`);
-    const activeContent = document.getElementById(tabName);
-    
-    if (activeTab) activeTab.classList.add('active');
-    if (activeContent) activeContent.classList.add('active');
-}
-
-// Обработчики кликов по табам
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('💳 Страница платежей инициализирована');
-
-    // Настраиваем переключение табов
-    document.querySelectorAll('.tabs-nav a').forEach(tab => {
-        tab.addEventListener('click', function(e) {
-            e.preventDefault();
-            const tabName = this.getAttribute('data-tab');
-            switchTab(tabName);
-        });
-    });
-
-    // Загружаем данные платежей
-    loadPaymentStats();
-});
-
-// Функция для кнопки "Назад"
-function goBack() {
-    window.history.back();
-}
-
-// Navigation functionality
-function showSection(section) {
-    // Remove active class from all nav cards
-    document.querySelectorAll('.nav-card').forEach(card => {
-        card.classList.remove('active');
-    });
-
-    // Add active class to clicked card
-    event.currentTarget.classList.add('active');
-
-    console.log('Showing section:', section);
-
-    // Here you would typically load data for the selected section
-    // For now, just log the action
-}
-
-// Payment actions
-function requestWithdraw() {
-    if (window.Telegram && window.Telegram.WebApp) {
-        window.Telegram.WebApp.showAlert('Функция вывода средств будет доступна в следующих обновлениях');
-    } else {
-        alert('Функция вывода средств будет доступна в следующих обновлениях');
-    }
-}
-
-function addPaymentMethod() {
-    if (window.Telegram && window.Telegram.WebApp) {
-        window.Telegram.WebApp.showAlert('Функция добавления карт будет доступна в следующих обновлениях');
-    } else {
-        alert('Функция добавления карт будет доступна в следующих обновлениях');
-    }
-}
-
-// Mock data loading
-function loadPaymentStats() {
-    // Simulate loading delay
-    setTimeout(() => {
-        document.getElementById('total-balance').innerHTML = '₽ 15,430';
-        document.getElementById('monthly-income').innerHTML = '₽ 8,750';
-        document.getElementById('pending-payments').innerHTML = '₽ 8,250';
-        document.getElementById('completed-payments').innerHTML = '47';
-    }, 1000);
-}
-</script>
+<script src="{{ url_for('static', filename='js/payments.js') }}"></script>
 {% endblock %}

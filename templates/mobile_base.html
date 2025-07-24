@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#667ee6">
+    
+    <title>{% block title %}Telegram Mini App{% endblock %}</title>
+    
+    <!-- Оптимизация для WebApp -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+    
+    <!-- Основные стили -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile-optimized.css') }}">
+    
+    {% block extra_css %}{% endblock %}
+    
+    <!-- Telegram WebApp Script -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <!-- Mobile Optimizer -->
+    <script src="{{ url_for('static', filename='js/mobile-optimizer.js') }}" defer></script>
+    
+    <!-- Prefetch критически важных ресурсов -->
+    <link rel="prefetch" href="/api/mobile/summary">
+    <link rel="prefetch" href="/api/mobile/notifications">
+    
+    <style>
+        /* Критические стили для быстрой загрузки */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #ffffff);
+            color: var(--tg-theme-text-color, #000000);
+            overflow-x: hidden;
+        }
+        
+        .loading-app {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--tg-theme-bg-color, #ffffff);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .loading-app.hidden {
+            display: none;
+        }
+        
+        .app-logo {
+            width: 80px;
+            height: 80px;
+            background: var(--tg-theme-button-color, #5288c1);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+        
+        .loading-text {
+            color: var(--tg-theme-hint-color, #708499);
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+        
+        .loading-progress {
+            width: 200px;
+            height: 4px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background: var(--tg-theme-button-color, #5288c1);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            animation: loading 2s infinite;
+        }
+        
+        @keyframes loading {
+            0% { width: 0%; }
+            50% { width: 70%; }
+            100% { width: 100%; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Экран загрузки -->
+    <div class="loading-app" id="appLoader">
+        <div class="app-logo">📱</div>
+        <div class="loading-text">Загрузка приложения...</div>
+        <div class="loading-progress">
+            <div class="progress-bar"></div>
+        </div>
+    </div>
+    
+    <!-- Основной контент -->
+    <div class="app-container" id="appContainer" style="display: none;">
+        {% block mobile_header %}
+        <header class="mobile-header">
+            <div class="header-content">
+                <button class="back-btn mobile-only" onclick="goBack()" id="backButton" style="display: none;">
+                    ← Назад
+                </button>
+                <h1 class="header-title">{% block header_title %}Mini App{% endblock %}</h1>
+                <div class="header-actions">
+                    {% block header_actions %}{% endblock %}
+                </div>
+            </div>
+        </header>
+        {% endblock %}
+        
+        <main class="main-content">
+            <!-- Уведомления -->
+            <div class="notifications-container" id="notificationsContainer" style="display: none;">
+                <div class="notification" id="notification">
+                    <span class="notification-text"></span>
+                    <button class="notification-close" onclick="hideNotification()">×</button>
+                </div>
+            </div>
+            
+            <!-- Основной контент страницы -->
+            {% block content %}{% endblock %}
+        </main>
+        
+        {% block mobile_footer %}
+        <footer class="mobile-footer mobile-only">
+            <nav class="bottom-nav">
+                <a href="/" class="nav-item">
+                    <span class="nav-icon">🏠</span>
+                    <span class="nav-label">Главная</span>
+                </a>
+                <a href="/channels" class="nav-item">
+                    <span class="nav-icon">📺</span>
+                    <span class="nav-label">Каналы</span>
+                </a>
+                <a href="/offers" class="nav-item">
+                    <span class="nav-icon">📢</span>
+                    <span class="nav-label">Офферы</span>
+                </a>
+                <a href="/analytics" class="nav-item">
+                    <span class="nav-icon">📊</span>
+                    <span class="nav-label">Аналитика</span>
+                </a>
+                <a href="/profile" class="nav-item">
+                    <span class="nav-icon">👤</span>
+                    <span class="nav-label">Профиль</span>
+                </a>
+            </nav>
+        </footer>
+        {% endblock %}
+    </div>
+    
+    <!-- Модальное окно (универсальное) -->
+    <div class="modal" id="universalModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">Заголовок</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                Содержимое модального окна
+            </div>
+            <div class="modal-footer" id="modalFooter">
+                <button class="btn btn-secondary" onclick="closeModal()">Закрыть</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Offline индикатор -->
+    <div class="offline-indicator" id="offlineIndicator" style="display: none;">
+        <span class="offline-text">Нет подключения к интернету</span>
+    </div>
+    
+    <!-- JavaScript -->
+    <script>
+        // === ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ===
+        window.appState = {
+            loaded: false,
+            user: null,
+            notifications: [],
+            isOnline: navigator.onLine
+        };
+        
+        // === ИНИЦИАЛИЗАЦИЯ ПРИЛОЖЕНИЯ ===
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('📱 Инициализация мобильного приложения...');
+            
+            try {
+                // 1. Инициализируем Telegram WebApp
+                if (window.Telegram && window.Telegram.WebApp) {
+                    const tg = window.Telegram.WebApp;
+                    tg.ready();
+                    tg.expand();
+                    
+                    // Настраиваем кнопку "Назад"
+                    if (window.location.pathname !== '/') {
+                        tg.BackButton.show();
+                        tg.BackButton.onClick(goBack);
+                        document.getElementById('backButton').style.display = 'block';
+                    }
+                    
+                    console.log('✅ Telegram WebApp инициализирован');
+                }
+                
+                // 2. Создаем мобильный оптимизатор
+                window.createMobileOptimizer();
+                
+                // 3. Загружаем начальные данные
+                await loadInitialData();
+                
+                // 4. Настраиваем события
+                setupEventListeners();
+                
+                // 5. Скрываем экран загрузки
+                hideLoader();
+                
+                console.log('✅ Мобильное приложение загружено');
+                
+            } catch (error) {
+                console.error('❌ Ошибка инициализации:', error);
+                showError('Ошибка инициализации приложения');
+                hideLoader();
+            }
+        });
+        
+        // === ЗАГРУЗКА ДАННЫХ ===
+        async function loadInitialData() {
+            try {
+                // Загружаем сводку через mobile API
+                const summaryResponse = await window.mobileOptimizer.optimizedFetch('/api/mobile/summary');
+                if (summaryResponse.success) {
+                    window.appState.summary = summaryResponse.data;
+                    updateSummaryDisplay(summaryResponse.data);
+                }
+                
+                // Загружаем уведомления
+                const notificationsResponse = await window.mobileOptimizer.optimizedFetch('/api/mobile/notifications');
+                if (notificationsResponse.success) {
+                    window.appState.notifications = notificationsResponse.data;
+                    updateNotificationsDisplay(notificationsResponse.data);
+                }
+                
+            } catch (error) {
+                console.warn('⚠️ Ошибка загрузки начальных данных:', error);
+            }
+        }
+        
+        // === ОБНОВЛЕНИЕ ИНТЕРФЕЙСА ===
+        function updateSummaryDisplay(data) {
+            // Обновляем элементы сводки на странице
+            const elements = {
+                'summary-balance': data.balance ? `₽${data.balance}` : '₽0',
+                'summary-channels': data.channels || 0,
+                'summary-offers': data.offers || 0,
+                'summary-pending': data.pending || 0
+            };
+            
+            Object.entries(elements).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            });
+        }
+        
+        function updateNotificationsDisplay(notifications) {
+            if (notifications.length > 0) {
+                const message = notifications.map(n => n.message).join(', ');
+                showNotification(message, 'info');
+            }
+        }
+        
+        // === УТИЛИТЫ ===
+        function hideLoader() {
+            const loader = document.getElementById('appLoader');
+            const container = document.getElementById('appContainer');
+            
+            if (loader && container) {
+                loader.classList.add('hidden');
+                container.style.display = 'block';
+                window.appState.loaded = true;
+            }
+        }
+        
+        function goBack() {
+            if (window.Telegram && window.Telegram.WebApp) {
+                if (window.history.length > 1) {
+                    window.history.back();
+                } else {
+                    window.Telegram.WebApp.close();
+                }
+            } else {
+                window.history.back();
+            }
+        }
+        
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notificationsContainer');
+            const notification = document.getElementById('notification');
+            const text = notification.querySelector('.notification-text');
+            
+            if (container && notification && text) {
+                text.textContent = message;
+                notification.className = `notification notification-${type}`;
+                container.style.display = 'block';
+                
+                // Автоматически скрываем через 5 секунд
+                setTimeout(hideNotification, 5000);
+            }
+        }
+        
+        function hideNotification() {
+            const container = document.getElementById('notificationsContainer');
+            if (container) {
+                container.style.display = 'none';
+            }
+        }
+        
+        function showError(message) {
+            showNotification(message, 'error');
+        }
+        
+        function showModal(title, content, actions = null) {
+            const modal = document.getElementById('universalModal');
+            const titleEl = document.getElementById('modalTitle');
+            const bodyEl = document.getElementById('modalBody');
+            const footerEl = document.getElementById('modalFooter');
+            
+            if (modal && titleEl && bodyEl) {
+                titleEl.textContent = title;
+                bodyEl.innerHTML = content;
+                
+                if (actions) {
+                    footerEl.innerHTML = actions;
+                } else {
+                    footerEl.innerHTML = '<button class="btn btn-secondary" onclick="closeModal()">Закрыть</button>';
+                }
+                
+                modal.classList.add('active');
+            }
+        }
+        
+        function closeModal() {
+            const modal = document.getElementById('universalModal');
+            if (modal) {
+                modal.classList.remove('active');
+            }
+        }
+        
+        // === СОБЫТИЯ ===
+        function setupEventListeners() {
+            // Отслеживаем состояние сети
+            window.addEventListener('online', () => {
+                window.appState.isOnline = true;
+                document.getElementById('offlineIndicator').style.display = 'none';
+                showNotification('Подключение восстановлено', 'success');
+            });
+            
+            window.addEventListener('offline', () => {
+                window.appState.isOnline = false;
+                document.getElementById('offlineIndicator').style.display = 'block';
+                showNotification('Нет подключения к интернету', 'warning');
+            });
+            
+            // Закрытие модального окна по клику на фон
+            document.getElementById('universalModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
+            });
+            
+            // Активная навигация
+            updateActiveNavigation();
+        }
+        
+        function updateActiveNavigation() {
+            const currentPath = window.location.pathname;
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            navItems.forEach(item => {
+                item.classList.remove('active');
+                if (item.getAttribute('href') === currentPath) {
+                    item.classList.add('active');
+                }
+            });
+        }
+        
+        // === ОБНОВЛЕНИЕ ДАННЫХ ===
+        async function refreshData() {
+            if (!window.appState.isOnline) {
+                showNotification('Нет подключения к интернету', 'warning');
+                return;
+            }
+            
+            try {
+                await loadInitialData();
+                showNotification('Данные обновлены', 'success');
+            } catch (error) {
+                console.error('Ошибка обновления:', error);
+                showNotification('Ошибка обновления данных', 'error');
+            }
+        }
+        
+        // Автоматическое обновление каждые 30 секунд (только если приложение активно)
+        setInterval(() => {
+            if (document.visibilityState === 'visible' && window.appState.isOnline) {
+                refreshData();
+            }
+        }, 30000);
+        
+        // Дополнительные стили для мобильной навигации
+        const additionalStyles = `
+            .mobile-header {
+                position: sticky;
+                top: 0;
+                background: var(--tg-theme-bg-color);
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+                padding: 12px;
+                z-index: 100;
+            }
+            
+            .header-content {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            
+            .header-title {
+                font-size: 18px;
+                font-weight: 600;
+                margin: 0;
+                color: var(--tg-theme-text-color);
+            }
+            
+            .main-content {
+                padding: 0 12px 80px 12px;
+                min-height: calc(100vh - 140px);
+            }
+            
+            .mobile-footer {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: var(--tg-theme-bg-color);
+                border-top: 1px solid rgba(0, 0, 0, 0.1);
+                z-index: 100;
+            }
+            
+            .bottom-nav {
+                display: flex;
+                justify-content: space-around;
+                padding: 8px 0;
+            }
+            
+            .nav-item {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                text-decoration: none;
+                color: var(--tg-theme-hint-color);
+                padding: 4px 8px;
+                border-radius: 8px;
+                transition: all 0.2s ease;
+                min-width: 50px;
+            }
+            
+            .nav-item.active {
+                color: var(--tg-theme-button-color);
+                background: rgba(82, 136, 193, 0.1);
+            }
+            
+            .nav-icon {
+                font-size: 20px;
+                margin-bottom: 2px;
+            }
+            
+            .nav-label {
+                font-size: 10px;
+                font-weight: 500;
+            }
+            
+            .notifications-container {
+                position: fixed;
+                top: 20px;
+                left: 12px;
+                right: 12px;
+                z-index: 1000;
+            }
+            
+            .notification {
+                background: var(--tg-theme-button-color);
+                color: var(--tg-theme-button-text-color);
+                padding: 12px 16px;
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                animation: slideDown 0.3s ease;
+            }
+            
+            .notification-error {
+                background: #dc2626;
+            }
+            
+            .notification-success {
+                background: #059669;
+            }
+            
+            .notification-warning {
+                background: #d97706;
+            }
+            
+            .notification-close {
+                background: none;
+                border: none;
+                color: inherit;
+                font-size: 18px;
+                cursor: pointer;
+                padding: 0;
+                margin-left: 12px;
+            }
+            
+            .offline-indicator {
+                position: fixed;
+                bottom: 100px;
+                left: 12px;
+                right: 12px;
+                background: #dc2626;
+                color: white;
+                padding: 12px;
+                text-align: center;
+                border-radius: 8px;
+                z-index: 1000;
+                animation: slideUp 0.3s ease;
+            }
+            
+            @keyframes slideDown {
+                from { transform: translateY(-100%); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+            
+            @keyframes slideUp {
+                from { transform: translateY(100%); opacity: 0; }
+                to { transform: translateY(0); opacity: 1; }
+            }
+            
+            @media (min-width: 769px) {
+                .mobile-header { display: none; }
+                .mobile-footer { display: none; }
+                .main-content { padding: 20px; min-height: auto; }
+            }
+        `;
+        
+        // Добавляем стили в head
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = additionalStyles;
+        document.head.appendChild(styleSheet);
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
