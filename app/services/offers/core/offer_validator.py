@@ -252,3 +252,88 @@ class OfferValidator:
                 errors.append("Некорректный формат ID канала")
         
         return errors
+    
+    @staticmethod
+    def validate_smart_offer_data(data: Dict[str, Any]) -> List[str]:
+        """Валидация данных для умного создания оффера"""
+        errors = []
+        
+        # Проверка обязательных полей для умного оффера
+        required_fields = ['title', 'description', 'category', 'budget']
+        for field in required_fields:
+            if not data.get(field):
+                errors.append(f"Поле '{field}' обязательно для заполнения")
+        
+        # Валидация заголовка
+        title = data.get('title', '').strip()
+        if len(title) < 10:
+            errors.append("Название должно содержать минимум 10 символов")
+        elif len(title) > 100:
+            errors.append("Название не должно превышать 100 символов")
+        
+        # Валидация описания
+        description = data.get('description', '').strip()
+        if len(description) < 50:
+            errors.append("Описание должно содержать минимум 50 символов")
+        elif len(description) > 1000:
+            errors.append("Описание не должно превышать 1000 символов")
+        
+        # Валидация бюджета
+        try:
+            budget = float(data.get('budget', 0))
+            if budget < 1000:
+                errors.append("Минимальный бюджет: 1,000₽")
+            elif budget > 10000000:
+                errors.append("Бюджет не должен превышать 10,000,000₽")
+        except (ValueError, TypeError):
+            errors.append("Некорректный формат бюджета")
+        
+        # Валидация категории
+        category = data.get('category')
+        valid_categories = [
+            'tech', 'business', 'lifestyle', 'entertainment', 'education',
+            'health', 'travel', 'food', 'fashion', 'crypto'
+        ]
+        if category not in valid_categories:
+            errors.append(f"Недопустимая категория. Доступные: {', '.join(valid_categories)}")
+        
+        # Валидация выбранных каналов
+        selected_channels = data.get('selected_channels', [])
+        if not selected_channels:
+            errors.append("Необходимо выбрать хотя бы один канал")
+        elif len(selected_channels) > 20:
+            errors.append("Нельзя выбрать больше 20 каналов за раз")
+        
+        # Валидация требований к каналам
+        channel_requirements = data.get('channel_requirements', [])
+        for req in channel_requirements:
+            if not isinstance(req, dict):
+                errors.append("Некорректный формат требований к каналу")
+                continue
+                
+            channel_id = req.get('channel_id')
+            if channel_id and channel_id not in selected_channels:
+                errors.append(f"Требования указаны для невыбранного канала {channel_id}")
+                
+            # Валидация кастомной цены
+            custom_price = req.get('custom_price')
+            if custom_price:
+                try:
+                    price = float(custom_price)
+                    if price <= 0:
+                        errors.append(f"Кастомная цена для канала {channel_id} должна быть больше 0")
+                except (ValueError, TypeError):
+                    errors.append(f"Некорректная кастомная цена для канала {channel_id}")
+        
+        # Валидация даты дедлайна
+        deadline = data.get('deadline')
+        if deadline:
+            try:
+                from datetime import datetime
+                deadline_date = datetime.fromisoformat(deadline.replace('Z', '+00:00'))
+                if deadline_date <= datetime.now():
+                    errors.append("Дата размещения должна быть в будущем")
+            except (ValueError, TypeError):
+                errors.append("Некорректный формат даты размещения")
+        
+        return errors

@@ -386,3 +386,96 @@ class OfferRepository:
             conn.close()
         
         return created_proposals
+    
+    @staticmethod
+    def create_smart_proposal(proposal_data: Dict[str, Any]) -> Optional[int]:
+        """Создание умного предложения с дополнительными параметрами"""
+        conn = sqlite3.connect(AppConfig.DATABASE_PATH)
+        cursor = conn.cursor()
+        
+        try:
+            conn.execute('BEGIN')
+            
+            # Проверяем канал
+            cursor.execute("""
+                SELECT id, title, owner_id, price_per_post
+                FROM channels 
+                WHERE id = ? AND is_active = 1
+            """, (proposal_data['channel_id'],))
+            
+            channel = cursor.fetchone()
+            if not channel:
+                logger.warning(f"Канал {proposal_data['channel_id']} не найден или неактивен")
+                return None
+            
+            # Проверяем дубликат
+            cursor.execute("""
+                SELECT id FROM offer_proposals 
+                WHERE offer_id = ? AND channel_id = ?
+            """, (proposal_data['offer_id'], proposal_data['channel_id']))
+            
+            if cursor.fetchone():
+                logger.warning(f"Предложение для канала {proposal_data['channel_id']} уже существует")
+                return None
+            
+            # Определяем цену (кастомная или из канала)
+            proposed_price = proposal_data.get('custom_price') or channel[3] or 0
+            
+            # Определяем статус (автоодобрение или отправлено)
+            status = 'accepted' if proposal_data.get('auto_approve', False) else 'sent'
+            
+            # Определяем время истечения
+            expires_at = "datetime('now', '+7 days')"
+            if proposal_data.get('posting_time'):
+                try:
+                    from datetime import datetime
+                    posting_time = datetime.fromisoformat(proposal_data['posting_time'].replace('Z', '+00:00'))
+                    expires_at = f"'{posting_time.isoformat()}'"
+                except:
+                    pass
+            
+            # Создаем предложение с расширенными данными
+            cursor.execute(f"""
+                INSERT INTO offer_proposals (
+                    offer_id, channel_id, status, 
+                    proposed_price, custom_message, special_requirements,
+                    posting_time, auto_approved,
+                    created_at, expires_at, notified_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, {expires_at}, CURRENT_TIMESTAMP)
+            """, (
+                proposal_data['offer_id'],
+                proposal_data['channel_id'],
+                status,
+                proposed_price,
+                proposal_data.get('custom_message', ''),
+                proposal_data.get('special_requirements', ''),
+                proposal_data.get('posting_time'),
+                proposal_data.get('auto_approve', False)
+            ))
+            
+            proposal_id = cursor.lastrowid
+            
+            # Если автоодобрение, сразу создаем размещение
+            if proposal_data.get('auto_approve', False):
+                cursor.execute("""
+                    INSERT INTO offer_placements (
+                        proposal_id, offer_id, channel_id,
+                        status, scheduled_at, created_at
+                    ) VALUES (?, ?, ?, 'scheduled', ?, CURRENT_TIMESTAMP)
+                """, (
+                    proposal_id,
+                    proposal_data['offer_id'],
+                    proposal_data['channel_id'],
+                    proposal_data.get('posting_time', "datetime('now', '+1 day')")
+                ))
+            
+            conn.commit()
+            logger.info(f"Создано умное предложение {proposal_id} для канала {proposal_data['channel_id']}")
+            return proposal_id
+            
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Ошибка создания умного предложения: {e}")
+            return None
+        finally:
+            conn.close()

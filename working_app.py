@@ -26,6 +26,7 @@ from app.api.monitoring_statistics import monitoring_statistics_bp
 from app.api.campaigns_management import campaigns_bp
 from app.api.mobile import mobile_bp
 from app.api.users import users_bp
+from app.api.smart_recommendations import smart_recommendations_bp
 from app.telegram.telegram_bot_commands import TelegramBotExtension
 from app.telegram.telegram_channel_parser import TelegramChannelParser
 from app.telegram.telegram_notifications import TelegramNotificationService
@@ -112,6 +113,7 @@ def register_blueprints(app: Flask) -> None:
     app.register_blueprint(campaigns_bp)
     app.register_blueprint(mobile_bp, url_prefix='/api/mobile')
     app.register_blueprint(users_bp, url_prefix='/api/users')
+    app.register_blueprint(smart_recommendations_bp, url_prefix='/api/offers')
     app.register_blueprint(monitoring_statistics_bp,
                            url_prefix='/api/monitoring_statistics')
 

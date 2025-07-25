@@ -3,7 +3,7 @@
  * API клиент для работы с офферами
  */
 
-export class OffersAPI {
+class OffersAPI {
     constructor() {
         this.baseUrl = '/api';
     }
@@ -270,6 +270,17 @@ export class OffersAPI {
             return await this.get(`/api/offers/${offerId}`);
         } catch (error) {
             console.error('❌ Ошибка загрузки деталей оффера:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    // Умное создание оффера через wizard
+    async createSmartOffer(offerData) {
+        try {
+            console.log('🎯 Создание умного оффера:', offerData);
+            return await this.post(`${this.baseUrl}/offers/smart-create`, offerData);
+        } catch (error) {
+            console.error('❌ Ошибка создания умного оффера:', error);
             return { success: false, error: error.message };
         }
     }

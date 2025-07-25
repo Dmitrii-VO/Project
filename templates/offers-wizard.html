@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создать оффер - Умная форма</title>
+    <link rel="stylesheet" href="/static/css/offers.css">
+    <link rel="stylesheet" href="/static/css/wizard.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="wizard-header">
+            <h1>🎯 Создать рекламный оффер</h1>
+            <p class="wizard-subtitle">Упрощенная форма создания с умными рекомендациями</p>
+        </header>
+
+        <!-- Прогресс-бар -->
+        <div class="wizard-progress">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-steps">
+                <span class="step active" data-step="1">Основная информация</span>
+                <span class="step" data-step="2">Выбор каналов</span>
+                <span class="step" data-step="3">Подтверждение</span>
+            </div>
+        </div>
+
+        <!-- Основная форма -->
+        <form id="smartOfferForm" class="smart-offer-form">
+            
+            <!-- Шаг 1: Основная информация -->
+            <div class="wizard-step active" id="step1">
+                <div class="form-section">
+                    <h2>📝 Основная информация</h2>
+                    
+                    <div class="form-group">
+                        <label for="offerTitle">Название оффера *</label>
+                        <input type="text" id="offerTitle" name="title" required 
+                               placeholder="Например: Реклама мобильного приложения для фитнеса"
+                               maxlength="100">
+                        <div class="input-hint">Минимум 10 символов. Будет видно владельцам каналов.</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="offerDescription">Описание *</label>
+                        <textarea id="offerDescription" name="description" required 
+                                  placeholder="Подробно опишите ваш продукт или услугу, целевую аудиторию, ожидаемый результат..."
+                                  rows="4" maxlength="1000"></textarea>
+                        <div class="input-hint">Минимум 50 символов. Чем подробнее, тем выше шанс принятия.</div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="offerCategory">Категория *</label>
+                            <select id="offerCategory" name="category" required>
+                                <option value="">Выберите категорию</option>
+                                <!-- Категории загружаются динамически -->
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="offerBudget">Бюджет *</label>
+                            <div class="budget-input">
+                                <input type="number" id="offerBudget" name="budget" required 
+                                       min="1000" step="100" placeholder="50000">
+                                <span class="currency">₽</span>
+                            </div>
+                            <div class="budget-recommendations" id="budgetRecommendations">
+                                <!-- Рекомендации по бюджету -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Умный калькулятор охвата -->
+                    <div class="reach-calculator">
+                        <h3>📊 Прогноз охвата</h3>
+                        <div class="reach-metrics">
+                            <div class="metric">
+                                <div class="metric-value" id="estimatedReach">0</div>
+                                <div class="metric-label">Охват аудитории</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value" id="estimatedViews">0</div>
+                                <div class="metric-label">Ожидаемые просмотры</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value" id="estimatedCPM">₽0</div>
+                                <div class="metric-label">Средний CPM</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="offerDeadline">Срок размещения</label>
+                        <input type="date" id="offerDeadline" name="deadline" 
+                               min="" max="">
+                        <div class="input-hint">Желаемый срок размещения рекламы</div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="offerRequirements">Дополнительные требования</label>
+                        <textarea id="offerRequirements" name="requirements" 
+                                  placeholder="Особые пожелания по оформлению, времени публикации, тексту и т.д."
+                                  rows="3" maxlength="500"></textarea>
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn-primary" onclick="nextStep()">
+                        Далее: Выбор каналов →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Шаг 2: Выбор каналов -->
+            <div class="wizard-step" id="step2">
+                <div class="form-section">
+                    <h2>📢 Умный выбор каналов</h2>
+                    <p class="section-description">
+                        На основе вашего бюджета и категории мы подобрали оптимальные каналы
+                    </p>
+
+                    <!-- Фильтры каналов -->
+                    <div class="channel-filters">
+                        <div class="filter-group">
+                            <label>Сортировка:</label>
+                            <select id="channelSort">
+                                <option value="match_score">По релевантности</option>
+                                <option value="price_asc">По цене (дешевле)</option>
+                                <option value="price_desc">По цене (дороже)</option>
+                                <option value="subscribers">По аудитории</option>
+                                <option value="engagement">По вовлеченности</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Минимум подписчиков:</label>
+                            <select id="minSubscribers">
+                                <option value="0">Любое количество</option>
+                                <option value="1000">1K+</option>
+                                <option value="5000">5K+</option>
+                                <option value="10000">10K+</option>
+                                <option value="50000">50K+</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Список рекомендованных каналов -->
+                    <div class="channels-container">
+                        <div class="channels-header">
+                            <h3>🎯 Рекомендованные каналы</h3>
+                            <div class="selection-summary">
+                                <span id="selectedCount">0</span> выбрано
+                            </div>
+                        </div>
+                        
+                        <div id="channelRecommendations" class="channel-recommendations">
+                            <!-- Каналы загружаются динамически -->
+                            <div class="loading-state">
+                                <div class="spinner"></div>
+                                <p>Подбираем оптимальные каналы...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Итоговая сводка -->
+                    <div class="selection-summary-card">
+                        <h3>📊 Итоговые показатели</h3>
+                        <div class="summary-metrics">
+                            <div class="summary-item">
+                                <span class="label">Общая стоимость:</span>
+                                <span class="value" id="totalCost">₽0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="label">Общий охват:</span>
+                                <span class="value" id="totalReach">0</span>
+                            </div>
+                            <div class="summary-item">
+                                <span class="label">Ожидаемые просмотры:</span>
+                                <span class="value" id="totalViews">0</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Прогресс-бар использования бюджета -->
+                        <div class="budget-usage">
+                            <div class="budget-label">Использование бюджета:</div>
+                            <div class="budget-bar">
+                                <div class="budget-progress" id="budgetProgress"></div>
+                            </div>
+                            <div id="budgetWarning" class="budget-warning"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep()">
+                        ← Назад
+                    </button>
+                    <button type="button" class="btn btn-primary" onclick="nextStep()">
+                        Далее: Подтверждение →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Шаг 3: Подтверждение -->
+            <div class="wizard-step" id="step3">
+                <div class="form-section">
+                    <h2>✅ Подтверждение и отправка</h2>
+                    
+                    <!-- Финальная сводка -->
+                    <div class="offer-summary">
+                        <div class="summary-header">
+                            <h3 id="summaryTitle">Название оффера</h3>
+                            <div class="summary-budget" id="summaryBudget">₽0</div>
+                        </div>
+                        
+                        <div class="summary-details">
+                            <div class="detail-item">
+                                <strong>Категория:</strong> <span id="summaryCategory"></span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Выбрано каналов:</strong> <span id="summaryChannelsCount">0</span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Общий охват:</strong> <span id="summaryReach">0</span>
+                            </div>
+                            <div class="detail-item">
+                                <strong>Срок размещения:</strong> <span id="summaryDeadline">Не указан</span>
+                            </div>
+                        </div>
+                        
+                        <div class="summary-description" id="summaryDescription">
+                            Описание оффера...
+                        </div>
+                    </div>
+
+                    <!-- Дополнительные опции -->
+                    <div class="additional-options">
+                        <div class="option-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="autoApprove" name="auto_approve">
+                                <span class="checkmark"></span>
+                                <div class="option-text">
+                                    <strong>Автоматическое одобрение</strong>
+                                    <div class="option-description">
+                                        Предложения будут отправлены сразу после модерации
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                        
+                        <div class="option-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="notifyProgress" name="notify_progress" checked>
+                                <span class="checkmark"></span>
+                                <div class="option-text">
+                                    <strong>Уведомления о прогрессе</strong>
+                                    <div class="option-description">
+                                        Получать уведомления в Telegram о принятии/отклонении
+                                    </div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Политика и условия -->
+                    <div class="terms-section">
+                        <label class="checkbox-label required">
+                            <input type="checkbox" id="acceptTerms" name="accept_terms" required>
+                            <span class="checkmark"></span>
+                            <div class="option-text">
+                                <strong>Я принимаю условия размещения</strong>
+                                <div class="option-description">
+                                    <a href="/terms" target="_blank">Ознакомиться с условиями</a>
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="wizard-actions">
+                    <button type="button" class="btn btn-secondary" onclick="prevStep()">
+                        ← Назад
+                    </button>
+                    <button type="submit" class="btn btn-success" id="submitOfferBtn">
+                        🚀 Создать оффер
+                    </button>
+                </div>
+            </div>
+
+            <!-- Контейнер для ошибок валидации -->
+            <div id="validationErrors" class="validation-errors" style="display: none;"></div>
+            
+            <!-- Результат отправки -->
+            <div id="submissionResult" class="submission-result"></div>
+        </form>
+    </div>
+
+    <!-- Скрипты -->
+    <script src="/static/js/offers/offers-api.js"></script>
+    <script src="/static/js/offers/offers-wizard.js"></script>
+    <script>
+        // Навигация по шагам
+        let currentStep = 1;
+        const totalSteps = 3;
+
+        function nextStep() {
+            if (currentStep < totalSteps) {
+                if (validateCurrentStep()) {
+                    currentStep++;
+                    showStep(currentStep);
+                    updateProgress();
+                }
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                showStep(currentStep);
+                updateProgress();
+            }
+        }
+
+        function showStep(step) {
+            // Скрываем все шаги
+            document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.progress-steps .step').forEach(s => s.classList.remove('active'));
+            
+            // Показываем текущий шаг
+            document.getElementById(`step${step}`).classList.add('active');
+            document.querySelector(`.progress-steps .step[data-step="${step}"]`).classList.add('active');
+
+            // Обновляем сводку на шаге 3
+            if (step === 3) {
+                updateFinalSummary();
+            }
+        }
+
+        function updateProgress() {
+            const progress = (currentStep / totalSteps) * 100;
+            document.getElementById('progressFill').style.width = `${progress}%`;
+        }
+
+        function validateCurrentStep() {
+            if (currentStep === 1) {
+                const title = document.getElementById('offerTitle').value.trim();
+                const description = document.getElementById('offerDescription').value.trim();
+                const category = document.getElementById('offerCategory').value;
+                const budget = parseFloat(document.getElementById('offerBudget').value);
+
+                if (!title || title.length < 10) {
+                    alert('Название должно содержать минимум 10 символов');
+                    return false;
+                }
+                if (!description || description.length < 50) {
+                    alert('Описание должно содержать минимум 50 символов');
+                    return false;
+                }
+                if (!category) {
+                    alert('Выберите категорию');
+                    return false;
+                }
+                if (!budget || budget < 1000) {
+                    alert('Минимальный бюджет: 1,000₽');
+                    return false;
+                }
+            } else if (currentStep === 2) {
+                if (window.smartOfferWizard.selectedChannels.length === 0) {
+                    alert('Выберите хотя бы один канал');
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function updateFinalSummary() {
+            const wizard = window.smartOfferWizard;
+            
+            document.getElementById('summaryTitle').textContent = 
+                document.getElementById('offerTitle').value;
+            document.getElementById('summaryBudget').textContent = 
+                `₽${wizard.formatNumber(parseFloat(document.getElementById('offerBudget').value))}`;
+            document.getElementById('summaryCategory').textContent = 
+                document.getElementById('offerCategory').selectedOptions[0].text;
+            document.getElementById('summaryChannelsCount').textContent = 
+                wizard.selectedChannels.length;
+            document.getElementById('summaryDescription').textContent = 
+                document.getElementById('offerDescription').value;
+            
+            const deadline = document.getElementById('offerDeadline').value;
+            document.getElementById('summaryDeadline').textContent = 
+                deadline ? new Date(deadline).toLocaleDateString('ru-RU') : 'Не указан';
+            
+            // Обновляем общий охват
+            const totalReach = wizard.selectedChannels.reduce((sum, ch) => 
+                sum + ch.data.subscribers, 0);
+            document.getElementById('summaryReach').textContent = 
+                wizard.formatNumber(totalReach);
+        }
+
+        // Устанавливаем минимальную дату для deadline
+        document.addEventListener('DOMContentLoaded', function() {
+            const today = new Date();
+            const maxDate = new Date();
+            maxDate.setDate(today.getDate() + 90); // Максимум 90 дней
+
+            const deadlineInput = document.getElementById('offerDeadline');
+            if (deadlineInput) {
+                deadlineInput.min = today.toISOString().split('T')[0];
+                deadlineInput.max = maxDate.toISOString().split('T')[0];
+            }
+        });
+    </script>
+</body>
+</html>

@@ -375,3 +375,99 @@ class OfferService:
                 'total_budget': stats['total_spent']
             }
         }
+    
+    def create_smart_offer(self, offer_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Умное создание оффера с автоматическим подбором и отправкой предложений"""
+        # Авторизация
+        telegram_id = auth_service.get_current_user_id()
+        if not telegram_id:
+            raise ValueError("Требуется авторизация")
+        
+        # Расширенная валидация для умного оффера
+        validation_errors = self.validator.validate_smart_offer_data(offer_data)
+        if validation_errors:
+            raise ValueError(f"Ошибки валидации: {'; '.join(validation_errors)}")
+        
+        # Получаем/создаем пользователя
+        user_db_id = auth_service.ensure_user_exists(
+            username=offer_data.get('username'),
+            first_name=offer_data.get('first_name')
+        )
+        
+        if not user_db_id:
+            raise ValueError("Ошибка создания пользователя")
+        
+        # Подготавливаем данные для оффера
+        offer_data['creator_telegram_id'] = telegram_id
+        
+        # Создаем основной оффер
+        offer_id = self.repository.create_offer(user_db_id, offer_data)
+        if not offer_id:
+            raise ValueError("Ошибка создания оффера")
+        
+        # Обрабатываем выбранные каналы
+        selected_channels = offer_data.get('selected_channels', [])
+        channel_requirements = offer_data.get('channel_requirements', [])
+        
+        proposals_created = 0
+        if selected_channels:
+            # Создаем предложения для выбранных каналов
+            for channel_id in selected_channels:
+                try:
+                    # Ищем специальные требования для канала
+                    channel_req = next(
+                        (req for req in channel_requirements if req.get('channel_id') == channel_id), 
+                        {}
+                    )
+                    
+                    # Создаем предложение с учетом требований
+                    proposal_data = {
+                        'channel_id': channel_id,
+                        'offer_id': offer_id,
+                        'custom_price': channel_req.get('custom_price'),
+                        'posting_time': channel_req.get('posting_time'),
+                        'special_requirements': channel_req.get('special_requirements'),
+                        'auto_approve': offer_data.get('auto_approve', False)
+                    }
+                    
+                    proposal_id = self.repository.create_smart_proposal(proposal_data)
+                    if proposal_id:
+                        proposals_created += 1
+                        
+                except Exception as e:
+                    logger.warning(f"Ошибка создания предложения для канала {channel_id}: {e}")
+                    continue
+        
+        # Получаем созданный оффер для ответа
+        created_offer = self.repository.get_offer_by_id(offer_id, user_db_id)
+        
+        # Статус оффера: если включено автоодобрение и есть предложения - активный, иначе - на модерации
+        offer_status = 'active' if offer_data.get('auto_approve') and proposals_created > 0 else 'pending'
+        
+        # Обновляем статус если нужно
+        if created_offer and created_offer.get('status') != offer_status:
+            self.repository.update_offer_status(offer_id, offer_status, 'Smart offer creation')
+        
+        # Если включены уведомления, отправляем уведомления владельцам каналов
+        if offer_data.get('notify_progress', True) and proposals_created > 0:
+            try:
+                from app.telegram.telegram_notifications import TelegramNotificationService
+                TelegramNotificationService.send_new_offer_notifications(offer_id, selected_channels)
+            except Exception as e:
+                logger.warning(f"Ошибка отправки уведомлений: {e}")
+        
+        return {
+            'success': True,
+            'data': {
+                'id': offer_id,
+                'title': offer_data.get('title'),
+                'status': offer_status,
+                'budget': offer_data.get('budget'),
+                'category': offer_data.get('category'),
+                'selected_channels_count': len(selected_channels),
+                'proposals_sent': proposals_created,
+                'auto_approve': offer_data.get('auto_approve', False),
+                'created_at': datetime.now().isoformat()
+            },
+            'message': f"Умный оффер создан успешно! Отправлено предложений: {proposals_created}"
+        }

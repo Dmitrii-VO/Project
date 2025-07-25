@@ -82,6 +82,31 @@ def create_offer():
         return error_response("Внутренняя ошибка сервера", 500)
 
 
+@offer_routes.route('/smart-create', methods=['POST'])
+def create_smart_offer():
+    """Умное создание оффера с автоматическим подбором каналов"""
+    try:
+        # Получаем данные из запроса
+        offer_data = request.get_json()
+        if not offer_data:
+            return error_response("Данные оффера не предоставлены", 400)
+        
+        # Создаем умный оффер через сервис
+        result = offer_service.create_smart_offer(offer_data)
+        
+        return success_response(
+            data=result,
+            message="Умный оффер успешно создан",
+            status_code=201
+        )
+        
+    except ValueError as e:
+        return error_response(str(e), 400)
+    except Exception as e:
+        logger.error(f"Ошибка создания умного оффера: {e}")
+        return error_response("Внутренняя ошибка сервера", 500)
+
+
 @offer_routes.route('/<int:offer_id>', methods=['GET'])
 def get_offer_details(offer_id):
     """Получение деталей оффера"""

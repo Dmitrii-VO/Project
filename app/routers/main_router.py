@@ -57,6 +57,15 @@ def offers_page():
         current_app.logger.error(f"Error rendering offers page: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+@main_bp.route('/offers/create')
+def create_offer_page():
+    """Умная форма создания оффера"""
+    try:
+        return render_template('offers-wizard.html')
+    except Exception as e:
+        current_app.logger.error(f"Error rendering offers wizard page: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
 # === СЛУЖЕБНЫЕ ЭНДПОИНТЫ ===
 
 @main_bp.route('/health')
